@@ -343,6 +343,16 @@ namespace J365.IntunePSApp.Tests
         }
 
         [Fact]
+        public void File_names_with_brackets_are_literal_unless_a_wildcard_is_intended()
+        {
+            string Code(string type, string key, string value) => string.Join("\n", ActionCatalog.Generate(new PackageAction { Type = type, ContinueOnError = false, Params = { [key] = value } }));
+            Assert.Contains("Remove-ADTFile -LiteralPath", Code("RemoveDesktopShortcut", "Name", "App [x64]"));
+            Assert.Contains("Remove-ADTFile -Path", Code("RemoveDesktopShortcut", "Name", "App*"));
+            Assert.Contains("Remove-ADTFile -LiteralPath ([Environment]::ExpandEnvironmentVariables('%ProgramData%\\App [x64]\\a.lic'))", Code("DeleteFile", "Path", @"%ProgramData%\App [x64]\a.lic"));
+            Assert.Contains("Remove-ADTFile -Path", Code("DeleteFile", "Path", @"%ProgramData%\App\*.tmp"));
+        }
+
+        [Fact]
         public void User_code_is_written_as_typed_and_a_continued_failure_does_not_fail_the_deployment()
         {
             var a = new PackageAction { Type = "RunPowerShell", ContinueOnError = true, Params = { ["Code"] = "$text = @'\nline one   \n  line two\n'@\nWrite-ADTLogEntry -Message $text" } };

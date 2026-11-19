@@ -397,6 +397,10 @@
                   <Button Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="{l:T Ed_ShowMatches}" Margin="8,0,0,0" Click="ShowInstalled_Click"/>
                 </Grid>
                 <TextBlock Style="{StaticResource Hint}" Text="{l:T Ed_PatternHint}"/>
+                <!-- Other applications of the database the pattern also matches (they would be removed and would satisfy detection) -->
+                <Border x:Name="PatternOthers" Background="{StaticResource WarningSoft}" CornerRadius="8" Padding="12,8" Margin="0,8,0,0" Visibility="Collapsed">
+                  <TextBlock x:Name="PatternOthersText" TextWrapping="Wrap" Foreground="{StaticResource Warning}" FontSize="12.5"/>
+                </Border>
                 <ListView x:Name="InstalledList" Margin="0,12,0,0" MaxHeight="200" Visibility="Collapsed">
                   <ListView.View>
                     <GridView>

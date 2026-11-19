@@ -208,6 +208,12 @@ namespace J365.IntunePSApp.Core
         private static string Exp(string s) => $"([Environment]::ExpandEnvironmentVariables({L(s)}))";
         private static string Support(string name) => $"(Join-Path -Path $adtSession.DirSupportFiles -ChildPath {L(name)})";
 
+        /// <summary>
+        /// "-Path" when the text uses * or ? on purpose, otherwise "-LiteralPath": with -Path a name such as
+        /// "App [x64].lnk" is read as a wildcard and matches nothing.
+        /// </summary>
+        private static string PathParameter(string text) => (text ?? "").IndexOfAny(new[] { '*', '?' }) >= 0 ? "-Path" : "-LiteralPath";
+
         private static string Lnk(string name)
         {
             name = (name ?? "").Trim();
@@ -248,7 +254,7 @@ namespace J365.IntunePSApp.Core
                         break;
                     }
                 case "RemoveDesktopShortcut":
-                    body.Add($"Remove-ADTFile -Path (Join-Path -Path ([Environment]::GetFolderPath('CommonDesktopDirectory')) -ChildPath {L(Lnk(a.P("Name")))})");
+                    body.Add($"Remove-ADTFile {PathParameter(a.P("Name"))} (Join-Path -Path ([Environment]::GetFolderPath('CommonDesktopDirectory')) -ChildPath {L(Lnk(a.P("Name")))})");
                     break;
                 case "RemoveStartMenuShortcut":
                     body.Add($"Get-ChildItem -LiteralPath ([Environment]::GetFolderPath('CommonPrograms')) -Filter {L(Lnk(a.P("Name")))} -Recurse -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue");
@@ -271,7 +277,7 @@ namespace J365.IntunePSApp.Core
                     body.Add($"Copy-ADTFileToUserProfiles -Path {Support(a.P("Source"))} -Destination {L(a.P("Destination"))} -BasePath {L(string.IsNullOrEmpty(a.P("BasePath")) ? "AppData" : a.P("BasePath"))} -Recurse");
                     break;
                 case "DeleteFile":
-                    body.Add($"Remove-ADTFile -Path {Exp(a.P("Path"))}");
+                    body.Add($"Remove-ADTFile {PathParameter(a.P("Path"))} {Exp(a.P("Path"))}");
                     break;
                 case "DeleteFolder":
                     body.Add($"$j365Folder = {Exp(a.P("Path"))}");

@@ -182,10 +182,10 @@ Every release is built by GitHub Actions from the tagged commit and carries chec
 
 ```powershell
 # 1. Checksum: compare with SHA256SUMS.txt of the release
-Get-FileHash .\J365-IntunePSApp-2.1.2-win-x64.zip -Algorithm SHA256
+Get-FileHash .\J365-IntunePSApp-2.1.3-win-x64.zip -Algorithm SHA256
 
 # 2. Provenance: proves the file was built by this repository's workflow (GitHub CLI)
-gh attestation verify .\J365-IntunePSApp-2.1.2-win-x64.zip --repo sesantanajr/J365-IntunePSApp
+gh attestation verify .\J365-IntunePSApp-2.1.3-win-x64.zip --repo sesantanajr/J365-IntunePSApp
 ```
 
 What the application itself verifies: the database installers (SHA256 from the winget manifest), the PSAppDeployToolkit module (Authenticode signature), IntuneWinAppUtil (Microsoft signature, otherwise discarded) and every `.intunewin` it creates (HMAC and SHA256). See [SECURITY.md](SECURITY.md).
@@ -215,7 +215,7 @@ Application logs: `IntunePSApp-Data\logs` next to the executable (portable) or `
 
 ## What was tested (and what was not)
 
-- **Automated:** 157 unit tests run on every push (generated scripts are parsed by Windows PowerShell 5.1, `.intunewin` round trip, both languages, project migration, validations).
+- **Automated:** 160 unit tests run on every push (generated scripts are parsed by Windows PowerShell 5.1, `.intunewin` round trip, both languages, project migration, validations).
 - **End to end, by the author:** packages built from the interface and from the command line in both languages; a generated package executed for real with a test installer (install, repair, uninstall, 22 actions including dependency and `.reg` import); first-run setup on an empty folder; per-user install and uninstall; database generation.
 - **In Windows Sandbox (2.1):** the 7-Zip MSI package was installed by the test script in a real sandbox (exit code 0, detected, 31 s; the same installation took about 150 s before the Smart App Control fix), and run as SYSTEM three times in a row: install on a clean Windows, install again over the existing version (the log shows it being listed and uninstalled first) and uninstall (no longer detected). Not exercised: enabling the Windows feature from the application (it needs a computer without it) and the test of an `.exe` installer.
 - **For 2.1.2:** a package built with the new code was run as SYSTEM in Windows Sandbox (install, install over the existing version, uninstall; an action failing on purpose was logged and the deployment still returned 0; user code with a here-string ran). Icon extraction was checked with two real MSI files (one carrying an `.ico`, one an `.exe`). The publishing script was run end to end, in Windows PowerShell 5.1 and PowerShell 7, against a local stand-in for Entra ID, Microsoft Graph and Azure Storage that verified the uploaded content (MAC, IV, digest), the retries, the update of an existing app, the assignment and the removal of an incomplete app.
@@ -418,10 +418,10 @@ Cada versão é compilada pelo GitHub Actions a partir do commit marcado e traz 
 
 ```powershell
 # 1. Checksum: compare com o SHA256SUMS.txt da versão
-Get-FileHash .\J365-IntunePSApp-2.1.2-win-x64.zip -Algorithm SHA256
+Get-FileHash .\J365-IntunePSApp-2.1.3-win-x64.zip -Algorithm SHA256
 
 # 2. Procedência: prova que o arquivo foi compilado pelo workflow deste repositório (GitHub CLI)
-gh attestation verify .\J365-IntunePSApp-2.1.2-win-x64.zip --repo sesantanajr/J365-IntunePSApp
+gh attestation verify .\J365-IntunePSApp-2.1.3-win-x64.zip --repo sesantanajr/J365-IntunePSApp
 ```
 
 O que o próprio aplicativo verifica: os instaladores do banco de dados (SHA256 do manifesto do winget), o módulo do PSAppDeployToolkit (assinatura Authenticode), o IntuneWinAppUtil (assinatura da Microsoft, senão é descartado) e cada `.intunewin` criado (HMAC e SHA256). Veja [SECURITY.md](SECURITY.md).
@@ -451,7 +451,7 @@ Logs do aplicativo: `IntunePSApp-Data\logs` ao lado do executável (portátil) o
 
 ## O que foi testado (e o que não foi)
 
-- **Automatizado:** 157 testes unitários rodam a cada push (os scripts gerados são analisados pelo Windows PowerShell 5.1, ida e volta do `.intunewin`, os dois idiomas, migração de projetos, validações).
+- **Automatizado:** 160 testes unitários rodam a cada push (os scripts gerados são analisados pelo Windows PowerShell 5.1, ida e volta do `.intunewin`, os dois idiomas, migração de projetos, validações).
 - **De ponta a ponta, pelo autor:** pacotes gerados pela interface e pela linha de comando nos dois idiomas; um pacote gerado executado de verdade com um instalador de teste (instalação, reparo, desinstalação, 22 ações incluindo dependência e importação de `.reg`); preparação da primeira execução em uma pasta vazia; instalação e desinstalação por usuário; geração do banco de dados.
 - **No Windows Sandbox (2.1):** o pacote MSI do 7-Zip foi instalado pelo script de teste em um sandbox real (código de saída 0, detectado, 31 s; a mesma instalação levava cerca de 150 s antes da correção do Smart App Control) e executado como SYSTEM três vezes seguidas: instalação em um Windows limpo, instalação por cima da versão existente (o log mostra ela sendo listada e desinstalada antes) e desinstalação (não é mais detectado). Não exercitado: a ativação do recurso do Windows pelo aplicativo (exige um computador sem ele) e o teste de um instalador `.exe`.
 - **Para a 2.1.2:** um pacote gerado com o código novo foi executado como SYSTEM no Windows Sandbox (instalação, instalação por cima da versão existente, desinstalação; uma ação que falha de propósito foi registrada e a implantação ainda retornou 0; código do usuário com here-string rodou). A extração de ícone foi conferida com dois arquivos MSI reais (um com `.ico`, outro com `.exe`). O script de publicação foi executado de ponta a ponta, no Windows PowerShell 5.1 e no PowerShell 7, contra um substituto local do Entra ID, do Microsoft Graph e do Azure Storage que conferiu o conteúdo enviado (MAC, IV, hash), as repetições, a atualização de um app existente, a atribuição e a remoção de um app incompleto.

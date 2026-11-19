@@ -268,6 +268,12 @@ namespace J365.IntunePSApp.Core
                     Log.Warn(T("Log_DownloadRetry", attempt, attempts - 1, ex.Message));
                     await Task.Delay(TimeSpan.FromSeconds(2 * attempt), ct);
                 }
+                catch
+                {
+                    // Last attempt failed or the user cancelled: no half-downloaded file is left behind.
+                    try { File.Delete(tmp); } catch { }
+                    throw;
+                }
             }
             if (!string.IsNullOrWhiteSpace(expectedSha256))
             {
@@ -283,7 +289,15 @@ namespace J365.IntunePSApp.Core
 
         private static async Task DownloadOnceAsync(string url, string tmp, IProgress<(long read, long? total)> progress, CancellationToken ct)
         {
-            using var resp = await Client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+            // A server that never answers fails after 60 seconds instead of hanging (the body has its own stall limit below).
+            HttpResponseMessage resp;
+            using (var headers = CancellationTokenSource.CreateLinkedTokenSource(ct))
+            {
+                headers.CancelAfter(TimeSpan.FromSeconds(60));
+                try { resp = await Client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, headers.Token); }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested) { throw new TimeoutException(T("Err_DownloadStalled")); }
+            }
+            using var response = resp;
             resp.EnsureSuccessStatusCode();
             long? total = resp.Content.Headers.ContentLength;
             using var src = await resp.Content.ReadAsStreamAsync(ct);

@@ -2,6 +2,22 @@
 
 All notable changes to J365 IntunePSApp. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.1.3 - 2026-11-19
+
+### Added
+
+- **Look-alike applications.** The Uninstall step shows which other applications of the database the program name also matches ("7-Zip*" also matches 7-Zip ZS; "KeePass*" would match KeePassXC). Where one of them is installed it would be uninstalled before the installation and would count for the detection rule.
+
+### Fixed
+
+- The built-in packager keeps its two working copies in the application's temporary folder instead of next to the package (often a synchronised OneDrive folder), stops as soon as the build is cancelled, and writes zip entries with "/" like Microsoft's tool.
+- A download that fails for good, or is cancelled, no longer leaves a `.part` file; a server that never answers fails after 60 seconds instead of waiting forever.
+- "Remove desktop shortcut" and "Delete file" treat names with brackets (`App [x64].lnk`) literally, unless the name uses `*` or `?` on purpose.
+
+### Changed
+
+- README cover images show the current application.
+
 ## 2.1.2 - 2026-11-19
 
 ### Publish to Intune, rewritten

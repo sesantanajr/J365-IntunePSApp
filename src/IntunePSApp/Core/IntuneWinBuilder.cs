@@ -57,13 +57,15 @@ namespace J365.IntunePSApp.Core
                 finally { try { Directory.Delete(tmpOut, true); } catch { } }
             }
             Log.Info(T("Log_NativeBuilding"));
-            await Task.Run(() => BuildNative(sourceFolder, SetupFile, outputFile), ct);
+            await Task.Run(() => BuildNative(sourceFolder, SetupFile, outputFile, ct), ct);
             return T("Tool_Native");
         }
 
-        public static void BuildNative(string sourceFolder, string setupFile, string outputFile)
+        public static void BuildNative(string sourceFolder, string setupFile, string outputFile, CancellationToken ct = default)
         {
-            string work = Path.Combine(Path.GetDirectoryName(outputFile), "_intunewin_" + Guid.NewGuid().ToString("N"));
+            // The two working copies (zip and encrypted zip) go to the application's temporary folder, not next to the
+            // package: the output folder is often synchronised (OneDrive) and a cancelled build must not leave gigabytes there.
+            string work = Path.Combine(AppPaths.Temp, "_intunewin_" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(work);
             try
             {
@@ -74,11 +76,16 @@ namespace J365.IntunePSApp.Core
                 using (var fs = new FileStream(plainZip, FileMode.CreateNew))
                 using (var zip = new ZipArchive(fs, ZipArchiveMode.Create))
                 {
+                    // Entry names use "/" like Microsoft's tool (the zip format's separator).
                     foreach (var f in Directory.GetFiles(src, "*", SearchOption.AllDirectories))
-                        zip.CreateEntryFromFile(f, f.Substring(src.Length + 1), CompressionLevel.Optimal);
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        zip.CreateEntryFromFile(f, f.Substring(src.Length + 1).Replace('\\', '/'), CompressionLevel.Optimal);
+                    }
                     foreach (var d in Directory.GetDirectories(src, "*", SearchOption.AllDirectories))
-                        if (!Directory.EnumerateFileSystemEntries(d).Any()) zip.CreateEntry(d.Substring(src.Length + 1) + "\\");
+                        if (!Directory.EnumerateFileSystemEntries(d).Any()) zip.CreateEntry(d.Substring(src.Length + 1).Replace('\\', '/') + "/");
                 }
+                ct.ThrowIfCancellationRequested();
 
                 byte[] encKey = RandomNumberGenerator.GetBytes(32), macKey = RandomNumberGenerator.GetBytes(32), iv = RandomNumberGenerator.GetBytes(16);
                 byte[] digest; long plainSize;
@@ -99,6 +106,7 @@ namespace J365.IntunePSApp.Core
                         var obuf = new byte[chunk + 32];
                         while (true)
                         {
+                            ct.ThrowIfCancellationRequested();
                             int n = 0, r;
                             while (n < chunk && (r = fin.Read(buf, n, chunk - n)) > 0) n += r;
                             if (fin.Position < fin.Length)

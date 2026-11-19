@@ -46,6 +46,21 @@ namespace J365.IntunePSApp.Tests
         }
 
         [Fact]
+        public void A_cancelled_native_build_leaves_nothing_behind()
+        {
+            using var tmp = new TempFolder();
+            string src = SampleSource(tmp), output = Path.Combine(tmp.Path, "out", "app.intunewin");
+            Directory.CreateDirectory(Path.GetDirectoryName(output));
+            var before = Directory.GetDirectories(AppPaths.Temp, "_intunewin_*").Length;
+            using var cts = new System.Threading.CancellationTokenSource();
+            cts.Cancel();
+            Assert.ThrowsAny<OperationCanceledException>(() => IntuneWinBuilder.BuildNative(src, IntuneWinBuilder.SetupFile, output, cts.Token));
+            Assert.False(File.Exists(output));
+            Assert.Empty(Directory.GetFileSystemEntries(Path.GetDirectoryName(output)));               // nothing in the output folder
+            Assert.Equal(before, Directory.GetDirectories(AppPaths.Temp, "_intunewin_*").Length);      // working copies removed
+        }
+
+        [Fact]
         public void Validate_detects_a_tampered_package()
         {
             using var tmp = new TempFolder();

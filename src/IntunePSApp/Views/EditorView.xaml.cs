@@ -507,8 +507,11 @@ namespace J365.IntunePSApp.Views
         private void UpdateExistingFlow()
         {
             if (ExistingFlow == null) return;
-            if (ChkRemovePrev.IsChecked != true) { ExistingFlow.Text = T("Ed_ExistingFlowOff"); return; }
             string pattern = TxtPattern.Text.Trim();
+            var others = CatalogService.Instance.OthersMatching(pattern, _s?.CatalogId);
+            PatternOthers.Visibility = others.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            PatternOthersText.Text = others.Count > 0 ? T("Ed_PatternOthers", pattern, string.Join(", ", others)) : "";
+            if (ChkRemovePrev.IsChecked != true) { ExistingFlow.Text = T("Ed_ExistingFlowOff"); return; }
             ExistingFlow.Text = T("Ed_ExistingFlowOn") + (pattern.Length > 0 ? " " + T("Ed_ExistingFlowName", pattern) : "");
         }
 

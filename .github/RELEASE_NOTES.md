@@ -1,8 +1,13 @@
-## J365 IntunePSApp 2.1.2
+## J365 IntunePSApp 2.1.3
 
 Package any Windows application for Microsoft Intune in minutes, with no scripting. Built on [PSAppDeployToolkit](https://psappdeploytoolkit.com). Created by [Sérgio Sant'Ana Junior](https://www.linkedin.com/in/sergiosantanacloud/) - [Jornada 365](https://jornada365.cloud).
 
-### Highlights
+### New in 2.1.3
+
+- The Uninstall step shows other applications of the database the program name also matches ("7-Zip*" also matches 7-Zip ZS), which would be uninstalled and would satisfy detection where installed.
+- The built-in packager no longer leaves working copies next to the package (OneDrive folders) and stops at once when cancelled; downloads no longer leave `.part` files or wait forever for a silent server; file names with brackets work in the shortcut and file actions.
+
+### Highlights of 2.1.2
 
 - **Publish to Intune, rewritten.** The script talks to Microsoft Graph directly: no PowerShell module to install. It detects an app with the same name (ask, stop, update or create another), can assign the new app, deletes an incomplete app when something fails and reports the outcome back to the application, with an *Open in Intune* link. The community module used before failed on Windows set to day-first dates (pt-BR, en-GB...) and reported a failed sign-in as success. Still labelled **preview**: tested end to end against a local stand-in for Entra ID, Graph and Azure Storage, not yet against a real tenant.
 - **Every package has an application icon** for Intune and the Company Portal, with nothing to download: the icon of the installer (now also from `.msi` files), a file you choose, or a tile with the initials.
@@ -26,9 +31,13 @@ The executable is not code-signed: Windows SmartScreen may ask for confirmation 
 
 ---
 
-## J365 IntunePSApp 2.1.2 (Português)
+## J365 IntunePSApp 2.1.3 (Português)
 
 Empacote qualquer aplicativo Windows para o Microsoft Intune em minutos, sem escrever scripts. Baseado no [PSAppDeployToolkit](https://psappdeploytoolkit.com). Criado por [Sérgio Sant'Ana Junior](https://www.linkedin.com/in/sergiosantanacloud/) - [Jornada 365](https://jornada365.cloud).
+
+**Novo na 2.1.3:** o passo Desinstalação mostra outros aplicativos do banco de dados que o nome do programa também encontra ("7-Zip*" também pega o 7-Zip ZS), que seriam desinstalados e contariam para a detecção onde estiverem instalados. O empacotador interno não deixa mais cópias de trabalho ao lado do pacote (pastas do OneDrive) e para na hora quando cancelado; downloads não deixam mais arquivos `.part` nem esperam para sempre por um servidor mudo; nomes de arquivo com colchetes funcionam nas ações de atalho e de arquivo.
+
+**Destaques da 2.1.2:**
 
 - **Publicação no Intune reescrita.** O script fala direto com o Microsoft Graph: nenhum módulo do PowerShell para instalar. Detecta um app com o mesmo nome (perguntar, parar, atualizar ou criar outro), pode atribuir o app novo, apaga o app incompleto quando algo falha e devolve o resultado ao aplicativo, com o link *Abrir no Intune*. O módulo da comunidade usado antes falhava em Windows com data no formato dia/mês (pt-BR) e mostrava login falho como sucesso. Continua marcado como **prévia**: testado de ponta a ponta contra um substituto local do Entra ID, do Graph e do Azure Storage, ainda não contra um locatário real.
 - **Todo pacote tem ícone do aplicativo** para o Intune e o Portal da Empresa, sem baixar nada: o ícone do instalador (agora também de arquivos `.msi`), um arquivo que você escolher ou um ícone com as iniciais.

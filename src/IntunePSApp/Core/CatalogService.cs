@@ -242,6 +242,31 @@ namespace J365.IntunePSApp.Core
             return 6;
         }
 
+        /// <summary>
+        /// Other applications of the database whose name (or the name they register in "Installed apps") the pattern also
+        /// matches: "KeePass*" finds KeePassXC. On a device where one of them is installed it would be uninstalled before
+        /// the installation, and it would satisfy the detection rule. Translations of the same package are not listed.
+        /// </summary>
+        public List<string> OthersMatching(string pattern, string catalogId, int max = 5)
+        {
+            var found = new List<string>();
+            if (!IsLoaded || string.IsNullOrWhiteSpace(pattern) || Regex.Replace(pattern, @"[\*\?\s]", "").Length < 2) return found;
+            var rx = InstallerAnalyzer.WildcardToRegex(pattern.Trim());
+            string family = string.IsNullOrEmpty(catalogId) ? null : catalogId + ".";
+            foreach (var a in Apps)
+            {
+                if (string.Equals(a.Id, catalogId, StringComparison.OrdinalIgnoreCase)) continue;
+                // Mozilla.Firefox.pt-BR is the same product as Mozilla.Firefox.
+                if (family != null && a.Id.StartsWith(family, StringComparison.OrdinalIgnoreCase) && Regex.IsMatch(a.Id.Substring(family.Length), @"^[a-z]{2}(-[A-Za-z]{2,4})?$")) continue;
+                var names = (a.Installers ?? new List<CatalogInstaller>()).SelectMany(i => i.Arp ?? new List<ArpEntry>()).Select(e => e.DisplayName).Where(n => !string.IsNullOrEmpty(n)).ToList();
+                if (names.Count == 0) names.Add(a.Name);
+                if (!names.Any(rx.IsMatch)) continue;
+                if (!found.Contains(a.Name, StringComparer.OrdinalIgnoreCase)) found.Add(a.Name);
+                if (found.Count >= max) break;
+            }
+            return found;
+        }
+
         public List<CatalogApp> FindByName(string name, string publisher, int max = 3)
         {
             var n = Names.CleanAppName(name ?? "").ToLowerInvariant();

@@ -183,6 +183,15 @@ namespace J365.IntunePSApp.Tests
         }
 
         [Fact]
+        public void Look_alike_applications_of_the_database_are_found_for_a_name_pattern()
+        {
+            // The test database is empty: nothing is reported and nothing breaks.
+            Assert.Empty(CatalogService.Instance.OthersMatching("KeePass*", "DominikReichl.KeePass"));
+            Assert.Empty(CatalogService.Instance.OthersMatching("", null));
+            Assert.Empty(CatalogService.Instance.OthersMatching("*", null)); // too generic to mean anything
+        }
+
+        [Fact]
         public void An_installer_the_target_cannot_run_is_never_picked()
         {
             var armFirst = new CatalogApp { Installers = { new CatalogInstaller { Arch = "arm64", Type = "exe" }, new CatalogInstaller { Arch = "x64", Type = "exe" } } };
