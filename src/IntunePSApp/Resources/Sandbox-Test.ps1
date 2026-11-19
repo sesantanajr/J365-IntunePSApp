@@ -13,10 +13,21 @@
     the local administrator. Use it to validate the installer switches, the dialogs and the detection
     rule; always finish with a pilot group in Intune.
 
-    After the test this window stays open with three commands:
-        Test-Install      installs again
+    What the script does before installing:
+      - Turns off the Smart App Control evaluation of the sandbox. Windows Sandbox starts with it in
+        evaluation mode, which makes installers (MSI above all) take minutes instead of seconds.
+        The change only exists inside this disposable Windows. Use -KeepSmartAppControl to skip it.
+      - Turns off QuickEdit in this window, so a click on it no longer pauses the test.
+
+    While the package runs, one line shows the elapsed time and the last entry of the
+    PSAppDeployToolkit log. The result and the logs are copied to the Sandbox\Results folder of the
+    package (on the host), when that folder is mapped.
+
+    After the test this window stays open with these commands:
+        Test-Install      installs again (versions already installed are removed first, when the package is set to do so)
         Test-Uninstall    runs the uninstall command and checks that the app is no longer detected
         Test-Detection    runs the Intune detection script
+        Show-Log          opens the last PSAppDeployToolkit log
 
 .PARAMETER PackageRoot
     Folder of the generated package (the one that contains Package, Intune and Sandbox).
@@ -24,19 +35,118 @@
 .PARAMETER WorkRoot
     Folder where the package is copied before running.
 
+.PARAMETER ResultsRoot
+    Writable folder that receives result.json and the logs (mapped to Sandbox\Results on the host).
+
+.PARAMETER TimeoutMinutes
+    Maximum time for one run of the package. Intune's own default is 60 minutes.
+
 .PARAMETER NoInstall
     Only prepares the test; nothing is installed until you type Test-Install.
+
+.PARAMETER KeepSmartAppControl
+    Leaves the Smart App Control state of the sandbox untouched (installers may take several minutes).
 #>
 [CmdletBinding()]
 param
 (
     [string]$PackageRoot = 'C:\J365Package',
     [string]$WorkRoot = 'C:\J365Test',
-    [switch]$NoInstall
+    [string]$ResultsRoot = 'C:\J365Results',
+    [ValidateRange(1, 600)]
+    [int]$TimeoutMinutes = 60,
+    [switch]$NoInstall,
+    [switch]$KeepSmartAppControl
 )
 
 $ErrorActionPreference = 'Stop'
 $marker = '.j365-sandbox-test'
+
+function global:Write-J365Line([string]$Text)
+{
+    # Rewrites the current console line (progress while the package runs).
+    $width = 100
+    try { $width = [Math]::Max(40, $Host.UI.RawUI.WindowSize.Width - 1) } catch { }
+    if ($Text.Length -gt $width) { $Text = $Text.Substring(0, $width - 3) + '...' }
+    Write-Host ("`r" + $Text.PadRight($width)) -NoNewline
+}
+
+function global:Disable-J365QuickEdit
+{
+    # With QuickEdit, a single click on the window selects text and freezes whatever is writing to it.
+    try
+    {
+        if (-not ('J365.ConsoleMode' -as [type]))
+        {
+            Add-Type -Namespace J365 -Name ConsoleMode -MemberDefinition @'
+[DllImport("kernel32.dll")] public static extern System.IntPtr GetStdHandle(int nStdHandle);
+[DllImport("kernel32.dll")] public static extern bool GetConsoleMode(System.IntPtr hConsoleHandle, out uint lpMode);
+[DllImport("kernel32.dll")] public static extern bool SetConsoleMode(System.IntPtr hConsoleHandle, uint dwMode);
+'@
+        }
+        $handle = [J365.ConsoleMode]::GetStdHandle(-10)
+        $mode = [uint32]0
+        if ([J365.ConsoleMode]::GetConsoleMode($handle, [ref]$mode))
+        {
+            # 0x0040 = ENABLE_QUICK_EDIT_MODE, 0x0080 = ENABLE_EXTENDED_FLAGS
+            $newMode = ([int64]$mode -band (-bnot [int64]0x0040)) -bor [int64]0x0080
+            $null = [J365.ConsoleMode]::SetConsoleMode($handle, [uint32]$newMode)
+        }
+    }
+    catch { }
+}
+
+function global:Optimize-J365Sandbox
+{
+    # Windows Sandbox signs in as WDAGUtilityAccount; nothing is changed on any other computer.
+    if ($global:J365Test.KeepSmartAppControl) { Write-Host '  Smart App Control left as it is (-KeepSmartAppControl): installers may take several minutes.' -ForegroundColor Yellow; return }
+    if ($env:USERNAME -ne 'WDAGUtilityAccount') { Write-Host '  Not running inside Windows Sandbox: nothing was changed on this computer.' -ForegroundColor Gray; return }
+    try
+    {
+        $key = 'HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy'
+        $state = (Get-ItemProperty -LiteralPath $key -ErrorAction Stop).VerifiedAndReputablePolicyState
+        if ($state -eq 0) { Write-Host '  Smart App Control is already off.' -ForegroundColor Gray; return }
+        Set-ItemProperty -LiteralPath $key -Name 'VerifiedAndReputablePolicyState' -Value 0 -Type DWord
+        $ciTool = Join-Path $env:windir 'System32\CiTool.exe'
+        if (Test-Path -LiteralPath $ciTool) { $null = & $ciTool --refresh --json 2>&1 }
+        Write-Host '  Smart App Control evaluation turned off in this sandbox (it makes installers take minutes here).' -ForegroundColor Gray
+    }
+    catch
+    {
+        Write-Host ('  Smart App Control could not be turned off (' + $_.Exception.Message + '). The installation may take several minutes.') -ForegroundColor Yellow
+    }
+}
+
+function global:Get-J365ToolkitLog([datetime]$Since = [datetime]::MinValue)
+{
+    # Newest PSAppDeployToolkit log written since the given moment (the MSI verbose logs are ignored).
+    $folders = @(
+        (Join-Path $env:ProgramData 'Microsoft\IntuneManagementExtension\Logs'),
+        (Join-Path $env:windir 'Logs\Software'),
+        (Join-Path $env:ProgramData 'Logs\Software')
+    )
+    $files = foreach ($folder in $folders)
+    {
+        if (Test-Path -LiteralPath $folder) { Get-ChildItem -LiteralPath $folder -Filter '*PSAppDeployToolkit*.log' -File -ErrorAction SilentlyContinue }
+    }
+    $files | Where-Object { $_.LastWriteTime -ge $Since } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+}
+
+function global:Get-J365LogStatus([datetime]$Since)
+{
+    try
+    {
+        $log = Get-J365ToolkitLog -Since $Since
+        if (-not $log) { return 'starting PSAppDeployToolkit' }
+        $lines = @(Get-Content -LiteralPath $log.FullName -Tail 6 -ErrorAction Stop)
+        for ($i = $lines.Count - 1; $i -ge 0; $i--)
+        {
+            if ($lines[$i] -match '<!\[LOG\[(.*?)\]LOG\]!>') { return ($matches[1] -replace '\s+', ' ').Trim() }
+        }
+    }
+    catch { }
+    return ''
+}
 
 function global:Test-Detection
 {
@@ -55,24 +165,101 @@ function global:Invoke-J365Package([string]$CommandLine)
     $exe = Join-Path $global:J365Test.PackageDir 'Invoke-AppDeployToolkit.exe'
     $arguments = ($CommandLine -replace '^\s*Invoke-AppDeployToolkit\.exe\s*', '').Trim()
     Write-Host ('  ' + $CommandLine) -ForegroundColor Gray
-    if ($arguments.Length -gt 0) { $process = Start-Process -FilePath $exe -ArgumentList $arguments -WorkingDirectory $global:J365Test.PackageDir -Wait -PassThru }
-    else { $process = Start-Process -FilePath $exe -WorkingDirectory $global:J365Test.PackageDir -Wait -PassThru }
-    $code = $process.ExitCode
-    $meaning = 'FAILED'
-    switch ($code)
+
+    $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $startInfo.FileName = $exe
+    $startInfo.Arguments = $arguments
+    $startInfo.WorkingDirectory = $global:J365Test.PackageDir
+    $startInfo.UseShellExecute = $false
+    $started = Get-Date
+    $watch = [System.Diagnostics.Stopwatch]::StartNew()
+    $process = [System.Diagnostics.Process]::Start($startInfo)
+    $timedOut = $false
+
+    # Only this process is awaited (not its descendants): an installer that leaves a helper running does not hold the test.
+    while (-not $process.WaitForExit(1000))
     {
-        0 { $meaning = 'success' }
-        1707 { $meaning = 'success' }
-        3010 { $meaning = 'success, restart required' }
-        1641 { $meaning = 'success, restart started by the installer' }
-        1618 { $meaning = 'another installation is in progress (Intune retries later)' }
-        1602 { $meaning = 'deferred or cancelled by the user (Intune retries later)' }
+        $status = Get-J365LogStatus -Since $started.AddSeconds(-2)
+        Write-J365Line ('  Running {0:mm\:ss}  {1}' -f $watch.Elapsed, $status)
+        if ($watch.Elapsed.TotalMinutes -ge $global:J365Test.TimeoutMinutes)
+        {
+            $timedOut = $true
+            $null = & taskkill.exe /PID $process.Id /T /F 2>&1
+            break
+        }
+    }
+    $watch.Stop()
+    Write-J365Line ''
+    Write-Host "`r" -NoNewline
+
+    $seconds = [int][Math]::Round($watch.Elapsed.TotalSeconds)
+    if ($timedOut)
+    {
+        $code = 1460
+        $meaning = 'FAILED: no answer after ' + $global:J365Test.TimeoutMinutes + ' minute(s), the package was stopped (a dialog waiting for an answer, or an installer that is not silent)'
+    }
+    else
+    {
+        $code = $process.ExitCode
+        $meaning = 'FAILED'
+        switch ($code)
+        {
+            0 { $meaning = 'success' }
+            1707 { $meaning = 'success' }
+            3010 { $meaning = 'success, restart required' }
+            1641 { $meaning = 'success, restart started by the installer' }
+            1618 { $meaning = 'another installation is in progress (Intune retries later)' }
+            1602 { $meaning = 'deferred or cancelled by the user (Intune retries later)' }
+        }
     }
     $color = 'Green'
-    if ($meaning -eq 'FAILED') { $color = 'Red' }
+    if ($meaning -like 'FAILED*') { $color = 'Red' }
     elseif ($code -eq 1618 -or $code -eq 1602) { $color = 'Yellow' }
-    Write-Host ('  Exit code ' + $code + ' - ' + $meaning) -ForegroundColor $color
+    Write-Host ('  Exit code ' + $code + ' - ' + $meaning + ' (' + $seconds + ' s)') -ForegroundColor $color
     $global:J365Test.ExitCode = $code
+    $global:J365Test.Seconds = $seconds
+    $global:J365Test.LastRun = $started
+}
+
+function global:Save-J365Result([string]$Step, [bool]$Passed)
+{
+    # result.json + logs on the host (Sandbox\Results), read by J365 IntunePSApp. Skipped when the folder is not mapped.
+    $global:J365Test.Steps += [pscustomobject]@{
+        step     = $Step
+        passed   = $Passed
+        exitCode = $global:J365Test.ExitCode
+        detected = $global:J365Test.Detected
+        seconds  = $global:J365Test.Seconds
+        time     = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+    }
+    $root = $global:J365Test.ResultsRoot
+    if (-not (Test-Path -LiteralPath $root)) { return }
+    try
+    {
+        $logs = Join-Path $root 'Logs'
+        $null = New-Item -Path $logs -ItemType Directory -Force
+        foreach ($folder in @((Join-Path $env:ProgramData 'Microsoft\IntuneManagementExtension\Logs'), (Join-Path $env:windir 'Logs\Software'), (Join-Path $env:ProgramData 'Logs\Software')))
+        {
+            if (Test-Path -LiteralPath $folder) { Copy-Item -Path (Join-Path $folder '*.log') -Destination $logs -Force -ErrorAction SilentlyContinue }
+        }
+        $result = [pscustomobject]@{
+            schema      = 1
+            app         = $global:J365Test.App.displayName
+            generator   = 'J365 IntunePSApp'
+            computer    = $env:COMPUTERNAME
+            user        = $env:USERNAME
+            updatedUtc  = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+            passed      = (@($global:J365Test.Steps | Where-Object { -not $_.passed }).Count -eq 0)
+            lastStep    = $Step
+            lastPassed  = $Passed
+            steps       = @($global:J365Test.Steps)
+        }
+        $json = $result | ConvertTo-Json -Depth 5
+        $temp = Join-Path $root 'result.json.tmp'
+        [System.IO.File]::WriteAllText($temp, $json, (New-Object System.Text.UTF8Encoding($false)))
+        Move-Item -LiteralPath $temp -Destination (Join-Path $root 'result.json') -Force
+    }
+    catch { Write-Host ('  The result could not be saved to ' + $root + ': ' + $_.Exception.Message) -ForegroundColor Yellow }
 }
 
 function global:Test-Install
@@ -84,14 +271,16 @@ function global:Test-Install
     Write-Host 'Detection after installing (expected: detected)' -ForegroundColor Cyan
     Test-Detection
     Write-Host ''
-    if ($global:J365Test.Detected -and (@(0, 1707, 3010, 1641) -contains $global:J365Test.ExitCode))
+    $passed = $global:J365Test.Detected -and (@(0, 1707, 3010, 1641) -contains $global:J365Test.ExitCode)
+    if ($passed)
     {
         Write-Host 'RESULT: the package installs and Intune will detect it.' -ForegroundColor Green
     }
     else
     {
-        Write-Host 'RESULT: review the package (installer switches or detection rule). See the PSAppDeployToolkit log.' -ForegroundColor Red
+        Write-Host 'RESULT: review the package (installer switches or detection rule). Type Show-Log to read the PSAppDeployToolkit log.' -ForegroundColor Red
     }
+    Save-J365Result -Step 'install' -Passed $passed
 }
 
 function global:Test-Uninstall
@@ -103,26 +292,57 @@ function global:Test-Uninstall
     Write-Host 'Detection after uninstalling (expected: not detected)' -ForegroundColor Cyan
     Test-Detection
     Write-Host ''
-    if ((-not $global:J365Test.Detected) -and (@(0, 1707, 3010, 1641) -contains $global:J365Test.ExitCode))
+    $passed = (-not $global:J365Test.Detected) -and (@(0, 1707, 3010, 1641) -contains $global:J365Test.ExitCode)
+    if ($passed)
     {
         Write-Host 'RESULT: the uninstall works and the app is no longer detected.' -ForegroundColor Green
     }
     else
     {
-        Write-Host 'RESULT: review the uninstall (program name or uninstall switches). See the PSAppDeployToolkit log.' -ForegroundColor Red
+        Write-Host 'RESULT: review the uninstall (program name or uninstall switches). Type Show-Log to read the PSAppDeployToolkit log.' -ForegroundColor Red
     }
+    Save-J365Result -Step 'uninstall' -Passed $passed
+}
+
+function global:Show-Log
+{
+    $log = Get-J365ToolkitLog
+    if ($log) { Write-Host ('  ' + $log.FullName); Start-Process -FilePath notepad.exe -ArgumentList ('"' + $log.FullName + '"') }
+    else { Write-Host '  No PSAppDeployToolkit log was written yet.' -ForegroundColor Yellow }
 }
 
 try
 {
+    try { $Host.UI.RawUI.WindowTitle = 'J365 IntunePSApp - package test' } catch { }
+    Disable-J365QuickEdit
+
     $metadataPath = Join-Path $PackageRoot 'Intune\intune-app.json'
     if (-not (Test-Path -LiteralPath $metadataPath)) { throw ('intune-app.json was not found in ' + $PackageRoot + '\Intune') }
     $app = Get-Content -LiteralPath $metadataPath -Raw -Encoding UTF8 | ConvertFrom-Json
     $source = Join-Path $PackageRoot 'Package'
     if (-not (Test-Path -LiteralPath (Join-Path $source 'Invoke-AppDeployToolkit.exe'))) { throw ('The package folder was not found: ' + $source) }
 
+    $global:J365Test = @{
+        App                 = $app
+        PackageDir          = Join-Path $WorkRoot 'Package'
+        Detection           = Join-Path $PackageRoot ('Intune\' + $app.detectionScript)
+        ResultsRoot         = $ResultsRoot
+        TimeoutMinutes      = $TimeoutMinutes
+        KeepSmartAppControl = [bool]$KeepSmartAppControl
+        Detected            = $false
+        ExitCode            = $null
+        Seconds             = 0
+        LastRun             = Get-Date
+        Steps               = @()
+    }
+
     Write-Host ''
     Write-Host ('J365 IntunePSApp - package test: ' + $app.displayName) -ForegroundColor White
+    Write-Host ('  PSAppDeployToolkit ' + $app.psadtVersion + '  |  time limit per run: ' + $TimeoutMinutes + ' min') -ForegroundColor Gray
+    Write-Host ''
+    Write-Host 'Preparing the sandbox' -ForegroundColor Cyan
+    Optimize-J365Sandbox
+
     Write-Host ''
     Write-Host 'Copying the package to the test folder...' -ForegroundColor Cyan
 
@@ -136,14 +356,6 @@ try
     Set-Content -LiteralPath (Join-Path $WorkRoot $marker) -Value 'J365 IntunePSApp sandbox test' -Encoding ASCII
     Copy-Item -LiteralPath $source -Destination $WorkRoot -Recurse -Force
 
-    $global:J365Test = @{
-        App        = $app
-        PackageDir = Join-Path $WorkRoot 'Package'
-        Detection  = Join-Path $PackageRoot ('Intune\' + $app.detectionScript)
-        Detected   = $false
-        ExitCode   = $null
-    }
-
     Write-Host ''
     Write-Host 'Detection before installing (expected: not detected)' -ForegroundColor Cyan
     Test-Detection
@@ -152,11 +364,13 @@ try
 
     Write-Host ''
     Write-Host 'Commands available in this window' -ForegroundColor White
-    Write-Host '  Test-Install      installs again'
+    Write-Host '  Test-Install      installs again (versions already installed are removed first, when the package is set to do so)'
     Write-Host '  Test-Uninstall    runs the uninstall command and checks that the app is no longer detected'
     Write-Host '  Test-Detection    runs the Intune detection script'
+    Write-Host '  Show-Log          opens the last PSAppDeployToolkit log'
     Write-Host ''
     Write-Host 'PSAppDeployToolkit logs: C:\ProgramData\Microsoft\IntuneManagementExtension\Logs or C:\Windows\Logs\Software'
+    if (Test-Path -LiteralPath $ResultsRoot) { Write-Host 'The result and the logs are also saved in the Sandbox\Results folder of the package (on your computer).' }
     Write-Host ''
 }
 catch

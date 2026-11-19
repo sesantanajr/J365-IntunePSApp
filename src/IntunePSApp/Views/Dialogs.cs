@@ -92,6 +92,17 @@ namespace J365.IntunePSApp.Views
             ResizeMode = ResizeMode.CanResize;
             TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
             try { Icon = new System.Windows.Media.Imaging.BitmapImage(new Uri("pack://application:,,,/Assets/app.ico")); } catch { }
+            // Dialogs designed for large screens never grow past the work area of a small one (notebooks at 125-150 % scaling).
+            var area = SystemParameters.WorkArea;
+            MaxWidth = Math.Max(360, area.Width - 32);
+            MaxHeight = Math.Max(280, area.Height - 32);
+        }
+
+        protected override void OnSourceInitialized(EventArgs e)
+        {
+            base.OnSourceInitialized(e);
+            if (MinWidth > MaxWidth) MinWidth = MaxWidth;
+            if (MinHeight > MaxHeight) MinHeight = MaxHeight;
         }
 
         protected Style S(string key) => Ui.Style(key);
@@ -114,7 +125,7 @@ namespace J365.IntunePSApp.Views
             Title = AppInfo.Name;
             Width = 500;
             SizeToContent = SizeToContent.Height;
-            MaxHeight = 680;
+            MaxHeight = Math.Min(680, MaxHeight);
             ResizeMode = ResizeMode.NoResize;
 
             var (glyph, color, soft) = kind switch

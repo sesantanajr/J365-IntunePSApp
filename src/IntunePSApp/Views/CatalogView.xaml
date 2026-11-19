@@ -39,9 +39,10 @@
 
     <Grid x:Name="Main" Grid.Row="2">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="440"/>
+        <!-- The list keeps its 440 px on wide windows and shrinks with narrow ones. -->
+        <ColumnDefinition Width="9*" MinWidth="300" MaxWidth="440"/>
         <ColumnDefinition Width="18"/>
-        <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="11*"/>
       </Grid.ColumnDefinitions>
 
       <DockPanel>

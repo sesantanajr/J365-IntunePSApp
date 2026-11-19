@@ -192,6 +192,9 @@ namespace J365.IntunePSApp.Core
                 default: v.Errors.Add(T("Val_DetUnknown")); break;
             }
             if (s.DetectionCheckVersion && !Regex.IsMatch(s.DetectionVersion ?? "", @"\d")) v.Errors.Add(T("Val_DetVersion"));
+            // Intune runs the detection rule before the package: when an older version already counts as "installed",
+            // the package (and its removal of existing versions) never runs. A product code changes with the version.
+            if (s.RemovePreviousVersions && !s.DetectionCheckVersion && s.DetectionMethod != "ProductCode") v.Warnings.Add(T("Val_Warn_DetectionHidesOldVersions"));
             return v;
         }
 
@@ -547,10 +550,9 @@ namespace J365.IntunePSApp.Core
             {
                 // Our own freshly generated script: the execution policy is bypassed for this single process only.
                 var psi = ToolsService.PowerShellStartInfo($"-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"{tmp}\"");
-                using var p = Process.Start(psi);
-                string output = p.StandardOutput.ReadToEnd().Trim();
-                if (!p.WaitForExit(60000)) { try { p.Kill(true); } catch { } return (false, output); }
-                return (p.ExitCode == 0 && output.Length > 0, output);
+                var run = ToolsService.RunPowerShell(psi);
+                string output = run.Output.Trim();
+                return (!run.TimedOut && run.ExitCode == 0 && output.Length > 0, output);
             }
             finally { try { File.Delete(tmp); } catch { } }
         }

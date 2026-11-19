@@ -293,8 +293,88 @@ namespace J365.IntunePSApp.Tests
             Assert.Contains("<ReadOnly>true</ReadOnly>", xml);
             Assert.Contains("App &amp; Co_1.0</HostFolder>", xml);
             Assert.Contains(@"C:\J365Package\Sandbox\Sandbox-Test.ps1", xml);
-            System.Xml.Linq.XDocument.Parse(xml); // well-formed
+            var doc = System.Xml.Linq.XDocument.Parse(xml); // well-formed
+
+            // The result comes back through a second, writable folder; a click on the console must not pause the test.
+            var folders = doc.Descendants("MappedFolder").ToList();
+            Assert.Equal(2, folders.Count);
+            Assert.Equal(SandboxService.ResultsDir(pkg), folders[1].Element("HostFolder").Value);
+            Assert.Equal(@"C:\J365Results", folders[1].Element("SandboxFolder").Value);
+            Assert.Equal("false", folders[1].Element("ReadOnly").Value);
+            Assert.True(Directory.Exists(SandboxService.ResultsDir(pkg)));
+            string command = doc.Descendants("Command").Single().Value;
+            Assert.Contains(@"reg add HKCU\Console /v QuickEdit /t REG_DWORD /d 0 /f", command);
+            Assert.Contains("powershell.exe -NoExit -ExecutionPolicy Bypass -File", command);
         }
+
+        [Fact]
+        public void Sandbox_result_of_a_previous_test_is_discarded_and_the_new_one_is_read()
+        {
+            using var tmp = new TempFolder();
+            Assert.Null(SandboxService.ReadResult(tmp.Path));
+
+            // Same shape Sandbox-Test.ps1 writes with ConvertTo-Json.
+            tmp.File(@"Sandbox\Results\result.json", @"{
+    ""schema"":  1,
+    ""app"":  ""Contoso App 1.2.3"",
+    ""passed"":  false,
+    ""lastStep"":  ""uninstall"",
+    ""lastPassed"":  false,
+    ""steps"":  [
+        { ""step"":  ""install"", ""passed"":  true, ""exitCode"":  0, ""detected"":  true, ""seconds"":  38 },
+        { ""step"":  ""uninstall"", ""passed"":  false, ""exitCode"":  1603, ""detected"":  true, ""seconds"":  12 }
+    ]
+}");
+            var result = SandboxService.ReadResult(tmp.Path);
+            Assert.NotNull(result);
+            Assert.False(result.Passed);
+            Assert.Equal(2, result.Steps.Count);
+            Assert.True(result.Steps[0].Passed);
+            Assert.Equal(38, result.Steps[0].Seconds);
+            Assert.Equal("uninstall", result.Last.Step);
+            Assert.Equal(1603, result.Last.ExitCode);
+            Assert.True(result.Last.Detected);
+
+            // A file caught half written is "no result yet", not an error.
+            tmp.File(@"Sandbox\Results\result.json", "{ \"steps\": [");
+            Assert.Null(SandboxService.ReadResult(tmp.Path));
+
+            SandboxService.CreateConfig(tmp.Path);
+            Assert.False(File.Exists(SandboxService.ResultFile(tmp.Path)));
+        }
+
+        [Fact]
+        public void Sandbox_test_needs_a_package_of_this_generation_and_gets_the_current_script()
+        {
+            using var tmp = new TempFolder();
+            Assert.False(SandboxService.CanTest(tmp.Path));
+            tmp.File(@"Intune\intune-app.json", "{}");
+            Assert.False(SandboxService.CanTest(tmp.Path)); // no Package folder
+            tmp.File(@"Package\Invoke-AppDeployToolkit.exe", "x");
+            Assert.True(SandboxService.CanTest(tmp.Path));
+
+            string old = tmp.File(@"Sandbox\Sandbox-Test.ps1", "# script of an older version");
+            string wsb = SandboxService.Prepare(tmp.Path);
+            Assert.True(File.Exists(wsb));
+            string script = File.ReadAllText(old);
+            Assert.Equal(PackageBuilder.CompanionScript(PackageLayout.SandboxScript), script);
+            // The fixes for the test that looked frozen: no QuickEdit pause, no Smart App Control slowdown, a time limit.
+            Assert.Contains("function global:Disable-J365QuickEdit", script);
+            Assert.Contains("VerifiedAndReputablePolicyState", script);
+            Assert.Contains("$TimeoutMinutes", script);
+            Assert.Contains("result.json", script);
+        }
+
+        [Theory]
+        [InlineData("Enterprise", "Client", true)]
+        [InlineData("Professional", "Client", true)]
+        [InlineData("Education", "Client", true)]
+        [InlineData("Core", "Client", false)]
+        [InlineData("CoreSingleLanguage", "Client", false)]
+        [InlineData("ServerStandard", "Server", false)]
+        [InlineData("", "", true)] // unknown: let Windows answer
+        public void Windows_Sandbox_is_offered_only_where_the_feature_exists(string edition, string installationType, bool expected)
+            => Assert.Equal(expected, SandboxService.IsSupportedEdition(edition, installationType));
 
         [Fact]
         public void Setup_items_start_pending_and_report_what_is_missing()

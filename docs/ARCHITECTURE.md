@@ -38,7 +38,7 @@ Everything a package needs is in `PackageSettings`, saved as `project.json` next
 | `ToolsService.cs` | Downloads and validates PSAppDeployToolkit and IntuneWinAppUtil; `PowerShellValidator` parses generated scripts with Windows PowerShell 5.1. |
 | `SetupService.cs` | First-run dependency setup and the update checks. |
 | `InstallService.cs` | Optional per-user installation, shortcuts, uninstall. |
-| `Integrations.cs` | Windows Sandbox configuration and the launcher of the publishing script. |
+| `Integrations.cs` | Windows Sandbox: state of the Windows feature (ready, open, turned off, not in this edition), enabling it with DISM, the `.wsb` configuration and the result of the test. Launcher of the publishing script. |
 | `Native.cs`, `ImageTools.cs` | P/Invoke (MSI, WinVerifyTrust, icons) and image work. |
 
 ## How a package is generated
@@ -51,6 +51,20 @@ Everything a package needs is in `PackageSettings`, saved as `project.json` next
 6. Branding is applied (`config.psd1`, `strings.psd1`, `Assets`), the detection script is written (pure ASCII) and parsed.
 7. `IntuneWinBuilder` creates the `.intunewin` and immediately validates it (HMAC, decryption, SHA256).
 8. Instructions, `intune-app.json`, `Publish-ToIntune.ps1` and `Sandbox-Test.ps1` are written; `project.json` is saved last, so an incomplete folder is never listed as a package. A failed build removes its folder.
+
+## The Windows Sandbox test
+
+`SandboxService.Prepare` writes the current `Sandbox-Test.ps1` and a `.wsb` file with two mapped folders: the package, read-only, at `C:\J365Package`, and `Sandbox\Results`, writable, at `C:\J365Results`. At logon the script:
+
+1. turns off QuickEdit in its console (a click would otherwise pause it) and the Smart App Control evaluation of the sandbox (it makes an MSI take minutes instead of seconds; measured with a 2 MB MSI: about 120 s against 1 s);
+2. copies the package to `C:\J365Test`, runs the detection script, then the install command line of `intune-app.json`, waiting for that process only, with a time limit, while showing the elapsed time and the last entry of the PSAppDeployToolkit log;
+3. runs the detection script again and writes `result.json` and the logs to `C:\J365Results`.
+
+The editor polls `Sandbox\Results\result.json` and shows each step (install, uninstall) on the result card. `SandboxService.State` decides what *Test in Sandbox* does before that: start, ask to close the open sandbox, offer to enable the Windows feature (`dism /Online /Enable-Feature /FeatureName:Containers-DisposableClientVM /All`, elevated), or explain that the edition has no sandbox.
+
+## Responsive layout
+
+The window never opens larger than the work area and remembers its size. `MainWindow.ApplyResponsiveLayout` switches the sidebar to icons only under 1180 px of width and hides its database card under 760 px of height; `HomeView` and `EditorView` have their own thresholds (indicator columns, stacked cards, dialog preview). `--snapshot <folder> --snapshot-size 900x580` renders every page at a given window size to check them.
 
 ## The `.intunewin` format
 

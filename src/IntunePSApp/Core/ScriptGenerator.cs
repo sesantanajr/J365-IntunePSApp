@@ -253,18 +253,38 @@ namespace J365.IntunePSApp.Core
             var L = new List<string>();
             if (continueOnError)
             {
-                L.Add("    ## Removes any version already installed (MSI and EXE). A failure here is logged but does not stop the installation.");
+                // Uninstall first, install after: no detection rule is consulted, so the same version is replaced too
+                // and two versions of the application never end up side by side.
+                string find = $"@(Get-ADTApplication -Name {pat} -NameMatch 'Wildcard')";
+                const string describe = "(($_ | ForEach-Object { \"$($_.DisplayName) $($_.DisplayVersion)\".Trim() }) -join '; ')";
+                L.Add("    ## Existing versions: whatever is already installed is removed first, then the new version is installed.");
+                L.Add("    ## No detection rule is consulted here: the removal runs whenever a program with this name is found (MSI and EXE).");
+                L.Add("    ## A failure is logged but does not stop the installation.");
+                L.Add($"    $existingApps = {find}");
+                L.Add("    if ($existingApps.Count -eq 0)");
+                L.Add("    {");
+                L.Add("        Write-ADTLogEntry -Message 'No version already installed was found: nothing to remove.'");
+                L.Add("    }");
+                L.Add("    else");
+                L.Add("    {");
+                L.Add("        Write-ADTLogEntry -Message ('Versions already installed, removed before installing: ' + " + describe.Replace("$_ |", "$existingApps |") + ")");
                 foreach (var c in new[] { msi, exe })
                 {
-                    L.Add("    try");
-                    L.Add("    {");
-                    L.Add("        " + c);
-                    L.Add("    }");
-                    L.Add("    catch");
-                    L.Add("    {");
-                    L.Add("        Write-ADTLogEntry -Message \"Could not remove the previous version: $($_.Exception.Message)\" -Severity 2");
-                    L.Add("    }");
+                    L.Add("        try");
+                    L.Add("        {");
+                    L.Add("            " + c);
+                    L.Add("        }");
+                    L.Add("        catch");
+                    L.Add("        {");
+                    L.Add("            Write-ADTLogEntry -Message \"Could not remove the previous version: $($_.Exception.Message)\" -Severity 2");
+                    L.Add("        }");
                 }
+                L.Add($"        $remainingApps = {find}");
+                L.Add("        if ($remainingApps.Count -gt 0)");
+                L.Add("        {");
+                L.Add("            Write-ADTLogEntry -Message ('Still installed after the removal (the new version is installed over it): ' + " + describe.Replace("$_ |", "$remainingApps |") + ") -Severity 2");
+                L.Add("        }");
+                L.Add("    }");
             }
             else
             {

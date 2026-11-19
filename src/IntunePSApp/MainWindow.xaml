@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:l="clr-namespace:J365.IntunePSApp.Localization"
-        Title="J365 IntunePSApp" Width="1360" Height="880" MinWidth="1120" MinHeight="720"
+        Title="J365 IntunePSApp" Width="1360" Height="880" MinWidth="900" MinHeight="580"
         WindowStartupLocation="CenterScreen" Background="{StaticResource PageBg}"
         FontFamily="{StaticResource UiFont}" FontSize="13.5" UseLayoutRounding="True"
         TextOptions.TextFormattingMode="Display" Icon="Assets/app.ico">
@@ -12,26 +12,27 @@
 
   <Grid x:Name="Root">
     <Grid.ColumnDefinitions>
-      <ColumnDefinition Width="256"/>
+      <!-- 256 px, or 64 px (icons only) when the window is narrow: see MainWindow.ApplyResponsiveLayout. -->
+      <ColumnDefinition x:Name="SidebarColumn" Width="256"/>
       <ColumnDefinition Width="*"/>
     </Grid.ColumnDefinitions>
 
     <!-- ===================== Sidebar ===================== -->
     <Border Grid.Column="0" Background="{StaticResource SidebarBrush}">
-      <DockPanel Margin="16,14,16,14">
-        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="4,0,0,22">
-          <Border Width="46" Height="46" CornerRadius="12" Background="#14FFFFFF" Margin="0,0,12,0">
+      <DockPanel x:Name="SidebarPanel" Margin="16,14,16,14">
+        <StackPanel x:Name="BrandPanel" DockPanel.Dock="Top" Orientation="Horizontal" Margin="4,0,0,22">
+          <Border x:Name="BrandIcon" Width="46" Height="46" CornerRadius="12" Background="#14FFFFFF" Margin="0,0,12,0">
             <Image Source="Assets/j365-cloud.png" Width="36" RenderOptions.BitmapScalingMode="HighQuality"/>
           </Border>
-          <StackPanel VerticalAlignment="Center">
+          <StackPanel x:Name="BrandText" VerticalAlignment="Center">
             <TextBlock Text="IntunePSApp" Foreground="White" FontFamily="{StaticResource DisplayFont}" FontSize="19" FontWeight="SemiBold"/>
             <TextBlock Text="{l:T Brand_By}" Foreground="#8FA6C6" FontSize="12"/>
           </StackPanel>
         </StackPanel>
 
-        <StackPanel DockPanel.Dock="Bottom">
+        <StackPanel x:Name="SidebarFooter" DockPanel.Dock="Bottom">
           <!-- Application database -->
-          <Border CornerRadius="12" Background="#10FFFFFF" BorderBrush="#1FFFFFFF" BorderThickness="1" Padding="14,11" Margin="0,0,0,10">
+          <Border x:Name="DatabaseCard" CornerRadius="12" Background="#10FFFFFF" BorderBrush="#1FFFFFFF" BorderThickness="1" Padding="14,11" Margin="0,0,0,10">
             <StackPanel>
               <StackPanel Orientation="Horizontal">
                 <TextBlock Text="&#xE8F1;" Style="{StaticResource Icon}" Foreground="#7FD3F7" FontSize="15" Margin="0,0,8,0"/>
@@ -45,8 +46,12 @@
           </Border>
 
           <!-- Credits -->
-          <Border CornerRadius="12" Background="#0AFFFFFF" Padding="12,9,12,8" Margin="0,0,0,8">
+          <Border CornerRadius="12" Background="#0AFFFFFF" Padding="12,10,12,8" Margin="0,0,0,8">
             <StackPanel>
+              <!-- Jornada 365 logo (the one of the blog); on a white badge so it reads on the dark sidebar. -->
+              <Button Style="{StaticResource LogoBadge}" Click="Blog_Click" ToolTip="{l:T Credits_BlogTip}" Margin="0,0,0,9">
+                <Image Source="Assets/j365-logo.png" Height="50" RenderOptions.BitmapScalingMode="HighQuality"/>
+              </Button>
               <TextBlock Text="{l:T Credits_CreatedBy}" Foreground="#8FA6C6" FontSize="11.5" Margin="2,0,0,0"/>
               <Button Style="{StaticResource SidebarLink}" Foreground="White" Padding="2,2" HorizontalAlignment="Left" Click="Author_Click" ToolTip="{l:T Credits_LinkedInTip}">
                 <StackPanel Orientation="Horizontal">
@@ -77,8 +82,8 @@
           <TextBlock x:Name="VersionText" Foreground="#6F86A8" FontSize="11.5" Margin="6,6,0,0"/>
         </StackPanel>
 
-        <StackPanel>
-          <TextBlock Text="{l:T Main_Menu}" Style="{StaticResource Overline}" Foreground="#6F86A8" Margin="6,0,0,10"/>
+        <StackPanel x:Name="NavPanel">
+          <TextBlock x:Name="MenuLabel" Text="{l:T Main_Menu}" Style="{StaticResource Overline}" Foreground="#6F86A8" Margin="6,0,0,10"/>
           <RadioButton x:Name="NavHome" Style="{StaticResource NavItem}" GroupName="nav" Tag="home" Checked="Nav_Checked" WindowChrome.IsHitTestVisibleInChrome="True">
             <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE80F;" Style="{StaticResource Icon}" Margin="0,0,14,0"/><TextBlock Text="{l:T Nav_Home}"/></StackPanel>
           </RadioButton>

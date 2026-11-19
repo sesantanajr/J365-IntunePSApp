@@ -60,8 +60,9 @@
     </Grid>
 
     <!-- Steps -->
-    <Border Grid.Row="1" Background="White" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="24" Padding="5" Margin="0,16,0,14" HorizontalAlignment="Left">
-      <StackPanel x:Name="Stepper" Orientation="Horizontal">
+    <Border Grid.Row="1" Background="White" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="22" Padding="5" Margin="0,16,0,14" HorizontalAlignment="Left">
+      <!-- WrapPanel: on narrow windows the steps continue on a second line instead of being cut off. -->
+      <WrapPanel x:Name="Stepper" Orientation="Horizontal">
         <RadioButton Style="{StaticResource StepItem}" GroupName="step" Tag="0" Content="{l:T Step_1}" Checked="Step_Checked"/>
         <RadioButton Style="{StaticResource StepItem}" GroupName="step" Tag="1" Content="{l:T Step_2}" Checked="Step_Checked"/>
         <RadioButton Style="{StaticResource StepItem}" GroupName="step" Tag="2" Content="{l:T Step_3}" Checked="Step_Checked"/>
@@ -70,7 +71,7 @@
         <RadioButton Style="{StaticResource StepItem}" GroupName="step" Tag="5" Content="{l:T Step_6}" Checked="Step_Checked"/>
         <RadioButton Style="{StaticResource StepItem}" GroupName="step" Tag="6" Content="{l:T Step_7}" Checked="Step_Checked"/>
         <RadioButton Style="{StaticResource StepItem}" GroupName="step" Tag="7" Content="{l:T Step_8}" Checked="Step_Checked"/>
-      </StackPanel>
+      </WrapPanel>
     </Border>
 
     <!-- Body -->
@@ -139,6 +140,21 @@
               </StackPanel>
             </Border>
             <CheckBox x:Name="ChkIncludeFolder" Style="{StaticResource Switch}" Content="{l:T Ed_IncludeFolder}" Margin="0,4,0,0"/>
+
+            <!-- Versions already installed on the device (same setting as the switch of step 5) -->
+            <Border Style="{StaticResource Section}" Margin="0,18,0,0">
+              <StackPanel>
+                <StackPanel Orientation="Horizontal">
+                  <Border Width="28" Height="28" CornerRadius="14" Background="{StaticResource BrandSoft}" Margin="0,0,10,0">
+                    <TextBlock Text="&#xE777;" Style="{StaticResource Icon}" FontSize="13" Foreground="{StaticResource Brand}" HorizontalAlignment="Center"/>
+                  </Border>
+                  <TextBlock Text="{l:T Ed_ExistingTitle}" Style="{StaticResource H2}" VerticalAlignment="Center"/>
+                </StackPanel>
+                <CheckBox x:Name="ChkRemovePrevQuick" Style="{StaticResource Switch}" Content="{l:T Ed_RemovePrev}" FontWeight="SemiBold" Margin="0,14,0,0"
+                          Checked="RemovePrev_Changed" Unchecked="RemovePrev_Changed"/>
+                <TextBlock x:Name="ExistingFlow" Style="{StaticResource Hint}" Margin="52,6,0,0"/>
+              </StackPanel>
+            </Border>
           </StackPanel>
 
           <!-- 2. Application -->
@@ -359,11 +375,13 @@
               <StackPanel>
                 <TextBlock Text="{l:T Ed_Uninstall}" Style="{StaticResource H2}"/>
                 <TextBlock Text="{l:T Ed_UninstallHint}" Style="{StaticResource MutedText}"/>
-                <CheckBox x:Name="ChkRemovePrev" Style="{StaticResource Switch}" Content="{l:T Ed_RemovePrev}" FontWeight="SemiBold" Margin="0,16,0,0"/>
+                <CheckBox x:Name="ChkRemovePrev" Style="{StaticResource Switch}" Content="{l:T Ed_RemovePrev}" FontWeight="SemiBold" Margin="0,16,0,0"
+                          Checked="RemovePrev_Changed" Unchecked="RemovePrev_Changed"/>
+                <TextBlock Text="{l:T Ed_RemovePrevHint}" Style="{StaticResource Hint}" Margin="52,6,0,0"/>
                 <TextBlock Text="{l:T Ed_ProgramName}" Style="{StaticResource Label}"/>
                 <Grid>
                   <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                  <TextBox x:Name="TxtPattern"/>
+                  <TextBox x:Name="TxtPattern" TextChanged="Pattern_Changed"/>
                   <Button Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="{l:T Ed_ShowMatches}" Margin="8,0,0,0" Click="ShowInstalled_Click"/>
                 </Grid>
                 <TextBlock Style="{StaticResource Hint}" Text="{l:T Ed_PatternHint}"/>
@@ -525,6 +543,14 @@
                     <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE898;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock Text="{l:T Ed_Publish}"/></StackPanel>
                   </Button>
                 </WrapPanel>
+                <!-- Result of the Windows Sandbox test, read from Sandbox\Results\result.json -->
+                <Border x:Name="SandboxStatus" CornerRadius="10" Padding="14,10" Margin="0,6,0,0" Background="{StaticResource BrandSoft}" Visibility="Collapsed">
+                  <DockPanel>
+                    <Button x:Name="BtnSandboxLogs" DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Content="{l:T Ed_SandboxLogs}" Margin="10,0,0,0" VerticalAlignment="Center" Click="SandboxLogs_Click" Visibility="Collapsed"/>
+                    <TextBlock x:Name="SandboxStatusIcon" DockPanel.Dock="Left" Text="&#xE7F8;" Style="{StaticResource Icon}" Margin="0,0,10,0" Foreground="{StaticResource Brand}"/>
+                    <TextBlock x:Name="SandboxStatusText" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="{StaticResource Ink2}"/>
+                  </DockPanel>
+                </Border>
               </StackPanel>
             </Border>
 

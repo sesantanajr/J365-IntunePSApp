@@ -60,10 +60,10 @@ Anyone can use it: there is nothing to install, no script to write and no PowerS
 | **Company branding** | Your logo, company name and accent colour in every dialog. Save once, reuse in every package. |
 | **Ready-made actions** | 20 actions, no scripting: install a **dependency**, uninstall another app, shortcuts, files and folders, copy to every user profile, registry values, import `.reg`, services, scheduled tasks, environment variables, run a program, show a message... and a PowerShell box for everything else. |
 | **Dependencies** | When the winget manifest declares dependencies (Visual C++ Redistributable, .NET Desktop Runtime...), one click downloads the right installer, ships it inside the package and installs it first. |
-| **Previous versions** | Removes any version already installed (MSI and EXE) before installing the new one. |
+| **Versions already installed** | Uninstalls any version already on the device (MSI and EXE) and only then installs the new one, so two versions never stay side by side. No detection is consulted before uninstalling; what was found and removed goes to the log. |
 | **Detection** | Generated detection script: by program name and minimum version, by product code, or by file. Test it on your computer with one click. |
 | **Keeping packages current** | *My packages* shows which packages have a **newer version in the database**. *Update* downloads the new installer and keeps every customisation. |
-| **Test before publishing** | **Windows Sandbox**: one click installs the package in a disposable Windows and runs the detection rule. Or test on the local computer. |
+| **Test before publishing** | **Windows Sandbox**: one click installs the package in a disposable Windows and runs the detection rule, with live progress; the result and the logs come back to the application. If the Windows feature is not installed, the application says so and installs it for you. Or test on the local computer. |
 | **Publish to Intune (preview)** | A generated `Publish-ToIntune.ps1` creates the app in your tenant with your own sign-in, without assignments. See [docs/INTUNE-PUBLISH.md](docs/INTUNE-PUBLISH.md). |
 | **English and Portuguese** | Switch the language at any time (sidebar or Settings). The generated instructions follow the same language. |
 | **Portable or installed** | Runs from any folder. Optionally installs for your user (Start menu, *Installed apps*) without administrator rights, and uninstalls cleanly. |
@@ -100,7 +100,9 @@ Anyone can use it: there is nothing to install, no script to write and no PowerS
 │   ├── intune-app.json              the same information, machine-readable
 │   ├── Publish-ToIntune.ps1         optional publishing script (preview)
 │   └── AppIcon.png
-├── Sandbox\Sandbox-Test.ps1     test script used by "Test in Sandbox"
+├── Sandbox\
+│   ├── Sandbox-Test.ps1             test script used by "Test in Sandbox"
+│   └── Results\                     result.json and logs written by the last sandbox test
 ├── project.json                 reopen, change and generate again
 └── build.log
 ```
@@ -132,10 +134,10 @@ Every release is built by GitHub Actions from the tagged commit and carries chec
 
 ```powershell
 # 1. Checksum: compare with SHA256SUMS.txt of the release
-Get-FileHash .\J365-IntunePSApp-2.0.0-win-x64.zip -Algorithm SHA256
+Get-FileHash .\J365-IntunePSApp-2.1.0-win-x64.zip -Algorithm SHA256
 
 # 2. Provenance: proves the file was built by this repository's workflow (GitHub CLI)
-gh attestation verify .\J365-IntunePSApp-2.0.0-win-x64.zip --repo sesantanajr/J365-IntunePSApp
+gh attestation verify .\J365-IntunePSApp-2.1.0-win-x64.zip --repo sesantanajr/J365-IntunePSApp
 ```
 
 What the application itself verifies: the database installers (SHA256 from the winget manifest), the PSAppDeployToolkit module (Authenticode signature), IntuneWinAppUtil (Microsoft signature, otherwise discarded) and every `.intunewin` it creates (HMAC and SHA256). See [SECURITY.md](SECURITY.md).
@@ -152,9 +154,10 @@ The project is open source so you can **audit it, build it yourself, fork it or 
 
 ## What was tested (and what was not)
 
-- **Automated:** 125 unit tests run on every push (generated scripts are parsed by Windows PowerShell 5.1, `.intunewin` round trip, both languages, project migration, validations).
+- **Automated:** 136 unit tests run on every push (generated scripts are parsed by Windows PowerShell 5.1, `.intunewin` round trip, both languages, project migration, validations).
 - **End to end, by the author:** packages built from the interface and from the command line in both languages; a generated package executed for real with a test installer (install, repair, uninstall, 22 actions including dependency and `.reg` import); first-run setup on an empty folder; per-user install and uninstall; database generation.
-- **Not verified by the author yet:** *Publish to Intune* against a real tenant (the script was reviewed against the IntuneWin32App module and its validation mode was run; that is why it is labelled **preview**) and the Windows Sandbox launch itself (the test script was run outside the sandbox). Feedback is welcome in the [issues](https://github.com/sesantanajr/J365-IntunePSApp/issues).
+- **In Windows Sandbox (2.1):** the 7-Zip MSI package was installed by the test script in a real sandbox (exit code 0, detected, 31 s; the same installation took about 150 s before the Smart App Control fix), and run as SYSTEM three times in a row: install on a clean Windows, install again over the existing version (the log shows it being listed and uninstalled first) and uninstall (no longer detected). Not exercised: enabling the Windows feature from the application (it needs a computer without it) and the test of an `.exe` installer.
+- **Not verified by the author yet:** *Publish to Intune* against a real tenant (the script was reviewed against the IntuneWin32App module and its validation mode was run; that is why it is labelled **preview**). Feedback is welcome in the [issues](https://github.com/sesantanajr/J365-IntunePSApp/issues).
 
 As with any packaging tool: **always test a package with a pilot group before a broad deployment.**
 
@@ -232,10 +235,10 @@ Qualquer pessoa consegue usar: não há nada para instalar, nenhum script para e
 | **Identidade da empresa** | Seu logo, nome da empresa e cor de destaque em todas as janelas. Salve uma vez e reutilize em todos os pacotes. |
 | **Ações prontas** | 20 ações, sem script: instalar uma **dependência**, desinstalar outro app, atalhos, arquivos e pastas, copiar para o perfil de cada usuário, valores de registro, importar `.reg`, serviços, tarefas agendadas, variáveis de ambiente, executar um programa, mostrar mensagem... e uma caixa de PowerShell para todo o resto. |
 | **Dependências** | Quando o manifesto do winget declara dependências (Visual C++ Redistributable, .NET Desktop Runtime...), um clique baixa o instalador certo, envia dentro do pacote e instala antes. |
-| **Versões anteriores** | Remove qualquer versão já instalada (MSI e EXE) antes de instalar a nova. |
+| **Versões já instaladas** | Desinstala qualquer versão que já esteja no dispositivo (MSI e EXE) e só então instala a nova, para nunca ficarem duas versões lado a lado. Nenhuma detecção é consultada antes de desinstalar; o que foi encontrado e removido vai para o log. |
 | **Detecção** | Script de detecção gerado: pelo nome do programa e versão mínima, pelo código do produto ou por arquivo. Teste no seu computador com um clique. |
 | **Pacotes sempre atuais** | *Meus pacotes* mostra quais pacotes têm **versão mais nova no banco de dados**. *Atualizar* baixa o novo instalador e mantém todas as personalizações. |
-| **Teste antes de publicar** | **Windows Sandbox**: um clique instala o pacote em um Windows descartável e executa a regra de detecção. Ou teste no computador local. |
+| **Teste antes de publicar** | **Windows Sandbox**: um clique instala o pacote em um Windows descartável e executa a regra de detecção, com progresso ao vivo; o resultado e os logs voltam para o aplicativo. Se o recurso do Windows não estiver instalado, o aplicativo avisa e instala para você. Ou teste no computador local. |
 | **Publicar no Intune (prévia)** | Um `Publish-ToIntune.ps1` gerado cria o aplicativo no seu locatário com o seu próprio login, sem atribuições. Veja [docs/INTUNE-PUBLISH.md](docs/INTUNE-PUBLISH.md). |
 | **Inglês e português** | Troque o idioma a qualquer momento (barra lateral ou Configurações). As instruções geradas seguem o mesmo idioma. |
 | **Portátil ou instalado** | Roda de qualquer pasta. Se quiser, instala para o seu usuário (Menu Iniciar, *Aplicativos instalados*) sem precisar de administrador, e desinstala sem deixar resíduos. |
@@ -272,7 +275,9 @@ Qualquer pessoa consegue usar: não há nada para instalar, nenhum script para e
 │   ├── intune-app.json              as mesmas informações, para automação
 │   ├── Publish-ToIntune.ps1         script opcional de publicação (prévia)
 │   └── AppIcon.png
-├── Sandbox\Sandbox-Test.ps1     script de teste usado por "Testar no Sandbox"
+├── Sandbox\
+│   ├── Sandbox-Test.ps1             script de teste usado por "Testar no Sandbox"
+│   └── Results\                     result.json e logs gravados pelo último teste no sandbox
 ├── project.json                 reabra, altere e gere novamente
 └── build.log
 ```
@@ -304,10 +309,10 @@ Cada versão é compilada pelo GitHub Actions a partir do commit marcado e traz 
 
 ```powershell
 # 1. Checksum: compare com o SHA256SUMS.txt da versão
-Get-FileHash .\J365-IntunePSApp-2.0.0-win-x64.zip -Algorithm SHA256
+Get-FileHash .\J365-IntunePSApp-2.1.0-win-x64.zip -Algorithm SHA256
 
 # 2. Procedência: prova que o arquivo foi compilado pelo workflow deste repositório (GitHub CLI)
-gh attestation verify .\J365-IntunePSApp-2.0.0-win-x64.zip --repo sesantanajr/J365-IntunePSApp
+gh attestation verify .\J365-IntunePSApp-2.1.0-win-x64.zip --repo sesantanajr/J365-IntunePSApp
 ```
 
 O que o próprio aplicativo verifica: os instaladores do banco de dados (SHA256 do manifesto do winget), o módulo do PSAppDeployToolkit (assinatura Authenticode), o IntuneWinAppUtil (assinatura da Microsoft, senão é descartado) e cada `.intunewin` criado (HMAC e SHA256). Veja [SECURITY.md](SECURITY.md).
@@ -324,9 +329,10 @@ O projeto é de código aberto para que você possa **auditar, compilar, fazer u
 
 ## O que foi testado (e o que não foi)
 
-- **Automatizado:** 125 testes unitários rodam a cada push (os scripts gerados são analisados pelo Windows PowerShell 5.1, ida e volta do `.intunewin`, os dois idiomas, migração de projetos, validações).
+- **Automatizado:** 136 testes unitários rodam a cada push (os scripts gerados são analisados pelo Windows PowerShell 5.1, ida e volta do `.intunewin`, os dois idiomas, migração de projetos, validações).
 - **De ponta a ponta, pelo autor:** pacotes gerados pela interface e pela linha de comando nos dois idiomas; um pacote gerado executado de verdade com um instalador de teste (instalação, reparo, desinstalação, 22 ações incluindo dependência e importação de `.reg`); preparação da primeira execução em uma pasta vazia; instalação e desinstalação por usuário; geração do banco de dados.
-- **Ainda não verificado pelo autor:** *Publicar no Intune* contra um locatário real (o script foi revisado com base no módulo IntuneWin32App e o modo de validação foi executado; por isso está marcado como **prévia**) e a abertura do Windows Sandbox em si (o script de teste foi executado fora do sandbox). Relatos são bem-vindos nas [issues](https://github.com/sesantanajr/J365-IntunePSApp/issues).
+- **No Windows Sandbox (2.1):** o pacote MSI do 7-Zip foi instalado pelo script de teste em um sandbox real (código de saída 0, detectado, 31 s; a mesma instalação levava cerca de 150 s antes da correção do Smart App Control) e executado como SYSTEM três vezes seguidas: instalação em um Windows limpo, instalação por cima da versão existente (o log mostra ela sendo listada e desinstalada antes) e desinstalação (não é mais detectado). Não exercitado: a ativação do recurso do Windows pelo aplicativo (exige um computador sem ele) e o teste de um instalador `.exe`.
+- **Ainda não verificado pelo autor:** *Publicar no Intune* contra um locatário real (o script foi revisado com base no módulo IntuneWin32App e o modo de validação foi executado; por isso está marcado como **prévia**). Relatos são bem-vindos nas [issues](https://github.com/sesantanajr/J365-IntunePSApp/issues).
 
 Como em qualquer ferramenta de empacotamento: **sempre teste o pacote em um grupo piloto antes de uma implantação ampla.**
 

@@ -25,7 +25,30 @@ namespace J365.IntunePSApp.Views
         {
             InitializeComponent();
             BuildSteps();
+            SizeChanged += (s, e) => ApplyResponsiveLayout();
         }
+
+        /// <summary>Page width (DIPs) under which the page switches to its narrow layout.</summary>
+        private const double NarrowBelow = 900;
+        private bool? _narrow;
+
+        /// <summary>Narrow window: indicators in 2 columns, the two information cards stacked and no artwork in the banner.</summary>
+        private void ApplyResponsiveLayout()
+        {
+            if (ActualWidth <= 0) return;
+            bool narrow = ActualWidth < NarrowBelow;
+            if (_narrow == narrow) return;
+            _narrow = narrow;
+            Stats.Columns = narrow ? 2 : 4;
+            HeroArt.Visibility = narrow ? Visibility.Collapsed : Visibility.Visible;
+            Info.ColumnDefinitions[1].Width = new GridLength(narrow ? 0 : 16);
+            Info.ColumnDefinitions[2].Width = narrow ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+            Grid.SetColumn(RecentCard, narrow ? 0 : 2);
+            Grid.SetRow(RecentCard, narrow ? 1 : 0);
+            RecentCard.Margin = narrow ? new Thickness(0, 16, 0, 0) : new Thickness(0);
+        }
+
+        private void Blog_Click(object sender, RoutedEventArgs e) => MainWindow.OpenUrl(AppInfo.BlogUrl);
 
         private void BuildSteps()
         {

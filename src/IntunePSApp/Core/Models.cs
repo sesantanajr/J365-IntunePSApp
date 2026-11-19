@@ -130,6 +130,10 @@ namespace J365.IntunePSApp.Core
         public DateTime? LastUpdateCheck { get; set; }
         public string LatestAppVersion { get; set; } = "";
         public string LatestPsadtVersion { get; set; } = "";
+        // Main window (size of the last session, in device-independent pixels)
+        public double WindowWidth { get; set; }
+        public double WindowHeight { get; set; }
+        public bool WindowMaximized { get; set; }
         // Company branding
         public string CompanyName { get; set; } = "";
         public string LogoPath { get; set; } = "";

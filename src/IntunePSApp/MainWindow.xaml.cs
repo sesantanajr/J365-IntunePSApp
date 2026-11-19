@@ -49,6 +49,8 @@ namespace J365.IntunePSApp
             Settings = new SettingsView();
             AuthorText.Text = AppInfo.Author;
             SetupList.ItemsSource = _setupItems;
+            ApplyInitialPlacement();
+            SizeChanged += (s, e) => ApplyResponsiveLayout();
             StateChanged += (s, e) => ApplyMaximizedFix();
             Loaded += OnLoaded;
             CatalogService.Instance.Changed += () => Dispatcher.Invoke(() => UpdateCatalogStatus());
@@ -410,7 +412,89 @@ namespace J365.IntunePSApp
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
         {
             if (Editor != null && Editor.IsBuilding && !Ui.Confirm(T("Main_ConfirmExitBuilding"), danger: true)) { e.Cancel = true; return; }
+            SavePlacement();
             base.OnClosing(e);
+        }
+
+        // ------------------------------------------------------------------ size and responsive layout
+
+        /// <summary>Window width (DIPs) under which the sidebar shows icons only.</summary>
+        public const double CompactSidebarBelow = 1180;
+        /// <summary>Window height (DIPs) under which the database card of the sidebar gives its room to the navigation.</summary>
+        public const double ShortSidebarBelow = 760;
+
+        private bool? _compactSidebar;
+
+        /// <summary>
+        /// First size of the window: the one of the last session, never larger than the work area of the screen. Where the
+        /// default size does not fit (small notebooks, 125-150 % scaling, remote sessions) the window starts maximized.
+        /// </summary>
+        private void ApplyInitialPlacement()
+        {
+            if (App.HasArg("--snapshot"))
+            {
+                // Capture mode: "--snapshot-size 1024x640" renders the pages at that window size (responsive checks).
+                var m = System.Text.RegularExpressions.Regex.Match(App.Arg("--snapshot-size") ?? "", @"^(\d{3,4})x(\d{3,4})$");
+                if (m.Success) { Width = Math.Max(MinWidth, int.Parse(m.Groups[1].Value)); Height = Math.Max(MinHeight, int.Parse(m.Groups[2].Value)); }
+                return;
+            }
+            var area = SystemParameters.WorkArea;
+            var c = ConfigStore.Current;
+            MinWidth = Math.Min(MinWidth, area.Width);
+            MinHeight = Math.Min(MinHeight, area.Height);
+            if (c.WindowWidth >= MinWidth && c.WindowHeight >= MinHeight) { Width = c.WindowWidth; Height = c.WindowHeight; }
+            bool fits = Width <= area.Width - 16 && Height <= area.Height - 16;
+            if (!fits)
+            {
+                Width = Math.Max(MinWidth, Math.Min(Width, area.Width - 16));
+                Height = Math.Max(MinHeight, Math.Min(Height, area.Height - 16));
+            }
+            if (c.WindowMaximized || !fits) WindowState = WindowState.Maximized;
+        }
+
+        private void SavePlacement()
+        {
+            if (App.HasArg("--snapshot")) return;
+            var c = ConfigStore.Current;
+            c.WindowMaximized = WindowState == WindowState.Maximized;
+            var bounds = WindowState == WindowState.Normal ? new Rect(Left, Top, ActualWidth, ActualHeight) : RestoreBounds;
+            if (!bounds.IsEmpty && bounds.Width >= MinWidth && bounds.Height >= MinHeight)
+            {
+                c.WindowWidth = Math.Round(bounds.Width);
+                c.WindowHeight = Math.Round(bounds.Height);
+            }
+            ConfigStore.Save();
+        }
+
+        /// <summary>
+        /// Narrow window: the sidebar keeps only its icons (64 px instead of 256). Short window: the database card is hidden.
+        /// Everything hidden here is also available on the Home and Settings pages.
+        /// </summary>
+        private void ApplyResponsiveLayout()
+        {
+            if (ActualWidth <= 0) return;
+            bool compact = ActualWidth < CompactSidebarBelow;
+            if (_compactSidebar != compact)
+            {
+                _compactSidebar = compact;
+                var hidden = compact ? Visibility.Collapsed : Visibility.Visible;
+                SidebarColumn.Width = new GridLength(compact ? 64 : 256);
+                SidebarPanel.Margin = compact ? new Thickness(10, 14, 10, 14) : new Thickness(16, 14, 16, 14);
+                BrandPanel.Margin = compact ? new Thickness(0, 0, 0, 18) : new Thickness(4, 0, 0, 22);
+                BrandIcon.Width = BrandIcon.Height = compact ? 44 : 46;
+                BrandIcon.Margin = compact ? new Thickness(0) : new Thickness(0, 0, 12, 0);
+                BrandText.Visibility = MenuLabel.Visibility = SidebarFooter.Visibility = hidden;
+                foreach (var item in NavPanel.Children.OfType<RadioButton>())
+                {
+                    if (!(item.Content is StackPanel sp) || sp.Children.Count != 2 || !(sp.Children[0] is TextBlock icon) || !(sp.Children[1] is TextBlock label)) continue;
+                    icon.Margin = compact ? new Thickness(0) : new Thickness(0, 0, 14, 0);
+                    label.Visibility = hidden;
+                    // The label becomes the tooltip (bound, so it follows the interface language).
+                    if (compact) item.SetBinding(ToolTipProperty, new System.Windows.Data.Binding(nameof(TextBlock.Text)) { Source = label });
+                    else System.Windows.Data.BindingOperations.ClearBinding(item, ToolTipProperty);
+                }
+            }
+            DatabaseCard.Visibility = ActualHeight < ShortSidebarBelow ? Visibility.Collapsed : Visibility.Visible;
         }
 
         public static BitmapImage LoadBitmap(string path)

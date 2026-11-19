@@ -207,6 +207,25 @@ namespace J365.IntunePSApp.Core
             psi.Environment["PSModulePath"] = "";
             return psi;
         }
+
+        /// <summary>
+        /// Runs Windows PowerShell and returns its exit code and standard output. Both streams are drained while the
+        /// process runs (a full error pipe would otherwise block it) and the process tree is stopped at the time limit.
+        /// </summary>
+        public static (int ExitCode, string Output, bool TimedOut) RunPowerShell(ProcessStartInfo psi, int timeoutMs = 60000)
+        {
+            using var p = Process.Start(psi) ?? throw new InvalidOperationException(WindowsPowerShell);
+            var stdout = p.StandardOutput.ReadToEndAsync();
+            var stderr = p.StandardError.ReadToEndAsync();
+            if (!p.WaitForExit(timeoutMs))
+            {
+                try { p.Kill(true); } catch { }
+                return (-1, "", true);
+            }
+            p.WaitForExit(); // flushes the redirected streams
+            _ = stderr.GetAwaiter().GetResult();
+            return (p.ExitCode, stdout.GetAwaiter().GetResult(), false);
+        }
     }
 
     /// <summary>Checks the syntax of generated scripts with the Windows PowerShell 5.1 parser (the engine that runs the package).</summary>
@@ -235,10 +254,9 @@ namespace J365.IntunePSApp.Core
                                       "foreach($x in $e){'{0}: {1}' -f $x.Extent.StartLineNumber,$x.Message}";
                 var psi = ToolsService.PowerShellStartInfo("-NoProfile -NonInteractive -Command \"" + script + "\"");
                 psi.Environment["J365_PS_FILE"] = file;
-                using var p = Process.Start(psi);
-                string output = p.StandardOutput.ReadToEnd();
-                if (!p.WaitForExit(60000)) { try { p.Kill(true); } catch { } }
-                return output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                var run = ToolsService.RunPowerShell(psi);
+                if (run.TimedOut) throw new TimeoutException(ToolsService.WindowsPowerShell);
+                return run.Output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
             }
             catch (Exception ex)
             {

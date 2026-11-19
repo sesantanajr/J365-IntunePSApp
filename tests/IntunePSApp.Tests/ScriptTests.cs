@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using J365.IntunePSApp.Core;
+using J365.IntunePSApp.Localization;
 using Xunit;
 
 namespace J365.IntunePSApp.Tests
@@ -90,6 +91,50 @@ namespace J365.IntunePSApp.Tests
             string install = script.Substring(script.IndexOf("function Install-ADTDeployment"), script.IndexOf("function Uninstall-ADTDeployment") - script.IndexOf("function Install-ADTDeployment"));
             Assert.DoesNotContain("Show-ADTInstallationWelcome", install);
             Assert.DoesNotContain("Uninstall-ADTApplication", install);
+        }
+
+        [Fact]
+        public void Existing_versions_are_removed_before_installing_without_any_detection_gate()
+        {
+            var s = Fakes.Settings("MSI");
+            string script = ScriptGenerator.DeployScript(Fakes.Template, s, "app.msi");
+            Ps.AssertParses(script);
+            int start = script.IndexOf("function Install-ADTDeployment"), end = script.IndexOf("function Uninstall-ADTDeployment");
+            string install = script.Substring(start, end - start);
+
+            // What is installed is listed (and logged), removed, and checked again; then the new version is installed.
+            int find = install.IndexOf("$existingApps = @(Get-ADTApplication -Name 'Contoso App*' -NameMatch 'Wildcard')");
+            int removeMsi = install.IndexOf("Uninstall-ADTApplication -Name 'Contoso App*' -NameMatch 'Wildcard' -ApplicationType 'MSI'");
+            int removeExe = install.IndexOf("Uninstall-ADTApplication -Name 'Contoso App*' -NameMatch 'Wildcard' -ApplicationType 'EXE'");
+            int verify = install.IndexOf("$remainingApps = @(Get-ADTApplication -Name 'Contoso App*' -NameMatch 'Wildcard')");
+            int installMsi = install.IndexOf("Start-ADTMsiProcess -Action 'Install'");
+            Assert.True(find > 0 && find < removeMsi && removeMsi < removeExe && removeExe < verify && verify < installMsi);
+            Assert.Contains("No version already installed was found", install);
+            // A failed removal is logged and the installation goes on.
+            Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(install, "Could not remove the previous version").Count);
+        }
+
+        [Fact]
+        public void A_detection_rule_without_version_is_flagged_when_existing_versions_are_removed()
+        {
+            using var tmp = new TempFolder();
+            var s = Fakes.Settings();
+            s.InstallerPath = tmp.File("setup.exe", "x");
+            s.DetectionCheckVersion = false;
+            string warning = Loc.T("Val_Warn_DetectionHidesOldVersions");
+            Assert.Contains(warning, PackageBuilder.Validate(s).Warnings);
+
+            s.DetectionCheckVersion = true;
+            Assert.DoesNotContain(warning, PackageBuilder.Validate(s).Warnings);
+
+            // A product code already changes with the version; nothing to remove = nothing hidden.
+            s.DetectionCheckVersion = false;
+            s.DetectionMethod = "ProductCode";
+            s.MsiProductCode = "{6F9619FF-8B86-D011-B42D-00C04FC964FF}";
+            Assert.DoesNotContain(warning, PackageBuilder.Validate(s).Warnings);
+            s.DetectionMethod = "Registry";
+            s.RemovePreviousVersions = false;
+            Assert.DoesNotContain(warning, PackageBuilder.Validate(s).Warnings);
         }
 
         [Fact]

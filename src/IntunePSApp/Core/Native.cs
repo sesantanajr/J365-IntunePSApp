@@ -29,6 +29,10 @@ namespace J365.IntunePSApp.Core
         public static extern uint PrivateExtractIcons(string lpszFile, int nIconIndex, int cxIcon, int cyIcon, IntPtr[] phicon, uint[] piconid, uint nIcons, uint flags);
         [DllImport("user32.dll")] public static extern bool DestroyIcon(IntPtr hIcon);
         [DllImport("kernel32.dll")] public static extern bool AttachConsole(int dwProcessId);
+
+        /// <summary>PF_VIRT_FIRMWARE_ENABLED: hardware virtualization is enabled in the firmware.</summary>
+        public const uint PF_VIRT_FIRMWARE_ENABLED = 21;
+        [DllImport("kernel32.dll")] public static extern bool IsProcessorFeaturePresent(uint processorFeature);
     }
 
     public static class MsiReader

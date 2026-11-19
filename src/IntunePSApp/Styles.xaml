@@ -447,6 +447,26 @@
     </Setter>
   </Style>
 
+  <!-- White badge that carries the Jornada 365 logo on dark surfaces -->
+  <Style x:Key="LogoBadge" TargetType="Button">
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="Padding" Value="12,8"/>
+    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+    <Setter Property="WindowChrome.IsHitTestVisibleInChrome" Value="True"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border x:Name="bd" Background="White" CornerRadius="10" Padding="{TemplateBinding Padding}">
+            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="Background" Value="#EAF4FE"/></Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
   <!-- Notice banner (updates, missing dependencies) -->
   <Style x:Key="Notice" TargetType="Border">
     <Setter Property="Background" Value="{StaticResource BrandSoft}"/>

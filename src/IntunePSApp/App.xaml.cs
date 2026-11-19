@@ -26,7 +26,7 @@ namespace J365.IntunePSApp
         public static bool HasArg(string name) => Args.Any(a => string.Equals(a, name, StringComparison.OrdinalIgnoreCase));
 
         /// <summary>Command-line switches that run without opening the main window.</summary>
-        private static readonly string[] CliSwitches = { "--help", "-h", "/?", "--version", "--build", "--setup", "--update-catalog", "--install", "--uninstall" };
+        private static readonly string[] CliSwitches = { "--help", "-h", "/?", "--version", "--build", "--setup", "--update-catalog", "--sandbox", "--install", "--uninstall" };
 
         protected override void OnStartup(StartupEventArgs e)
         {
@@ -82,6 +82,7 @@ namespace J365.IntunePSApp
                 if (HasArg("--version")) { Console.WriteLine(AppInfo.Version); return 0; }
                 if (HasArg("--install")) return CliInstall();
                 if (HasArg("--uninstall")) return CliUninstall();
+                if (HasArg("--sandbox")) return CliSandbox();
                 // Network/build work runs off the UI thread: awaiting on the dispatcher while blocking it would deadlock.
                 return Task.Run(RunCliWork).GetAwaiter().GetResult();
             }
@@ -123,6 +124,31 @@ namespace J365.IntunePSApp
             Console.WriteLine(T("Install_Uninstalled"));
             // The installed copy must exit right away so its own folder can be removed: no dialog in that case.
             if (!quiet && !AppPaths.IsInstalledCopy) Ui.Info(T("Install_Uninstalled"));
+            return 0;
+        }
+
+        /// <summary>
+        /// --sandbox &lt;package folder|project.json&gt;: opens Windows Sandbox with the test of a generated package.
+        /// Exit codes: 0 started, 2 wrong usage, 3 Windows Sandbox not available, 4 a sandbox is already open.
+        /// </summary>
+        private static int CliSandbox()
+        {
+            string target = Arg("--sandbox");
+            if (!string.IsNullOrWhiteSpace(target) && File.Exists(target)) target = Path.GetDirectoryName(Path.GetFullPath(target));
+            if (string.IsNullOrWhiteSpace(target) || !Directory.Exists(target) || !SandboxService.CanTest(Path.GetFullPath(target)))
+            {
+                Console.WriteLine(T("Cli_SandboxUsage"));
+                return 2;
+            }
+            target = Path.GetFullPath(target).TrimEnd('\\');
+            switch (SandboxService.State)
+            {
+                case SandboxState.NotSupported: Console.WriteLine(T("Cli_SandboxUnsupported")); return 3;
+                case SandboxState.NotEnabled: Console.WriteLine(T("Cli_SandboxNotEnabled", SandboxService.FeatureName)); return 3;
+                case SandboxState.Running: Console.WriteLine(T("Cli_SandboxRunning")); return 4;
+            }
+            SandboxService.Launch(SandboxService.Prepare(target));
+            Console.WriteLine(T("Cli_SandboxStarted", SandboxService.ResultFile(target)));
             return 0;
         }
 

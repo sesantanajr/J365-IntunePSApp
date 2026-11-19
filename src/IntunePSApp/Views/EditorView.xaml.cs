@@ -48,6 +48,7 @@ namespace J365.IntunePSApp.Views
             BuildQuickActions();
             LoadSettings(ConfigStore.Current.NewPackage());
             GoStep(0);
+            SizeChanged += (s, e) => UpdatePreviewVisibility();
         }
 
         public void Refresh()
@@ -74,6 +75,8 @@ namespace J365.IntunePSApp.Views
             if (_last != null && ResultCard.Visibility == Visibility.Visible) ShowResult(_last);
             if (_step == ReviewStep) BuildSummary();
             SetBuildButton(IsBuilding);
+            UpdateExistingFlow();
+            RefreshSandboxStatus();
         }
 
         // ------------------------------------------------------------------ load / collect
@@ -111,6 +114,7 @@ namespace J365.IntunePSApp.Views
                 _actions.Clear(); foreach (var a in s.Actions) _actions.Add(a);
                 _extraFiles.Clear(); foreach (var f in s.ExtraFiles) _extraFiles.Add(f);
                 ChkRemovePrev.IsChecked = s.RemovePreviousVersions;
+                ChkRemovePrevQuick.IsChecked = s.RemovePreviousVersions;
                 TxtPattern.Text = s.UninstallPattern;
                 TxtUninstallArgs.Text = s.UninstallExeArgs;
                 RbDetName.IsChecked = s.DetectionMethod == "Registry";
@@ -138,6 +142,7 @@ namespace J365.IntunePSApp.Views
             UpdateHeader();
             UpdateDependencies();
             UpdateUpdateBanner();
+            UpdateExistingFlow();
         }
 
         public PackageSettings Collect()
@@ -258,6 +263,7 @@ namespace J365.IntunePSApp.Views
                 }
                 _info = info;
                 _last = null;
+                ResetSandboxStatus();
                 LoadSettings(s);
                 ShowAnalysis(info);
                 _installerIcon = null;
@@ -387,7 +393,7 @@ namespace J365.IntunePSApp.Views
             var rb = Stepper.Children.OfType<RadioButton>().ElementAt(_step);
             if (rb.IsChecked != true) { rb.IsChecked = true; return; }
             for (int k = 0; k < StepCount; k++) ((FrameworkElement)FindName("Step" + k)).Visibility = k == _step ? Visibility.Visible : Visibility.Collapsed;
-            PreviewPanel.Visibility = _step == 2 || _step == 6 ? Visibility.Visible : Visibility.Collapsed;
+            UpdatePreviewVisibility();
             BtnBack.IsEnabled = _step > 0;
             BtnNext.IsEnabled = _step < StepCount - 1;
             BodyScroll.ScrollToTop();
@@ -402,6 +408,47 @@ namespace J365.IntunePSApp.Views
 
         private void Back_Click(object sender, RoutedEventArgs e) => GoStep(_step - 1);
         private void Next_Click(object sender, RoutedEventArgs e) => GoStep(_step + 1);
+
+        /// <summary>Page width (DIPs) under which the dialog preview gives its room to the form.</summary>
+        private const double PreviewNeedsWidth = 1000;
+
+        /// <summary>The dialog preview sits beside the Experience and Visual steps, when the window is wide enough for both.</summary>
+        private void UpdatePreviewVisibility()
+        {
+            if (PreviewPanel == null) return;
+            bool wanted = _step == 2 || _step == 6;
+            bool room = ActualWidth <= 0 || ActualWidth >= PreviewNeedsWidth;
+            PreviewPanel.Visibility = wanted && room ? Visibility.Visible : Visibility.Collapsed;
+            // Short windows: a lower drop area leaves room for the analysis of the installer.
+            DropZone.Height = ActualHeight > 0 && ActualHeight < 620 ? 128 : 186;
+        }
+
+        // ------------------------------------------------------------------ versions already installed
+
+        /// <summary>The switch exists on step 1 (where it is seen first) and on step 5 (with its details): both show the same setting.</summary>
+        private void RemovePrev_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_loading || !(sender is CheckBox changed)) return;
+            _loading = true;
+            try
+            {
+                ChkRemovePrev.IsChecked = changed.IsChecked;
+                ChkRemovePrevQuick.IsChecked = changed.IsChecked;
+            }
+            finally { _loading = false; }
+            UpdateExistingFlow();
+        }
+
+        private void Pattern_Changed(object sender, TextChangedEventArgs e) { if (!_loading) UpdateExistingFlow(); }
+
+        /// <summary>Spells out the order on the device: close the app, uninstall what is there, install the new version.</summary>
+        private void UpdateExistingFlow()
+        {
+            if (ExistingFlow == null) return;
+            if (ChkRemovePrev.IsChecked != true) { ExistingFlow.Text = T("Ed_ExistingFlowOff"); return; }
+            string pattern = TxtPattern.Text.Trim();
+            ExistingFlow.Text = T("Ed_ExistingFlowOn") + (pattern.Length > 0 ? " " + T("Ed_ExistingFlowName", pattern) : "");
+        }
 
         private void UpdateHeader()
         {
@@ -780,6 +827,7 @@ namespace J365.IntunePSApp.Views
             IsBuilding = true;
             BtnGenerate.IsEnabled = BtnGenerate2.IsEnabled = false;
             SetBuildButton(true);
+            ResetSandboxStatus();
             ResultCard.Visibility = Visibility.Collapsed;
             LogCard.Visibility = Visibility.Visible;
             LogTitle.Text = T("Ed_GeneratingTitle");
@@ -895,17 +943,135 @@ namespace J365.IntunePSApp.Views
         }
 
         /// <summary>Installs the package inside Windows Sandbox (a disposable Windows), without touching this computer.</summary>
-        private void Sandbox_Click(object sender, RoutedEventArgs e)
+        private async void Sandbox_Click(object sender, RoutedEventArgs e)
         {
             if (_last == null) return;
-            if (!SandboxService.IsAvailable) { Ui.Info(T("Ed_SandboxMissing")); return; }
-            if (!File.Exists(Path.Combine(_last.PackageFolder, PackageLayout.SandboxDir, PackageLayout.SandboxScript))) { MainWindow.Current.Toast(T("Ed_OldPackage"), "warn"); return; }
+            switch (SandboxService.State)
+            {
+                case SandboxState.NotSupported:
+                    Ui.Info(T("Ed_SandboxUnsupported"));
+                    return;
+                case SandboxState.NotEnabled:
+                    await OfferSandboxFeatureAsync();
+                    return;
+                case SandboxState.Running:
+                    Ui.Info(T("Ed_SandboxRunning"));
+                    return;
+            }
+            string folder = _last.PackageFolder;
+            if (!SandboxService.CanTest(folder)) { MainWindow.Current.Toast(T("Ed_OldPackage"), "warn"); return; }
             try
             {
-                SandboxService.Launch(SandboxService.CreateConfig(_last.PackageFolder));
+                SandboxService.Launch(SandboxService.Prepare(folder));
                 MainWindow.Current.Toast(T("Ed_SandboxStarted"), "info");
+                WatchSandbox(folder);
             }
             catch (Exception ex) { Ui.Error(ex.Message); }
+        }
+
+        /// <summary>The Windows feature is turned off: explains it and offers to turn it on (DISM, elevated).</summary>
+        private async Task OfferSandboxFeatureAsync()
+        {
+            string text = T("Ed_SandboxNotEnabled");
+            if (SandboxService.VirtualizationLooksDisabled) text += "\n\n" + T("Ed_SandboxVirtualization");
+            if (!Ui.Confirm(text, T("Ed_SandboxEnable"), T("Common_Cancel"))) return;
+            var main = MainWindow.Current;
+            main.SetStatus(T("Ed_SandboxEnabling"), true);
+            BtnSandbox.IsEnabled = false;
+            try
+            {
+                int code = await SandboxService.EnableFeatureAsync();
+                if (code == 0 || code == 3010) Ui.Info(T("Ed_SandboxEnabled"));
+                else Ui.Warn(T("Ed_SandboxEnableFailed", code));
+            }
+            catch (System.ComponentModel.Win32Exception) { main.Toast(T("Ed_SandboxEnableCancelled"), "warn"); }
+            catch (Exception ex) { Ui.Error(ex.Message); }
+            finally
+            {
+                BtnSandbox.IsEnabled = true;
+                main.SetStatus(null);
+            }
+        }
+
+        // The sandbox writes Sandbox\Results\result.json through a writable mapped folder; this page follows it.
+        private System.Windows.Threading.DispatcherTimer _sandboxTimer;
+        private string _sandboxFolder;
+        private SandboxResult _sandboxResult;
+        private bool _sandboxClosed;
+
+        private void WatchSandbox(string packageFolder)
+        {
+            StopSandboxWatch();
+            _sandboxFolder = packageFolder;
+            _sandboxResult = null;
+            _sandboxClosed = false;
+            RefreshSandboxStatus();
+            var started = DateTime.UtcNow;
+            int seen = 0;
+            var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+            timer.Tick += (s, e) =>
+            {
+                var result = SandboxService.ReadResult(packageFolder);
+                if (result?.Steps != null && result.Steps.Count > seen)
+                {
+                    seen = result.Steps.Count;
+                    _sandboxResult = result;
+                    RefreshSandboxStatus();
+                    var last = result.Last;
+                    if (last != null) MainWindow.Current.Toast(SandboxSummary(last), last.Passed ? "ok" : "error");
+                }
+                // The sandbox takes a while to appear as a process; after that, a closed sandbox ends the watch.
+                bool closed = (DateTime.UtcNow - started).TotalSeconds > 60 && !SandboxService.IsRunning;
+                if (closed || (DateTime.UtcNow - started).TotalHours > 8)
+                {
+                    timer.Stop();
+                    _sandboxClosed = true;
+                    RefreshSandboxStatus();
+                }
+            };
+            _sandboxTimer = timer;
+            timer.Start();
+        }
+
+        private void StopSandboxWatch()
+        {
+            _sandboxTimer?.Stop();
+            _sandboxTimer = null;
+        }
+
+        private void ResetSandboxStatus()
+        {
+            StopSandboxWatch();
+            _sandboxFolder = null;
+            _sandboxResult = null;
+            RefreshSandboxStatus();
+        }
+
+        private static string SandboxSummary(SandboxStep step)
+        {
+            string name = step.Step == "uninstall" ? T("Ed_SandboxStepUninstall") : T("Ed_SandboxStepInstall");
+            string detection = step.Detected ? T("Ed_SandboxDetected") : T("Ed_SandboxNotDetected");
+            string code = step.ExitCode?.ToString() ?? "—";
+            return step.Passed ? T("Ed_SandboxResultOk", name, code, detection, step.Seconds) : T("Ed_SandboxResultFail", name, code, detection);
+        }
+
+        private void RefreshSandboxStatus()
+        {
+            if (SandboxStatus == null) return;
+            if (_sandboxFolder == null) { SandboxStatus.Visibility = Visibility.Collapsed; return; }
+            var last = _sandboxResult?.Last;
+            SandboxStatus.Visibility = Visibility.Visible;
+            BtnSandboxLogs.Visibility = last != null ? Visibility.Visible : Visibility.Collapsed;
+            string soft = last == null ? "BrandSoft" : last.Passed ? "SuccessSoft" : "DangerSoft";
+            string strong = last == null ? "Brand" : last.Passed ? "Success" : "Danger";
+            SandboxStatus.Background = (Brush)FindResource(soft);
+            SandboxStatusIcon.Foreground = (Brush)FindResource(strong);
+            SandboxStatusText.Text = last != null ? SandboxSummary(last) : _sandboxClosed ? T("Ed_SandboxClosed") : T("Ed_SandboxWaiting");
+        }
+
+        private void SandboxLogs_Click(object sender, RoutedEventArgs e)
+        {
+            if (_sandboxFolder != null) Ui.OpenPath(SandboxService.ResultsDir(_sandboxFolder));
         }
 
         private void Publish_Click(object sender, RoutedEventArgs e)
@@ -929,6 +1095,7 @@ namespace J365.IntunePSApp.Views
                 var s = PackageBuilder.LoadProject(path);
                 _info = null;
                 _installerIcon = null;
+                ResetSandboxStatus();
                 LoadSettings(s);
                 AnalysisCard.Visibility = Visibility.Collapsed;
                 LogCard.Visibility = Visibility.Collapsed;
@@ -972,6 +1139,7 @@ namespace J365.IntunePSApp.Views
             _last = null;
             _info = null;
             _installerIcon = null;
+            ResetSandboxStatus();
             AnalysisCard.Visibility = Visibility.Collapsed;
             ResultCard.Visibility = Visibility.Collapsed;
             LogCard.Visibility = Visibility.Collapsed;
