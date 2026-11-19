@@ -125,6 +125,15 @@ namespace J365.IntunePSApp.Core
                 string found = (info.ProductVersion ?? "").Split('+')[0].Trim();
                 if (found.Length == 0) found = info.FileVersion ?? "";
                 if (VersionUtil.Compare(found, version) != 0) throw new InvalidDataException(T("Update_ErrVersion", found, version));
+                // Once releases are code-signed, an update must carry a valid signature of the same publisher: a signed
+                // copy is never replaced by an unsigned or foreign file.
+                string running = AppPaths.ExePath;
+                if (Path.GetFileName(running).Equals(ExeName, StringComparison.OrdinalIgnoreCase) && Signature.IsValid(running))
+                {
+                    var current = Signature.Signer(running);
+                    if (!Signature.IsValid(part) || !string.Equals(Signature.Signer(part).Subject, current.Subject, StringComparison.OrdinalIgnoreCase))
+                        throw new InvalidDataException(T("Update_ErrSignature", current.Name));
+                }
                 File.Move(part, destination, true);
             }
             finally { try { File.Delete(part); } catch { } }

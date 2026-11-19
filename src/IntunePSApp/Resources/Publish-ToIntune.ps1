@@ -55,6 +55,10 @@
 .PARAMETER GroupId
     Object ID of the Entra group, with -AssignTo Group.
 
+.PARAMETER AppId
+    Id of the Intune app to update (for example the previous version of this application). Its settings and content
+    are replaced by this package; its assignments are kept. Without it, the app is looked up by its exact name.
+
 .PARAMETER Force
     Does not ask for confirmation. With -IfExists Ask, an existing app then stops the script.
 
@@ -90,6 +94,7 @@ param
     [ValidateSet('AllUsers', 'AllDevices', 'Group')]
     [string]$AssignTo = 'AllUsers',
     [string]$GroupId,
+    [string]$AppId,
     [switch]$Force,
     [switch]$Pause,
     [string]$GraphUrl = 'https://graph.microsoft.com',
@@ -248,9 +253,10 @@ function Connect-WithBrowser
     $probe.Start()
     $port = $probe.LocalEndpoint.Port
     $probe.Stop()
-    $redirect = 'http://localhost:' + $port + '/'
+    # Same form as the registration ("http://localhost"): Entra ID accepts any port on the loopback address.
+    $redirect = 'http://localhost:' + $port
     $listener = New-Object System.Net.HttpListener
-    $listener.Prefixes.Add($redirect)
+    $listener.Prefixes.Add($redirect + '/')
     $listener.Start()
     try
     {
@@ -533,10 +539,29 @@ try
     $script:Result.tenantId = $TenantId
 
     Write-Step 'Signing in to Microsoft Graph...'
-    if ($DeviceCode) { Connect-WithDeviceCode } else { Connect-WithBrowser }
+    $appSession = [Environment]::GetEnvironmentVariable('J365_GRAPH_REFRESH_TOKEN')
+    if ($appSession)
+    {
+        # Started by J365 IntunePSApp with the session already open in the application: no browser.
+        [Environment]::SetEnvironmentVariable('J365_GRAPH_REFRESH_TOKEN', $null)
+        Set-Token (Invoke-TokenRequest @{ grant_type = 'refresh_token'; client_id = $ClientId; refresh_token = $appSession; scope = $Scope })
+        $appSession = $null
+    }
+    elseif ($DeviceCode) { Connect-WithDeviceCode } else { Connect-WithBrowser }
     Write-Ok ('Signed in to ' + $TenantId)
 
     # ------------------------------------------------------------ existing app with the same name
+    $targetId = $null
+    if ($AppId)
+    {
+        # A new version of an app already in Intune: update that very app (assignments and history are kept).
+        Write-Step 'Looking for the app to update...'
+        $current = Invoke-Graph -Method 'GET' -Path ('/deviceAppManagement/mobileApps/' + [uri]::EscapeDataString($AppId.Trim()))
+        if (-not $current -or [string]$current.'@odata.type' -ne '#microsoft.graph.win32LobApp') { throw ('The app ' + $AppId + ' was not found in Intune, or it is not a Windows app (Win32).') }
+        $targetId = [string]$current.id
+        Write-Ok ('Updating "' + [string]$current.displayName + '" (version ' + [string]$current.displayVersion + ') to ' + [string]$app.appVersion)
+    }
+    else {
     Write-Step 'Looking for an app with the same name...'
     $filter = "isof('microsoft.graph.win32LobApp') and displayName eq '" + ([string]$app.displayName).Replace("'", "''") + "'"
     $found = Invoke-Graph -Method 'GET' -Path ('/deviceAppManagement/mobileApps?$filter=' + [uri]::EscapeDataString($filter))
@@ -569,6 +594,7 @@ try
         }
     }
     else { Write-Ok 'No app with this name yet.' }
+    }
 
     if (-not $Force)
     {

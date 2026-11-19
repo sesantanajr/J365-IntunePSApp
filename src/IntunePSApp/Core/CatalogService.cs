@@ -426,7 +426,9 @@ namespace J365.IntunePSApp.Core
             name = string.Concat((name ?? "").Where(c => !Path.GetInvalidFileNameChars().Contains(c)));
             if (string.IsNullOrWhiteSpace(name) || name.Length < 5 || !name.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
                 name = $"{Names.Safe(app.Name)}_{Names.Safe(app.Version)}_{inst.Arch}{ext}";
-            return Path.Combine(AppPaths.Downloads, Names.Safe(app.Id), Names.Safe(app.Version ?? "latest"), name);
+            // x64 and ARM64 rows (or machine and user) often share the file name: each variant gets its own folder.
+            string variant = string.Join("-", new[] { inst.Arch, inst.Scope, inst.Locale }.Where(v => !string.IsNullOrWhiteSpace(v)));
+            return Path.Combine(AppPaths.Downloads, Names.Safe(app.Id), Names.Safe(app.Version ?? "latest"), Names.Safe(variant.Length > 0 ? variant : "any"), name);
         }
 
         /// <summary>

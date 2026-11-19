@@ -166,7 +166,7 @@ namespace J365.IntunePSApp.Core
         public int CatalogUpdateDays { get; set; } = 1;
         public DateTime? LastCatalogCheck { get; set; }
         public string PreferredArch { get; set; } = "x64";
-        public string PreferredLocale { get; set; } = "pt-BR";
+        public string PreferredLocale { get; set; } = System.Globalization.CultureInfo.CurrentUICulture.Name is { Length: > 0 } culture ? culture : "en-US";
         public string IntuneTenantId { get; set; } = "";
         public string IntuneClientId { get; set; } = "";
 

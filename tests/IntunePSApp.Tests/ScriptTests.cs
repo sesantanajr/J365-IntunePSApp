@@ -89,7 +89,10 @@ namespace J365.IntunePSApp.Tests
             string script = ScriptGenerator.DeployScript(Fakes.Template, s, "setup.exe");
             Ps.AssertParses(script);
             string install = script.Substring(script.IndexOf("function Install-ADTDeployment"), script.IndexOf("function Uninstall-ADTDeployment") - script.IndexOf("function Install-ADTDeployment"));
-            Assert.DoesNotContain("Show-ADTInstallationWelcome", install);
+            // No dialog: only the disk space check remains (it shows nothing).
+            Assert.DoesNotContain("Show-ADTInstallationWelcome @saiwParams", install);
+            Assert.Single(System.Text.RegularExpressions.Regex.Matches(install, "Show-ADTInstallationWelcome"));
+            Assert.Contains("Show-ADTInstallationWelcome -CheckDiskSpace", install);
             Assert.DoesNotContain("Uninstall-ADTApplication", install);
         }
 
@@ -165,6 +168,60 @@ namespace J365.IntunePSApp.Tests
             s.DetectionRequireMark = false;
             Assert.DoesNotContain(@"J365\IntunePSApp\Apps", ScriptGenerator.DeployScript(Fakes.Template, s, "app.msi"));
             Assert.Contains("$RequireMark = $false", ScriptGenerator.DetectionScript(s));
+        }
+
+        [Fact]
+        public void Automatic_mode_shows_the_dialogs_even_when_no_application_must_be_closed()
+        {
+            // PSAppDeployToolkit's own Auto turns the deployment silent when none of the processes to close is running.
+            var s = Fakes.Settings();
+            s.DeployMode = "Auto";
+            string auto = ScriptGenerator.DeployScript(Fakes.Template, s, "setup.exe");
+            Ps.AssertParses(auto);
+            Assert.Contains("NoProcessDetection = $true", auto);
+            Assert.Equal("Invoke-AppDeployToolkit.exe -DeploymentType Install", ScriptGenerator.Commands(s).Install);
+
+            s.DeployMode = "WhenNeeded";
+            Assert.DoesNotContain("NoProcessDetection", ScriptGenerator.DeployScript(Fakes.Template, s, "setup.exe"));
+            Assert.Equal("Invoke-AppDeployToolkit.exe -DeploymentType Install", ScriptGenerator.Commands(s).Install);
+
+            s.DeployMode = "Interactive";
+            Assert.DoesNotContain("NoProcessDetection", ScriptGenerator.DeployScript(Fakes.Template, s, "setup.exe"));
+            Assert.EndsWith("-DeployMode Interactive", ScriptGenerator.Commands(s).Install);
+        }
+
+        [Fact]
+        public void Free_disk_space_is_checked_even_without_a_welcome_dialog()
+        {
+            var s = Fakes.Settings();
+            s.ProcessesToClose.Clear();
+            s.AllowDefer = false;
+            s.WelcomeMessage = "";
+            string script = ScriptGenerator.DeployScript(Fakes.Template, s, "setup.exe");
+            Ps.AssertParses(script);
+            Assert.Contains("Show-ADTInstallationWelcome -CheckDiskSpace", script);
+            s.CheckDiskSpace = false;
+            Assert.DoesNotContain("-CheckDiskSpace", ScriptGenerator.DeployScript(Fakes.Template, s, "setup.exe"));
+        }
+
+        [Fact]
+        public void The_mark_of_a_database_package_is_keyed_by_its_id()
+        {
+            // .NET 8 and .NET 9 share their name; their ids tell them apart.
+            var s = new PackageSettings { AppName = "Microsoft .NET Windows Desktop Runtime", CatalogId = "Microsoft.DotNet.DesktopRuntime.8" };
+            Assert.Equal("Microsoft.DotNet.DesktopRuntime.8", ScriptGenerator.MarkId(s));
+            s.CatalogId = "";
+            Assert.Equal("Microsoft .NET Windows Desktop Runtime", ScriptGenerator.MarkId(s));
+        }
+
+        [Fact]
+        public void Publishing_can_target_the_previous_version_of_the_app()
+        {
+            var o = new PublishOptions { TenantId = "contoso.onmicrosoft.com", ClientId = "11111111-2222-3333-4444-555555555555", IfExists = "Update", AppId = "AAAAAAAA-1111-2222-3333-444444444444" };
+            string args = IntunePublisher.Arguments(@"C:\p\Publish-ToIntune.ps1", o);
+            Assert.Contains("-IfExists Update -AppId aaaaaaaa-1111-2222-3333-444444444444", args);
+            o.AppId = "not-a-guid; calc";
+            Assert.DoesNotContain("-AppId", IntunePublisher.Arguments(@"C:\p\Publish-ToIntune.ps1", o));
         }
 
         [Fact]
@@ -455,6 +512,32 @@ namespace J365.IntunePSApp.Tests
             Assert.Contains("Remove-ADTFile -Path", Code("RemoveDesktopShortcut", "Name", "App*"));
             Assert.Contains("Remove-ADTFile -LiteralPath ([Environment]::ExpandEnvironmentVariables('%ProgramData%\\App [x64]\\a.lic'))", Code("DeleteFile", "Path", @"%ProgramData%\App [x64]\a.lic"));
             Assert.Contains("Remove-ADTFile -Path", Code("DeleteFile", "Path", @"%ProgramData%\App\*.tmp"));
+        }
+
+        [Fact]
+        public void Per_user_packages_use_the_users_own_folders_and_flag_actions_that_need_an_administrator()
+        {
+            var remove = new PackageAction { Type = "RemoveDesktopShortcut", ContinueOnError = false, Params = { ["Name"] = "App" } };
+            Assert.Contains("GetFolderPath('CommonDesktopDirectory')", string.Join("\n", ActionCatalog.Generate(remove)));
+            Assert.Contains("GetFolderPath('Desktop')", string.Join("\n", ActionCatalog.Generate(remove, userContext: true)));
+            var env = new PackageAction { Type = "SetEnvironment", ContinueOnError = false, Params = { ["Name"] = "X", ["Value"] = "1" } };
+            Assert.Contains("'Machine')", string.Join("\n", ActionCatalog.Generate(env)));
+            Assert.Contains("'User')", string.Join("\n", ActionCatalog.Generate(env, userContext: true)));
+
+            var service = new PackageAction { Type = "StopService", Params = { ["Name"] = "svc", ["Mode"] = "Stop" } };
+            Assert.Single(ActionCatalog.Warnings(service, userContext: true));
+            Assert.Empty(ActionCatalog.Warnings(service, userContext: false));
+            var hklm = new PackageAction { Type = "SetRegistry", Params = { ["Key"] = @"HKLM:\SOFTWARE\X", ["Name"] = "n", ["Type"] = "String", ["Value"] = "v" } };
+            Assert.Single(ActionCatalog.Warnings(hklm, userContext: true));
+        }
+
+        [Fact]
+        public void A_message_that_waits_for_OK_never_ends_the_deployment_when_nobody_answers()
+        {
+            var wait = new PackageAction { Type = "ShowMessage", ContinueOnError = false, Params = { ["Text"] = "Hi", ["Wait"] = "true" } };
+            Assert.Contains("-NoExitOnTimeout", string.Join("\n", ActionCatalog.Generate(wait)));
+            wait.Params["Wait"] = "false";
+            Assert.Contains("-NoWait", string.Join("\n", ActionCatalog.Generate(wait)));
         }
 
         [Fact]

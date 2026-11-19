@@ -1,0 +1,586 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Net.Sockets;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Threading;
+using System.Threading.Tasks;
+using static J365.IntunePSApp.Localization.Loc;
+
+namespace J365.IntunePSApp.Core
+{
+    /// <summary>A sign-in failure, already explained in the interface language.</summary>
+    public class AuthException : Exception
+    {
+        public string Code { get; }
+        public AuthException(string message, string code = "") : base(message) { Code = code ?? ""; }
+    }
+
+    /// <summary>Tokens of one sign-in and what the ID token says about the account.</summary>
+    public sealed class TokenSet
+    {
+        public string AccessToken { get; set; } = "";
+        public string RefreshToken { get; set; } = "";
+        public DateTime ExpiresUtc { get; set; }
+        public Dictionary<string, string> Claims { get; set; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        public string Account => Claim("preferred_username") ?? Claim("upn") ?? Claim("email") ?? "";
+        public string DisplayName => Claim("name") ?? "";
+        public string TenantId => Claim("tid") ?? "";
+        private string Claim(string name) => Claims.TryGetValue(name, out var v) && !string.IsNullOrWhiteSpace(v) ? v : null;
+
+        /// <summary>Claims of a JWT (payload only: the token came straight from the token endpoint over HTTPS).</summary>
+        public static Dictionary<string, string> ReadClaims(string jwt)
+        {
+            var claims = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                var parts = (jwt ?? "").Split('.');
+                if (parts.Length < 2) return claims;
+                string p = parts[1].Replace('-', '+').Replace('_', '/');
+                p = p.PadRight(p.Length + (4 - p.Length % 4) % 4, '=');
+                using var doc = JsonDocument.Parse(Convert.FromBase64String(p));
+                foreach (var prop in doc.RootElement.EnumerateObject())
+                    if (prop.Value.ValueKind is JsonValueKind.String or JsonValueKind.Number) claims[prop.Name] = prop.Value.ToString();
+            }
+            catch { }
+            return claims;
+        }
+    }
+
+    /// <summary>
+    /// Microsoft Entra ID sign-in for a public client: authorization code with PKCE in the default browser, answered on a
+    /// loopback port (no secret, no password typed in the application). J365_LOGIN_URL and J365_GRAPH_URL point it to a
+    /// national cloud or to a test server.
+    /// </summary>
+    public static class EntraAuth
+    {
+        /// <summary>Microsoft Graph Command Line Tools: Microsoft's public client used by Connect-MgGraph. Only used to create the app registration.</summary>
+        public const string GraphCliClientId = "14d82eec-204b-4c2f-b7e8-296a70dab67e";
+        public const string GraphAppId = "00000003-0000-0000-c000-000000000000";
+
+        public static string LoginUrl => (Environment.GetEnvironmentVariable("J365_LOGIN_URL") is { Length: > 0 } u ? u : "https://login.microsoftonline.com").TrimEnd('/');
+        public static string GraphUrl => (Environment.GetEnvironmentVariable("J365_GRAPH_URL") is { Length: > 0 } u ? u : "https://graph.microsoft.com").TrimEnd('/');
+
+        /// <summary>Opens the sign-in page. Tests replace it with a call that follows the redirect without a browser.</summary>
+        public static Func<string, Task> OpenBrowser { get; set; } = url =>
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true })?.Dispose();
+            return Task.CompletedTask;
+        };
+
+        public static async Task<TokenSet> SignInAsync(string tenant, string clientId, string scopes, string loginHint, CancellationToken ct)
+        {
+            string verifier = RandomUrlToken(32), state = RandomUrlToken(16);
+            string challenge = Base64Url(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
+            int port = FreePort();
+            // Registered as "http://localhost": Entra ID accepts any port on the loopback address.
+            string redirect = $"http://localhost:{port}";
+            using var listener = new HttpListener();
+            listener.Prefixes.Add(redirect + "/");
+            listener.Start();
+            var query = new Dictionary<string, string>
+            {
+                ["client_id"] = clientId, ["response_type"] = "code", ["redirect_uri"] = redirect, ["response_mode"] = "query",
+                ["scope"] = scopes, ["state"] = state, ["code_challenge"] = challenge, ["code_challenge_method"] = "S256", ["prompt"] = "select_account"
+            };
+            if (!string.IsNullOrWhiteSpace(loginHint)) query["login_hint"] = loginHint;
+            string url = $"{LoginUrl}/{Uri.EscapeDataString(tenant)}/oauth2/v2.0/authorize?" + string.Join("&", query.Select(kv => kv.Key + "=" + Uri.EscapeDataString(kv.Value)));
+
+            var contextTask = listener.GetContextAsync();
+            await OpenBrowser(url);
+            var finished = await Task.WhenAny(contextTask, Task.Delay(TimeSpan.FromMinutes(5), ct));
+            if (finished != contextTask)
+            {
+                ct.ThrowIfCancellationRequested();
+                throw new AuthException(T("Auth_ErrTimeout"));
+            }
+            var context = await contextTask;
+            var q = context.Request.QueryString;
+            bool ok = string.IsNullOrEmpty(q["error"]) && q["state"] == state && !string.IsNullOrEmpty(q["code"]);
+            await AnswerBrowserAsync(context, ok);
+            if (!string.IsNullOrEmpty(q["error"])) throw Explain(q["error"], q["error_description"]);
+            if (q["state"] != state || string.IsNullOrEmpty(q["code"])) throw new AuthException(T("Auth_ErrUnexpected"));
+            return await TokenAsync(tenant, new Dictionary<string, string>
+            {
+                ["grant_type"] = "authorization_code", ["client_id"] = clientId, ["code"] = q["code"], ["redirect_uri"] = redirect,
+                ["code_verifier"] = verifier, ["scope"] = scopes
+            }, ct);
+        }
+
+        public static Task<TokenSet> RefreshAsync(string tenant, string clientId, string refreshToken, string scopes, CancellationToken ct)
+            => TokenAsync(tenant, new Dictionary<string, string>
+            {
+                ["grant_type"] = "refresh_token", ["client_id"] = clientId, ["refresh_token"] = refreshToken, ["scope"] = scopes
+            }, ct);
+
+        private static async Task<TokenSet> TokenAsync(string tenant, Dictionary<string, string> form, CancellationToken ct)
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromSeconds(60));
+            HttpResponseMessage resp;
+            try { resp = await Http.Client.PostAsync($"{LoginUrl}/{Uri.EscapeDataString(tenant)}/oauth2/v2.0/token", new FormUrlEncodedContent(form), cts.Token); }
+            catch (Exception ex) when (ex is HttpRequestException || (ex is OperationCanceledException && !ct.IsCancellationRequested))
+            {
+                throw new AuthException(T("Auth_ErrNetwork", ex.Message));
+            }
+            using var response = resp;
+            string text = await resp.Content.ReadAsStringAsync(ct);
+            JsonNode json = null;
+            try { json = JsonNode.Parse(text); } catch { }
+            string access = json?["access_token"]?.GetValue<string>();
+            if (resp.IsSuccessStatusCode && !string.IsNullOrEmpty(access))
+            {
+                int seconds = 3600;
+                try { seconds = (int)(json["expires_in"]?.GetValue<double>() ?? 3600); } catch { try { seconds = int.Parse(json["expires_in"]?.GetValue<string>() ?? "3600"); } catch { } }
+                var claims = TokenSet.ReadClaims(json["id_token"]?.GetValue<string>());
+                foreach (var kv in TokenSet.ReadClaims(access)) claims.TryAdd(kv.Key, kv.Value);
+                return new TokenSet
+                {
+                    AccessToken = access,
+                    RefreshToken = json["refresh_token"]?.GetValue<string>() ?? form.GetValueOrDefault("refresh_token", ""),
+                    ExpiresUtc = DateTime.UtcNow.AddSeconds(Math.Max(60, seconds)),
+                    Claims = claims
+                };
+            }
+            throw Explain(json?["error"]?.GetValue<string>() ?? ("HTTP " + (int)resp.StatusCode), json?["error_description"]?.GetValue<string>());
+        }
+
+        /// <summary>The usual Entra ID errors, in plain words (the AADSTS code stays at the end for the administrator).</summary>
+        public static AuthException Explain(string error, string description)
+        {
+            string first = (description ?? "").Split('\n')[0].Trim();
+            var known = new (string Code, string Key)[]
+            {
+                ("AADSTS65001", "Auth_Err65001"), ("AADSTS90094", "Auth_Err90094"), ("AADSTS90008", "Auth_Err90094"),
+                ("AADSTS50011", "Auth_Err50011"), ("AADSTS700016", "Auth_Err700016"), ("AADSTS7000218", "Auth_Err7000218"),
+                ("AADSTS50020", "Auth_Err50020"), ("AADSTS50034", "Auth_Err50020"), ("AADSTS53003", "Auth_Err53003"),
+                ("AADSTS50105", "Auth_Err50105"), ("AADSTS65004", "Auth_Err65004"), ("AADSTS90002", "Auth_Err90002"),
+                ("AADSTS50126", "Auth_Err50126"), ("AADSTS70008", "Auth_Err70008"), ("AADSTS700082", "Auth_Err70008")
+            };
+            foreach (var (code, key) in known)
+                if (first.Contains(code, StringComparison.OrdinalIgnoreCase) || (error ?? "").Contains(code, StringComparison.OrdinalIgnoreCase))
+                    return new AuthException(T(key) + (first.Length > 0 ? $" [{Shorten(first)}]" : ""), code);
+            if (error == "access_denied") return new AuthException(T("Auth_ErrDenied") + (first.Length > 0 ? $" [{Shorten(first)}]" : ""), error);
+            return new AuthException(T("Auth_ErrGeneric", first.Length > 0 ? Shorten(first) : error ?? "?"), error ?? "");
+        }
+
+        private static string Shorten(string s) => s.Length > 240 ? s.Substring(0, 240) + "…" : s;
+
+        private static async Task AnswerBrowserAsync(HttpListenerContext context, bool ok)
+        {
+            try
+            {
+                string title = ok ? T("Auth_PageOkTitle") : T("Auth_PageFailTitle");
+                string text = ok ? T("Auth_PageOk", AppInfo.Name) : T("Auth_PageFail", AppInfo.Name);
+                string html = "<!doctype html><html><head><meta charset=\"utf-8\"><title>" + WebUtility.HtmlEncode(AppInfo.Name) + "</title></head>"
+                    + "<body style=\"font-family:Segoe UI,Arial,sans-serif;background:#0B1A33;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0\">"
+                    + "<div style=\"background:#fff;color:#0F172A;border-radius:14px;padding:36px 44px;max-width:520px;box-shadow:0 10px 40px rgba(0,0,0,.35)\">"
+                    + "<div style=\"font-size:13px;letter-spacing:.08em;color:#0A5CA8;font-weight:600\">" + WebUtility.HtmlEncode(AppInfo.Name.ToUpperInvariant()) + "</div>"
+                    + "<h2 style=\"margin:8px 0 10px\">" + WebUtility.HtmlEncode(title) + "</h2><p style=\"color:#475569;line-height:1.5\">" + WebUtility.HtmlEncode(text) + "</p></div></body></html>";
+                var bytes = Encoding.UTF8.GetBytes(html);
+                context.Response.ContentType = "text/html; charset=utf-8";
+                context.Response.ContentLength64 = bytes.Length;
+                await context.Response.OutputStream.WriteAsync(bytes);
+                context.Response.Close();
+            }
+            catch { }
+        }
+
+        private static int FreePort()
+        {
+            var probe = new TcpListener(IPAddress.Loopback, 0);
+            probe.Start();
+            int port = ((IPEndPoint)probe.LocalEndpoint).Port;
+            probe.Stop();
+            return port;
+        }
+
+        private static string RandomUrlToken(int bytes) => Base64Url(RandomNumberGenerator.GetBytes(bytes));
+        private static string Base64Url(byte[] data) => Convert.ToBase64String(data).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    }
+
+    /// <summary>What the automatic setup did in the tenant.</summary>
+    public sealed class RegistrationResult
+    {
+        public string TenantId { get; set; } = "";
+        public string ClientId { get; set; } = "";
+        public string Admin { get; set; } = "";
+        public bool Reused { get; set; }
+        public bool ConsentGranted { get; set; }
+        public string ConsentUrl { get; set; } = "";
+    }
+
+    /// <summary>
+    /// The connection to Microsoft Intune: the app registration of the tenant (created automatically or typed by hand) and
+    /// the session of the signed-in user. The refresh token is kept encrypted for the Windows user (DPAPI), so publishing
+    /// does not ask to sign in every time; nothing else about the account is stored.
+    /// </summary>
+    public static class IntuneConnection
+    {
+        public const string RegistrationName = "J365 IntunePSApp";
+        public const string RegistrationTag = "J365IntunePSApp";
+        public const string IntunePermission = "DeviceManagementApps.ReadWrite.All";
+        public static string IntuneScopes => $"{EntraAuth.GraphUrl}/{IntunePermission} offline_access openid profile";
+        private static string AdminScopes => $"{EntraAuth.GraphUrl}/Application.ReadWrite.All {EntraAuth.GraphUrl}/DelegatedPermissionGrant.ReadWrite.All offline_access openid profile";
+
+        private sealed class Saved
+        {
+            public string TenantId { get; set; } = "";
+            public string ClientId { get; set; } = "";
+            public string Account { get; set; } = "";
+            public string Name { get; set; } = "";
+            public string Token { get; set; } = "";
+            public DateTime SignedInUtc { get; set; }
+        }
+
+        private static readonly object Gate = new object();
+        private static TokenSet _current;
+        private static Saved _saved;
+        private static bool _loaded;
+
+        public static event Action Changed;
+
+        private static string SessionFile => Path.Combine(AppPaths.Data, "intune-session.dat");
+
+        public static string TenantId => ConfigStore.Current.IntuneTenantId?.Trim() ?? "";
+        public static string ClientId => ConfigStore.Current.IntuneClientId?.Trim() ?? "";
+        public static bool IsConfigured => IntunePublisher.IsTenant(TenantId) && IntunePublisher.IsGuid(ClientId);
+
+        /// <summary>
+        /// Signed in with the registration in Settings. An app registration belongs to one tenant, so the client id of
+        /// the saved session identifies it (the tenant in Settings may be a domain or an id).
+        /// </summary>
+        public static bool IsSignedIn
+        {
+            get
+            {
+                var s = Load();
+                return s != null && s.Token.Length > 0 && IsConfigured && string.Equals(s.ClientId, ClientId, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+
+        public static string Account => Load()?.Account ?? "";
+        public static string SessionTenant => Load()?.TenantId ?? "";
+
+        private static Saved Load()
+        {
+            lock (Gate)
+            {
+                if (_loaded) return _saved;
+                _loaded = true;
+                try
+                {
+                    if (File.Exists(SessionFile))
+                    {
+                        var plain = Unprotect(File.ReadAllBytes(SessionFile));
+                        _saved = JsonSerializer.Deserialize<Saved>(plain);
+                    }
+                }
+                catch { _saved = null; }
+                return _saved;
+            }
+        }
+
+        private static void Save(TokenSet t, string tenant, string client)
+        {
+            var s = new Saved
+            {
+                TenantId = string.IsNullOrEmpty(t.TenantId) ? tenant : t.TenantId,
+                ClientId = client,
+                Account = t.Account,
+                Name = t.DisplayName,
+                Token = t.RefreshToken ?? "",
+                SignedInUtc = DateTime.UtcNow
+            };
+            lock (Gate)
+            {
+                _saved = s;
+                _loaded = true;
+                _current = t;
+                try
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(SessionFile));
+                    File.WriteAllBytes(SessionFile, Protect(JsonSerializer.SerializeToUtf8Bytes(s)));
+                }
+                catch (Exception ex) { Log.Warn(T("Auth_SessionNotSaved", ex.Message)); }
+            }
+            Changed?.Invoke();
+        }
+
+        public static void SignOut()
+        {
+            lock (Gate)
+            {
+                _saved = null;
+                _current = null;
+                _loaded = true;
+                try { if (File.Exists(SessionFile)) File.Delete(SessionFile); } catch { }
+            }
+            Changed?.Invoke();
+        }
+
+        /// <summary>Signs in (browser) with the registration in Settings and keeps the session.</summary>
+        public static async Task<TokenSet> SignInAsync(CancellationToken ct, string loginHint = null)
+        {
+            if (!IsConfigured) throw new AuthException(T("Auth_ErrNotConfigured"));
+            var t = await EntraAuth.SignInAsync(TenantId, ClientId, IntuneScopes, loginHint ?? Load()?.Account, ct);
+            Save(t, TenantId, ClientId);
+            Log.Ok(T("Log_IntuneSignedIn", t.Account, t.TenantId.Length > 0 ? t.TenantId : TenantId));
+            return t;
+        }
+
+        /// <summary>A fresh token set of the saved session (renewed with its refresh token); null when there is no session.</summary>
+        public static async Task<TokenSet> RenewAsync(CancellationToken ct)
+        {
+            if (!IsSignedIn) return null;
+            if (_current != null && _current.ExpiresUtc > DateTime.UtcNow.AddMinutes(10) && !string.IsNullOrEmpty(_current.RefreshToken)) return _current;
+            var saved = Load();
+            try
+            {
+                var t = await EntraAuth.RefreshAsync(saved.TenantId.Length > 0 ? saved.TenantId : TenantId, ClientId, saved.Token, IntuneScopes, ct);
+                if (string.IsNullOrEmpty(t.Account)) t.Claims["preferred_username"] = saved.Account;
+                if (string.IsNullOrEmpty(t.TenantId)) t.Claims["tid"] = saved.TenantId;
+                Save(t, TenantId, ClientId);
+                return t;
+            }
+            catch (AuthException)
+            {
+                // Expired, revoked or blocked: the next action signs in again.
+                SignOut();
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Creates (or reuses) the app registration "J365 IntunePSApp" in the tenant of the administrator who signs in:
+        /// public client with the loopback redirect, the delegated permission DeviceManagementApps.ReadWrite.All and the
+        /// admin consent for the organisation. Saves the tenant and client id in Settings.
+        /// </summary>
+        public static async Task<RegistrationResult> CreateRegistrationAsync(IProgress<string> progress, CancellationToken ct)
+        {
+            progress?.Report(T("Connect_StepAdminSignIn"));
+            var admin = await EntraAuth.SignInAsync("organizations", EntraAuth.GraphCliClientId, AdminScopes, null, ct);
+            string tenant = admin.TenantId;
+            if (string.IsNullOrEmpty(tenant)) throw new AuthException(T("Auth_ErrNoTenant"));
+            var g = new Graph(admin.AccessToken);
+            var result = new RegistrationResult { TenantId = tenant, Admin = admin.Account };
+
+            progress?.Report(T("Connect_StepPermission"));
+            var graphSp = await g.GetAsync($"/v1.0/servicePrincipals(appId='{EntraAuth.GraphAppId}')?$select=id,oauth2PermissionScopes", ct);
+            string graphSpId = graphSp?["id"]?.GetValue<string>() ?? throw new InvalidDataException(T("Connect_ErrGraphSp"));
+            string scopeId = graphSp["oauth2PermissionScopes"]?.AsArray()
+                .FirstOrDefault(s => s?["value"]?.GetValue<string>() == IntunePermission)?["id"]?.GetValue<string>()
+                ?? throw new InvalidDataException(T("Connect_ErrScope", IntunePermission));
+
+            progress?.Report(T("Connect_StepApp"));
+            string filter = Uri.EscapeDataString($"displayName eq '{RegistrationName}'");
+            var found = (await g.GetAsync($"/v1.0/applications?$filter={filter}&$select=id,appId,displayName,tags", ct))?["value"]?.AsArray();
+            var existing = found?.FirstOrDefault(a => a?["tags"]?.AsArray().Any(x => x?.GetValue<string>() == RegistrationTag) == true) ?? found?.FirstOrDefault();
+            var body = new JsonObject
+            {
+                ["displayName"] = RegistrationName,
+                ["description"] = "Publishes Win32 apps packaged with J365 IntunePSApp to Microsoft Intune, as the signed-in user (delegated permission).",
+                ["signInAudience"] = "AzureADMyOrg",
+                ["isFallbackPublicClient"] = true,
+                ["publicClient"] = new JsonObject { ["redirectUris"] = new JsonArray("http://localhost") },
+                ["requiredResourceAccess"] = new JsonArray(new JsonObject
+                {
+                    ["resourceAppId"] = EntraAuth.GraphAppId,
+                    ["resourceAccess"] = new JsonArray(new JsonObject { ["id"] = scopeId, ["type"] = "Scope" })
+                }),
+                ["tags"] = new JsonArray(RegistrationTag),
+                ["notes"] = $"Created by {AppInfo.Name} {AppInfo.Version} ({AppInfo.RepoUrl}) on {DateTime.UtcNow:yyyy-MM-dd}."
+            };
+            string appId;
+            if (existing != null)
+            {
+                // Same registration from an earlier setup: its configuration is set again (redirect, permission, public client).
+                result.Reused = true;
+                appId = existing["appId"]!.GetValue<string>();
+                body.Remove("notes");
+                await g.SendAsync(HttpMethod.Patch, $"/v1.0/applications/{existing["id"]!.GetValue<string>()}", body, ct);
+            }
+            else
+            {
+                var created = await g.SendAsync(HttpMethod.Post, "/v1.0/applications", body, ct);
+                appId = created?["appId"]?.GetValue<string>() ?? throw new InvalidDataException(T("Connect_ErrCreate"));
+            }
+            result.ClientId = appId;
+
+            progress?.Report(T("Connect_StepServicePrincipal"));
+            string spId = null;
+            for (int attempt = 1; spId == null; attempt++)
+            {
+                var sps = (await g.GetAsync($"/v1.0/servicePrincipals?$filter={Uri.EscapeDataString($"appId eq '{appId}'")}&$select=id", ct))?["value"]?.AsArray();
+                spId = sps?.FirstOrDefault()?["id"]?.GetValue<string>();
+                if (spId != null) break;
+                try { spId = (await g.SendAsync(HttpMethod.Post, "/v1.0/servicePrincipals", new JsonObject { ["appId"] = appId }, ct))?["id"]?.GetValue<string>(); }
+                catch (GraphException ex) when (attempt < 8 && ex.Status is 400 or 404)
+                {
+                    // A new application takes a few seconds to reach every replica of the directory.
+                    await Task.Delay(TimeSpan.FromSeconds(Math.Min(10, 2 * attempt)), ct);
+                }
+            }
+
+            progress?.Report(T("Connect_StepConsent"));
+            try
+            {
+                var grants = (await g.GetAsync($"/v1.0/oauth2PermissionGrants?$filter={Uri.EscapeDataString($"clientId eq '{spId}' and consentType eq 'AllPrincipals'")}", ct))?["value"]?.AsArray();
+                var grant = grants?.FirstOrDefault(x => x?["resourceId"]?.GetValue<string>() == graphSpId);
+                if (grant == null)
+                    await g.SendAsync(HttpMethod.Post, "/v1.0/oauth2PermissionGrants", new JsonObject
+                    {
+                        ["clientId"] = spId, ["consentType"] = "AllPrincipals", ["resourceId"] = graphSpId, ["scope"] = IntunePermission
+                    }, ct);
+                else if (!(grant["scope"]?.GetValue<string>() ?? "").Split(' ').Contains(IntunePermission))
+                    await g.SendAsync(HttpMethod.Patch, $"/v1.0/oauth2PermissionGrants/{grant["id"]!.GetValue<string>()}", new JsonObject
+                    {
+                        ["scope"] = ((grant["scope"]?.GetValue<string>() ?? "") + " " + IntunePermission).Trim()
+                    }, ct);
+                result.ConsentGranted = true;
+            }
+            catch (GraphException ex) when (ex.Status is 401 or 403)
+            {
+                // The administrator may create apps but not grant consent for Microsoft Graph: a Global Administrator
+                // (or Privileged Role Administrator) grants it with the link.
+                result.ConsentGranted = false;
+                Log.Warn(T("Connect_ConsentDenied", ex.Message));
+            }
+            result.ConsentUrl = $"{EntraAuth.LoginUrl}/{tenant}/adminconsent?client_id={appId}";
+
+            var cfg = ConfigStore.Current;
+            cfg.IntuneTenantId = tenant;
+            cfg.IntuneClientId = appId;
+            ConfigStore.Save();
+            Log.Ok(T("Log_RegistrationReady", RegistrationName, appId, tenant));
+            Changed?.Invoke();
+            return result;
+        }
+
+        /// <summary>Reads one app of the tenant: proves the session and the Intune permission work.</summary>
+        public static async Task<string> TestAsync(CancellationToken ct)
+        {
+            var t = await RenewAsync(ct) ?? throw new AuthException(T("Auth_ErrNotSignedIn"));
+            var g = new Graph(t.AccessToken);
+            var list = await g.GetAsync("/beta/deviceAppManagement/mobileApps?$top=1&$select=id", ct);
+            return T("Auth_TestOk", t.Account, list?["value"]?.AsArray().Count ?? 0);
+        }
+
+        /// <summary>
+        /// Win32 apps of the tenant whose name starts with the name of the application ("7-Zip" finds "7-Zip 26.06" and
+        /// "7-Zip 25.01"): the earlier versions this package can update, so a new version does not become a second app.
+        /// </summary>
+        public static async Task<List<(string Id, string Name, string Version)>> FindRelatedAppsAsync(string appName, CancellationToken ct)
+        {
+            var t = await RenewAsync(ct) ?? throw new AuthException(T("Auth_ErrNotSignedIn"));
+            var g = new Graph(t.AccessToken);
+            var result = new List<(string Id, string Name, string Version)>();
+            string name = (appName ?? "").Trim();
+            if (name.Length == 0) return result;
+            string path = "/beta/deviceAppManagement/mobileApps?$filter=" + Uri.EscapeDataString("isof('microsoft.graph.win32LobApp')") + "&$select=id,displayName,displayVersion&$top=999";
+            for (int page = 0; path != null && page < 20; page++)
+            {
+                var data = await g.GetAsync(path, ct);
+                foreach (var a in data?["value"]?.AsArray() ?? new JsonArray())
+                {
+                    string dn = a?["displayName"]?.GetValue<string>() ?? "";
+                    if (dn.StartsWith(name, StringComparison.OrdinalIgnoreCase))
+                        result.Add((a?["id"]?.GetValue<string>() ?? "", dn, a?["displayVersion"]?.GetValue<string>() ?? ""));
+                }
+                string next = data?["@odata.nextLink"]?.GetValue<string>();
+                path = next != null && next.StartsWith(EntraAuth.GraphUrl, StringComparison.OrdinalIgnoreCase) ? next.Substring(EntraAuth.GraphUrl.Length) : null;
+            }
+            return result.OrderByDescending(r => r.Version, Comparer<string>.Create(VersionUtil.Compare)).ToList();
+        }
+
+        // ------------------------------------------------------------------ DPAPI (current Windows user)
+
+        private static byte[] Protect(byte[] data) => Dpapi(data, true);
+        private static byte[] Unprotect(byte[] data) => Dpapi(data, false);
+
+        private static byte[] Dpapi(byte[] data, bool protect)
+        {
+            var input = new NativeMethods.DATA_BLOB();
+            var output = new NativeMethods.DATA_BLOB();
+            var entropy = Encoding.UTF8.GetBytes("J365.IntunePSApp.IntuneSession");
+            var pin = System.Runtime.InteropServices.GCHandle.Alloc(data, System.Runtime.InteropServices.GCHandleType.Pinned);
+            var pent = System.Runtime.InteropServices.GCHandle.Alloc(entropy, System.Runtime.InteropServices.GCHandleType.Pinned);
+            try
+            {
+                input.cbData = data.Length; input.pbData = pin.AddrOfPinnedObject();
+                var ent = new NativeMethods.DATA_BLOB { cbData = entropy.Length, pbData = pent.AddrOfPinnedObject() };
+                bool ok = protect
+                    ? NativeMethods.CryptProtectData(ref input, "J365 IntunePSApp", ref ent, IntPtr.Zero, IntPtr.Zero, 0x1, ref output)
+                    : NativeMethods.CryptUnprotectData(ref input, IntPtr.Zero, ref ent, IntPtr.Zero, IntPtr.Zero, 0x1, ref output);
+                if (!ok) throw new CryptographicException(System.Runtime.InteropServices.Marshal.GetLastWin32Error());
+                var result = new byte[output.cbData];
+                System.Runtime.InteropServices.Marshal.Copy(output.pbData, result, 0, output.cbData);
+                return result;
+            }
+            finally
+            {
+                pin.Free(); pent.Free();
+                if (output.pbData != IntPtr.Zero) NativeMethods.LocalFree(output.pbData);
+            }
+        }
+    }
+
+    public class GraphException : Exception
+    {
+        public int Status { get; }
+        public GraphException(int status, string message) : base(message) { Status = status; }
+    }
+
+    /// <summary>Minimal Microsoft Graph client: JSON in and out, retries on throttling and transient errors.</summary>
+    internal sealed class Graph
+    {
+        private readonly string _token;
+        public Graph(string accessToken) { _token = accessToken; }
+
+        public Task<JsonNode> GetAsync(string path, CancellationToken ct) => SendAsync(HttpMethod.Get, path, null, ct);
+
+        public async Task<JsonNode> SendAsync(HttpMethod method, string path, JsonNode body, CancellationToken ct)
+        {
+            for (int attempt = 1; ; attempt++)
+            {
+                using var req = new HttpRequestMessage(method, EntraAuth.GraphUrl + path);
+                req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _token);
+                if (body != null) req.Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                cts.CancelAfter(TimeSpan.FromSeconds(100));
+                HttpResponseMessage resp;
+                try { resp = await Http.Client.SendAsync(req, cts.Token); }
+                catch (Exception ex) when (attempt < 4 && !ct.IsCancellationRequested && (ex is HttpRequestException || ex is OperationCanceledException))
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(2 * attempt), ct);
+                    continue;
+                }
+                using var response = resp;
+                string text = await resp.Content.ReadAsStringAsync(ct);
+                int status = (int)resp.StatusCode;
+                if ((status == 429 || status >= 500) && attempt < 5)
+                {
+                    var wait = resp.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(2 * attempt);
+                    await Task.Delay(wait > TimeSpan.FromSeconds(30) ? TimeSpan.FromSeconds(30) : wait, ct);
+                    continue;
+                }
+                if (!resp.IsSuccessStatusCode)
+                {
+                    string message = $"HTTP {status}";
+                    try { message = JsonNode.Parse(text)?["error"]?["message"]?.GetValue<string>() ?? message; } catch { }
+                    throw new GraphException(status, $"{method} {path.Split('?')[0]}: {message}");
+                }
+                if (string.IsNullOrWhiteSpace(text)) return null;
+                try { return JsonNode.Parse(text); } catch { return null; }
+            }
+        }
+    }
+}

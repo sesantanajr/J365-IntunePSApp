@@ -261,7 +261,9 @@ namespace J365.IntunePSApp.Views
             s.Language = TagOf(CmbLanguage);
             s.LogsInIntuneFolder = ChkImeLogs.IsChecked == true;
             s.Author = TxtAuthor.Text.Trim();
-            if (string.IsNullOrWhiteSpace(s.OutputRoot)) s.OutputRoot = ConfigStore.Current.OutputFolder;
+            // Projects keep the folder they were built in: the folder of Settings wins (it may have changed, or the
+            // project came from another computer).
+            s.OutputRoot = ConfigStore.Current.OutputFolder;
             return s;
         }
 
@@ -553,10 +555,12 @@ namespace J365.IntunePSApp.Views
         {
             string ext = Path.GetExtension(_s?.InstallerPath ?? "").ToLowerInvariant();
             InstallArgsHint.Text = ext switch { ".msi" => T("Ed_ArgsHintMsi"), ".exe" => T("Ed_ArgsHintExe"), _ => T("Ed_ArgsHintNone") };
-            ModeHint.Text = TagOf(CmbMode) switch { "Silent" => T("Ed_ModeHintSilent"), "Interactive" => T("Ed_ModeHintInteractive"), _ => T("Ed_ModeHintAuto") };
+            ModeHint.Text = TagOf(CmbMode) switch { "Silent" => T("Ed_ModeHintSilent"), "Interactive" => T("Ed_ModeHintInteractive"), "WhenNeeded" => T("Ed_ModeHintWhenNeeded"), _ => T("Ed_ModeHintAuto") };
         }
 
         private void Mode_Changed(object sender, SelectionChangedEventArgs e) { if (!_loading) { UpdateHints(); UpdatePreview(); } }
+
+        private void Style_Changed(object sender, SelectionChangedEventArgs e) { if (!_loading) UpdatePreview(); }
 
         private void Arch_Changed(object sender, SelectionChangedEventArgs e) { if (!_loading) UpdateDependencies(); }
 
@@ -569,37 +573,37 @@ namespace J365.IntunePSApp.Views
             if (sender == TxtName || sender == TxtVersion) UpdateHeader();
         }
 
+        private ImageSource _previewLogo;
+
         private void UpdatePreview()
         {
-            if (PrevTitle == null) return;
+            if (PrevDialog == null || TxtName == null) return;
             string name = $"{TxtName.Text} {TxtVersion.Text}".Trim();
-            PrevTitle.Text = string.IsNullOrEmpty(name) ? T("Ed_AppName") : name;
             string company = string.IsNullOrWhiteSpace(TxtCompany.Text) ? AppInfo.PsadtName : TxtCompany.Text.Trim();
-            PrevSubtitle.Text = T("Prev_Subtitle", company);
             var procs = Names.ParseProcessList(TxtProcesses.Text);
-            if (procs.Count > 0)
-            {
-                PrevBody.Text = T("Prev_CloseBody");
-                PrevAppsBox.Visibility = Visibility.Visible;
-                string label = string.IsNullOrWhiteSpace(TxtName.Text) ? T("Prev_AppLabel") : TxtName.Text.Trim();
-                PrevApps.Text = string.Join("\n", procs.Select(p => $"•  {label} ({p})"));
-                PrevMainText.Text = T("Prev_CloseAndInstall");
-            }
-            else
-            {
-                PrevBody.Text = T("Prev_ReadyBody");
-                PrevAppsBox.Visibility = Visibility.Collapsed;
-                PrevMainText.Text = T("Prev_Install");
-            }
-            PrevCustom.Text = TxtWelcome.Text.Trim();
-            PrevCustom.Visibility = string.IsNullOrWhiteSpace(TxtWelcome.Text) ? Visibility.Collapsed : Visibility.Visible;
-            bool defer = ChkDefer.IsChecked == true;
-            PrevDefer.Text = T("Prev_DeferText", Int(TxtDeferTimes.Text, 3));
-            PrevDefer.Visibility = defer ? Visibility.Visible : Visibility.Collapsed;
-            PrevDeferBtn.Visibility = defer ? Visibility.Visible : Visibility.Collapsed;
+            string label = string.IsNullOrWhiteSpace(TxtName.Text) ? T("Prev_AppLabel") : TxtName.Text.Trim();
             var brush = AccentBrush();
-            PrevMainBtn.Background = brush;
-            PrevOkBtn.Background = brush;
+            bool classic = TagOf(CmbStyle) == "Classic";
+            PrevDialog.Show(new DialogPreviewModel
+            {
+                Style = classic ? "Classic" : "Fluent",
+                Accent = brush,
+                Logo = _previewLogo,
+                Company = company,
+                Title = string.IsNullOrEmpty(name) ? T("Ed_AppName") : name,
+                Subtitle = T("Prev_Subtitle", company),
+                Body = procs.Count > 0 ? T("Prev_CloseBody") : T("Prev_ReadyBody"),
+                Apps = procs.Select(p => $"{label} ({p})").ToList(),
+                Custom = TxtWelcome.Text.Trim(),
+                DeferText = ChkDefer.IsChecked == true ? T("Prev_DeferText", Int(TxtDeferTimes.Text, 3)) : null,
+                MainButton = procs.Count > 0 ? T("Prev_CloseAndInstall") : T("Prev_Install")
+            });
+            // The completion prompt follows the same style: accent button in Fluent, a plain Windows button in Classic.
+            PrevOkBtn.Background = classic ? Ui.Hex("#E1E1E1") : brush;
+            ((TextBlock)PrevOkBtn.Child).Foreground = classic ? Ui.Hex("#1F1F1F") : Brushes.White;
+            PrevOkBtn.CornerRadius = new CornerRadius(classic ? 0 : 5);
+            PrevDoneBox.CornerRadius = new CornerRadius(classic ? 0 : 10);
+            PrevDoneBox.Background = classic ? Ui.Hex("#F0F0F0") : Brushes.White;
             AccentSwatch.Background = brush;
             string done = TxtCompletion.Text.Trim();
             PrevDone.Text = done;
@@ -610,7 +614,8 @@ namespace J365.IntunePSApp.Views
             {
                 "Silent" => T("Prev_NoteSilent"),
                 "Interactive" => T("Prev_NoteInteractive"),
-                _ => procs.Count > 0 ? T("Prev_NoteAutoApps") : T("Prev_NoteAuto")
+                "WhenNeeded" => procs.Count > 0 ? T("Prev_NoteAutoApps") : T("Prev_NoteWhenNeededNoApps"),
+                _ => T("Prev_NoteAuto")
             };
         }
 
@@ -632,7 +637,8 @@ namespace J365.IntunePSApp.Views
                 var tpl = ToolsService.LocalPsadt();
                 if (tpl != null) img = MainWindow.LoadBitmap(Path.Combine(tpl, "Assets", "AppIcon.png"));
             }
-            PrevLogo.Source = img ?? new System.Windows.Media.Imaging.BitmapImage(new Uri("pack://application:,,,/Assets/app-256.png"));
+            _previewLogo = img ?? new System.Windows.Media.Imaging.BitmapImage(new Uri("pack://application:,,,/Assets/app-256.png"));
+            UpdatePreview();
         }
 
         private void Logo_Changed(object sender, TextChangedEventArgs e) { if (!_loading) UpdateLogo(); }
@@ -645,10 +651,70 @@ namespace J365.IntunePSApp.Views
 
         private void LogoClear_Click(object sender, RoutedEventArgs e) => TxtLogo.Text = "";
 
+        /// <summary>Accent colours offered next to the colour field (editor and Settings).</summary>
+        public static readonly (string Hex, string Key)[] AccentPalette =
+        {
+            ("#0A5CA8", "Color_J365"), ("#0F6CBD", "Color_Microsoft"), ("#0B6E4F", "Color_Green"), ("#C50F1F", "Color_Red"),
+            ("#CA5010", "Color_Orange"), ("#8764B8", "Color_Purple"), ("#038387", "Color_Teal"), ("#1F2937", "Color_Graphite")
+        };
+
+        /// <summary>
+        /// New company defaults were saved in Settings: every field of the open package that still had the previous default
+        /// takes the new one (what the user changed in this package is kept). Returns how many fields changed.
+        /// </summary>
+        public int ApplyNewDefaults(PackageSettings before, PackageSettings after)
+        {
+            if (IsBuilding) return 0;
+            var cur = Collect();
+            int n = 0;
+            void Text(Func<PackageSettings, string> get, Action<string> set)
+            {
+                string b = get(before) ?? "", a = get(after) ?? "", c = get(cur) ?? "";
+                if (a != b && c == b) { set(a); n++; }
+            }
+            void Flag(Func<PackageSettings, bool> get, Action<bool> set)
+            {
+                if (get(after) != get(before) && get(cur) == get(before)) { set(get(after)); n++; }
+            }
+            void Number(Func<PackageSettings, int> get, Action<int> set)
+            {
+                if (get(after) != get(before) && get(cur) == get(before)) { set(get(after)); n++; }
+            }
+            _loading = true;
+            try
+            {
+                Text(s => s.CompanyName, v => TxtCompany.Text = v);
+                Text(s => s.LogoPath, v => TxtLogo.Text = v);
+                Text(s => NormalizeHex(s.AccentColor), v => TxtAccent.Text = v);
+                Text(s => s.DialogStyle, v => SelectTag(CmbStyle, v));
+                Text(s => s.Language, v => SelectTag(CmbLanguage, v));
+                Flag(s => s.LogsInIntuneFolder, v => ChkImeLogs.IsChecked = v);
+                Text(s => s.Author, v => TxtAuthor.Text = v);
+                Text(s => s.DeployMode, v => SelectTag(CmbMode, v));
+                Flag(s => s.AllowDefer, v => ChkDefer.IsChecked = v);
+                Number(s => s.DeferTimes, v => TxtDeferTimes.Text = v.ToString());
+                Number(s => s.CloseAppsCountdown, v => TxtCountdown.Text = v.ToString());
+                Flag(s => s.BlockExecution, v => ChkBlock.IsChecked = v);
+                Flag(s => s.CheckDiskSpace, v => ChkDisk.IsChecked = v);
+                Flag(s => s.RemovePreviousVersions, v => { ChkRemovePrev.IsChecked = v; ChkRemovePrevQuick.IsChecked = v; });
+                Text(s => s.WelcomeMessage, v => TxtWelcome.Text = v);
+                Text(s => s.CompletionMessage, v => TxtCompletion.Text = v);
+            }
+            finally { _loading = false; }
+            if (n > 0)
+            {
+                UpdateHints();
+                UpdateLogo();
+                UpdatePreview();
+                UpdateHeader();
+            }
+            return n;
+        }
+
         private void BuildSwatches()
         {
             Swatches.Children.Clear();
-            foreach (var (hex, key) in new[] { ("#0A5CA8", "Color_J365"), ("#0F6CBD", "Color_Microsoft"), ("#0B6E4F", "Color_Green"), ("#C50F1F", "Color_Red"), ("#CA5010", "Color_Orange"), ("#8764B8", "Color_Purple"), ("#038387", "Color_Teal"), ("#1F2937", "Color_Graphite") })
+            foreach (var (hex, key) in AccentPalette)
             {
                 var b = new Border
                 {
@@ -665,6 +731,8 @@ namespace J365.IntunePSApp.Views
             var s = Collect();
             var c = ConfigStore.Current;
             c.CompanyName = s.CompanyName;
+            if (!string.IsNullOrWhiteSpace(s.AccentColor) && !Regex.IsMatch(s.AccentColor.Trim(), "^#?[0-9A-Fa-f]{6}$")) { Ui.Warn(T("Val_AccentColor")); return; }
+            if (!string.IsNullOrWhiteSpace(s.LogoPath) && !File.Exists(s.LogoPath)) { Ui.Warn(T("Val_LogoMissing", s.LogoPath)); return; }
             c.AccentColor = s.AccentColor;
             c.DialogStyle = s.DialogStyle;
             c.Language = s.Language;
@@ -847,7 +915,7 @@ namespace J365.IntunePSApp.Views
             PnlDetCode.Visibility = RbDetCode.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
             PnlDetFile.Visibility = RbDetFile.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
             TxtDetVersion.IsEnabled = ChkDetVersion.IsChecked == true;
-            var who = new PackageSettings { AppName = TxtName.Text.Trim(), InstallBehavior = TagOf(CmbBehavior) };
+            var who = new PackageSettings { AppName = TxtName.Text.Trim(), InstallBehavior = TagOf(CmbBehavior), CatalogId = _s?.CatalogId ?? "" };
             DetMarkHint.Text = ChkDetMark.IsChecked == true ? T("Ed_DetMarkHint", ScriptGenerator.MarkDisplayPath(who)) : T("Ed_DetMarkOffHint");
         }
 
@@ -874,7 +942,7 @@ namespace J365.IntunePSApp.Views
         {
             var s = Collect();
             var cmds = ScriptGenerator.Commands(s);
-            string mode = s.DeployMode == "Silent" ? T("Opt_ModeSilent") : s.DeployMode == "Interactive" ? T("Opt_ModeInteractive") : T("Opt_ModeAuto");
+            string mode = s.DeployMode switch { "Silent" => T("Opt_ModeSilent"), "Interactive" => T("Opt_ModeInteractive"), "WhenNeeded" => T("Opt_ModeWhenNeeded"), _ => T("Opt_ModeAuto") };
             SummaryList.ItemsSource = new List<Tuple<string, string>>
             {
                 Tuple.Create(T("Rev_App"), $"{s.AppName} {s.AppVersion}  ·  {s.AppVendor}"),
@@ -1189,8 +1257,10 @@ namespace J365.IntunePSApp.Views
             try { script = IntunePublisher.Prepare(intune); }
             catch (Exception ex) { Ui.Error(ex.Message); return; }
 
-            var dialog = new PublishDialog(script, HeaderTitle.Text) { Owner = Window.GetWindow(this) };
-            if (dialog.ShowDialog() != true || dialog.Started == null) return;
+            var dialog = new PublishDialog(script, HeaderTitle.Text, IntuneDisplayName(intune), Collect().AppName) { Owner = Window.GetWindow(this) };
+            if (dialog.ShowDialog() != true) return;
+            if (dialog.InAppOptions != null) { await PublishInAppAsync(script, intune, dialog.InAppOptions); return; }
+            if (dialog.Started == null) return;
             MainWindow.Current.Toast(T("Ed_PublishStarted"), "info");
             _publishFolder = intune;
             _publishResult = null;
@@ -1210,6 +1280,90 @@ namespace J365.IntunePSApp.Views
             _publishResult = result;
             RefreshPublishStatus();
             if (result != null) MainWindow.Current.Toast(PublishSummary(result), result.IsPublished ? "ok" : result.Status == "cancelled" ? "warn" : "error");
+        }
+
+        /// <summary>Name of the app in Intune, as the publishing script will send it (Intune\intune-app.json).</summary>
+        private static string IntuneDisplayName(string intuneFolder)
+        {
+            try { return System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(Path.Combine(intuneFolder, PackageLayout.MetadataFile)))?["displayName"]?.GetValue<string>(); }
+            catch { return null; }
+        }
+
+        /// <summary>
+        /// Publishes with the session open in the application: the script runs without a window and its steps and upload
+        /// progress are shown here. Cancelling stops it; an app half created is removed by the script itself.
+        /// </summary>
+        private async Task PublishInAppAsync(string script, string intune, PublishOptions o)
+        {
+            var main = MainWindow.Current;
+            TokenSet session;
+            try { session = await IntuneConnection.RenewAsync(CancellationToken.None); }
+            catch (Exception ex) { Ui.Error(T("Auth_Failed", ex.Message)); return; }
+            if (session == null || string.IsNullOrEmpty(session.RefreshToken)) { Ui.Warn(T("Auth_ErrNotSignedIn")); return; }
+
+            _publishFolder = intune;
+            _publishResult = null;
+            _publishRunning = true;
+            RefreshPublishStatus();
+            string title = T("Publish_InAppTitle", HeaderTitle.Text);
+            var ct = main.ShowBusy(title, T("Publish_StepSignIn"));
+            main.SetStatus(title, true);
+            var started = DateTime.UtcNow;
+            try
+            {
+                using var p = IntunePublisher.LaunchInApp(script, o, session.RefreshToken, line => Dispatcher.BeginInvoke(new Action(() => ShowPublishLine(line))));
+                using (ct.Register(() => { try { if (!p.HasExited) p.Kill(true); } catch { } }))
+                    await p.WaitForExitAsync();
+            }
+            catch (Exception ex)
+            {
+                main.HideBusy();
+                main.SetStatus(null);
+                _publishRunning = false;
+                RefreshPublishStatus();
+                Ui.Error(ex.Message);
+                return;
+            }
+            main.HideBusy();
+            main.SetStatus(null);
+            _publishRunning = false;
+            if (_publishFolder != intune) return;
+            var result = IntunePublisher.ReadResult(intune);
+            if (result != null && File.GetLastWriteTimeUtc(IntunePublisher.ResultFile(intune)) < started.AddSeconds(-5)) result = null;
+            _publishResult = result;
+            RefreshPublishStatus();
+            if (result != null) MainWindow.Current.Toast(PublishSummary(result), result.IsPublished ? "ok" : result.Status == "cancelled" ? "warn" : "error");
+            else if (ct.IsCancellationRequested) MainWindow.Current.Toast(T("Publish_InAppCancelled"), "warn");
+        }
+
+        private void ShowPublishLine(string line)
+        {
+            Log.Info(line);
+            var main = MainWindow.Current;
+            var pct = Regex.Match(line, @"^\s*(\d{1,3})\s*%\s*$");
+            if (pct.Success) { main.BusyPercent(int.Parse(pct.Groups[1].Value)); return; }
+            string text = line.Trim();
+            if (text.StartsWith("OK", StringComparison.Ordinal)) return;   // the step text stays until the next step
+            if (text.StartsWith("> ", StringComparison.Ordinal))
+            {
+                string step = text.Substring(2);
+                main.BusyStatus(PublishStepText(step), indeterminate: !step.StartsWith("Uploading", StringComparison.Ordinal));
+                return;
+            }
+            main.BusyStatus(text, indeterminate: false);
+        }
+
+        /// <summary>The steps of the script (written in English) in the language of the interface.</summary>
+        private static string PublishStepText(string step)
+        {
+            if (step.StartsWith("Signing in", StringComparison.Ordinal)) return T("Publish_StepSignIn");
+            if (step.StartsWith("Looking for an app", StringComparison.Ordinal)) return T("Publish_StepLooking");
+            if (step.StartsWith("Updating the settings", StringComparison.Ordinal)) return T("Publish_StepUpdating");
+            if (step.StartsWith("Creating the app", StringComparison.Ordinal)) return T("Publish_StepCreating");
+            if (step.StartsWith("Uploading", StringComparison.Ordinal)) return T("Publish_StepUploading", Regex.Match(step, @"[\d.,]+ MB").Value);
+            if (step.StartsWith("Waiting for Intune", StringComparison.Ordinal)) return T("Publish_StepCommitting");
+            if (step.StartsWith("Assigning", StringComparison.Ordinal)) return T("Publish_StepAssigning");
+            return step;
         }
 
         /// <summary>A reopened package shows the outcome of its last publication, when one was recorded.</summary>
@@ -1269,7 +1423,7 @@ namespace J365.IntunePSApp.Views
 
         private bool LoadProject(string path, bool quiet)
         {
-            if (IsBuilding) return false;
+            if (IsBuilding) { MainWindow.Current.Toast(T("Ed_BusyBuilding"), "warn"); return false; }
             var main = MainWindow.Current;
             try
             {

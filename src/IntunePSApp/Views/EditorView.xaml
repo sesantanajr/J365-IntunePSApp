@@ -234,6 +234,7 @@
                 <TextBlock Text="{l:T Settings_Mode}" Style="{StaticResource H2}"/>
                 <ComboBox x:Name="CmbMode" Margin="0,12,0,0" SelectionChanged="Mode_Changed">
                   <ComboBoxItem Tag="Auto" Content="{l:T Opt_ModeAutoLong}"/>
+                  <ComboBoxItem Tag="WhenNeeded" Content="{l:T Opt_ModeWhenNeededLong}"/>
                   <ComboBoxItem Tag="Silent" Content="{l:T Opt_ModeSilentLong}"/>
                   <ComboBoxItem Tag="Interactive" Content="{l:T Opt_ModeInteractiveLong}"/>
                 </ComboBox>
@@ -491,7 +492,7 @@
                 <Grid Margin="0,4,0,0">
                   <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/></Grid.ColumnDefinitions>
                   <StackPanel><TextBlock Text="{l:T Settings_DialogStyle}" Style="{StaticResource Label}"/>
-                    <ComboBox x:Name="CmbStyle">
+                    <ComboBox x:Name="CmbStyle" SelectionChanged="Style_Changed">
                       <ComboBoxItem Tag="Fluent" Content="{l:T Opt_StyleFluent}"/>
                       <ComboBoxItem Tag="Classic" Content="{l:T Opt_StyleClassic}"/>
                     </ComboBox>
@@ -647,27 +648,7 @@
           <StackPanel>
             <TextBlock Text="{l:T Ed_PreviewOverline}" Style="{StaticResource Overline}"/>
             <TextBlock Text="{l:T Ed_PreviewHint}" Style="{StaticResource Hint}" Margin="0,2,0,12"/>
-            <Border Background="White" CornerRadius="10" BorderBrush="{StaticResource Line2}" BorderThickness="1" Effect="{StaticResource CardShadow}">
-              <StackPanel>
-                <Grid Margin="18,16,18,0">
-                  <Image x:Name="PrevLogo" Width="40" Height="40" HorizontalAlignment="Left" VerticalAlignment="Top" RenderOptions.BitmapScalingMode="HighQuality"/>
-                  <StackPanel Margin="52,0,0,0">
-                    <TextBlock x:Name="PrevTitle" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" Foreground="{StaticResource Ink}"/>
-                    <TextBlock x:Name="PrevSubtitle" Style="{StaticResource MutedText}" FontSize="12"/>
-                  </StackPanel>
-                </Grid>
-                <TextBlock x:Name="PrevBody" Margin="18,14,18,0" Style="{StaticResource Body}"/>
-                <Border x:Name="PrevAppsBox" Margin="18,10,18,0" Background="{StaticResource Subtle}" CornerRadius="7" Padding="10,8">
-                  <TextBlock x:Name="PrevApps" Style="{StaticResource Body}"/>
-                </Border>
-                <TextBlock x:Name="PrevCustom" Margin="18,10,18,0" Style="{StaticResource Body}" Foreground="{StaticResource Ink}"/>
-                <TextBlock x:Name="PrevDefer" Margin="18,10,18,0" Style="{StaticResource MutedText}"/>
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="18,16,18,18">
-                  <Border x:Name="PrevDeferBtn" BorderBrush="{StaticResource Line2}" BorderThickness="1" CornerRadius="5" Padding="12,6"><TextBlock Text="{l:T Prev_Defer}"/></Border>
-                  <Border x:Name="PrevMainBtn" CornerRadius="5" Padding="12,6" Margin="8,0,0,0" Background="{StaticResource Brand}"><TextBlock x:Name="PrevMainText" Foreground="White"/></Border>
-                </StackPanel>
-              </StackPanel>
-            </Border>
+            <v:DialogPreview x:Name="PrevDialog"/>
             <TextBlock x:Name="PrevDoneLabel" Text="{l:T Ed_PreviewDone}" Style="{StaticResource Overline}" Margin="0,20,0,8"/>
             <Border x:Name="PrevDoneBox" Background="White" CornerRadius="10" BorderBrush="{StaticResource Line2}" BorderThickness="1" Padding="16,12">
               <StackPanel>

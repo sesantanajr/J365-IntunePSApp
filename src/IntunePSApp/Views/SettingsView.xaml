@@ -1,7 +1,8 @@
 <UserControl x:Class="J365.IntunePSApp.Views.SettingsView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:l="clr-namespace:J365.IntunePSApp.Localization">
+             xmlns:l="clr-namespace:J365.IntunePSApp.Localization"
+             xmlns:v="clr-namespace:J365.IntunePSApp.Views">
   <Grid>
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto"/>
@@ -72,14 +73,17 @@
           </StackPanel>
         </Border>
 
-        <!-- Company -->
+        <!-- Company: the fields and, beside them (below on narrow windows), the welcome dialog as it will look -->
         <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+          <Grid x:Name="CompanyGrid">
+            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
           <StackPanel>
             <TextBlock Text="{l:T Settings_Company}" Style="{StaticResource H2}"/>
             <TextBlock Text="{l:T Settings_CompanyHint}" Style="{StaticResource MutedText}"/>
             <Grid>
               <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/></Grid.ColumnDefinitions>
-              <StackPanel><TextBlock Text="{l:T Settings_CompanyName}" Style="{StaticResource Label}"/><TextBox x:Name="TxtCompany"/></StackPanel>
+              <StackPanel><TextBlock Text="{l:T Settings_CompanyName}" Style="{StaticResource Label}"/><TextBox x:Name="TxtCompany" TextChanged="Brand_Changed"/></StackPanel>
               <StackPanel Grid.Column="2"><TextBlock Text="{l:T Settings_Author}" Style="{StaticResource Label}"/><TextBox x:Name="TxtAuthor"/></StackPanel>
             </Grid>
             <TextBlock Text="{l:T Settings_Logo}" Style="{StaticResource Label}"/>
@@ -93,9 +97,15 @@
             </Grid>
             <Grid>
               <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/></Grid.ColumnDefinitions>
-              <StackPanel><TextBlock Text="{l:T Settings_Accent}" Style="{StaticResource Label}"/><TextBox x:Name="TxtAccent" FontFamily="{StaticResource MonoFont}"/></StackPanel>
+              <StackPanel><TextBlock Text="{l:T Settings_Accent}" Style="{StaticResource Label}"/>
+                <DockPanel>
+                  <Border x:Name="AccentSwatch" DockPanel.Dock="Left" Width="30" Height="30" CornerRadius="6" Margin="0,0,8,0" Background="{StaticResource Brand}" BorderBrush="{StaticResource Line}" BorderThickness="1"/>
+                  <TextBox x:Name="TxtAccent" FontFamily="{StaticResource MonoFont}" TextChanged="Brand_Changed"/>
+                </DockPanel>
+                <WrapPanel x:Name="SwatchPanel" Margin="0,6,0,0"/>
+              </StackPanel>
               <StackPanel Grid.Column="2"><TextBlock Text="{l:T Settings_DialogStyle}" Style="{StaticResource Label}"/>
-                <ComboBox x:Name="CmbStyle"><ComboBoxItem Tag="Fluent" Content="{l:T Opt_StyleFluent}"/><ComboBoxItem Tag="Classic" Content="{l:T Opt_StyleClassic}"/></ComboBox>
+                <ComboBox x:Name="CmbStyle" SelectionChanged="Brand_Changed"><ComboBoxItem Tag="Fluent" Content="{l:T Opt_StyleFluent}"/><ComboBoxItem Tag="Classic" Content="{l:T Opt_StyleClassic}"/></ComboBox>
               </StackPanel>
               <StackPanel Grid.Column="4"><TextBlock Text="{l:T Settings_DialogLanguage}" Style="{StaticResource Label}"/>
                 <ComboBox x:Name="CmbLanguage"><ComboBoxItem Tag="Auto" Content="{l:T Opt_LangAuto}"/><ComboBoxItem Tag="pt-BR" Content="Português (Brasil)"/><ComboBoxItem Tag="en" Content="English"/><ComboBoxItem Tag="es" Content="Español"/></ComboBox>
@@ -103,6 +113,12 @@
             </Grid>
             <CheckBox x:Name="ChkImeLogs" Style="{StaticResource Switch}" Content="{l:T Settings_ImeLogs}" Margin="0,16,0,0"/>
           </StackPanel>
+            <StackPanel x:Name="BrandPreviewPanel" Grid.Column="1" Width="340" Margin="24,0,0,0">
+              <TextBlock Text="{l:T Settings_PreviewOverline}" Style="{StaticResource Overline}"/>
+              <TextBlock Text="{l:T Settings_PreviewHint}" Style="{StaticResource Hint}" Margin="0,2,0,10" TextWrapping="Wrap"/>
+              <v:DialogPreview x:Name="BrandPreview"/>
+            </StackPanel>
+          </Grid>
         </Border>
 
         <!-- Defaults -->
@@ -113,17 +129,17 @@
             <Grid>
               <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition Width="160"/><ColumnDefinition Width="16"/><ColumnDefinition Width="220"/></Grid.ColumnDefinitions>
               <StackPanel><TextBlock Text="{l:T Settings_Mode}" Style="{StaticResource Label}"/>
-                <ComboBox x:Name="CmbMode"><ComboBoxItem Tag="Auto" Content="{l:T Opt_ModeAuto}"/><ComboBoxItem Tag="Silent" Content="{l:T Opt_ModeSilent}"/><ComboBoxItem Tag="Interactive" Content="{l:T Opt_ModeInteractive}"/></ComboBox>
+                <ComboBox x:Name="CmbMode"><ComboBoxItem Tag="Auto" Content="{l:T Opt_ModeAuto}"/><ComboBoxItem Tag="WhenNeeded" Content="{l:T Opt_ModeWhenNeeded}"/><ComboBoxItem Tag="Silent" Content="{l:T Opt_ModeSilent}"/><ComboBoxItem Tag="Interactive" Content="{l:T Opt_ModeInteractive}"/></ComboBox>
               </StackPanel>
-              <StackPanel Grid.Column="2"><TextBlock Text="{l:T Settings_Deferrals}" Style="{StaticResource Label}"/><TextBox x:Name="TxtDefer"/></StackPanel>
+              <StackPanel Grid.Column="2"><TextBlock Text="{l:T Settings_Deferrals}" Style="{StaticResource Label}"/><TextBox x:Name="TxtDefer" TextChanged="Brand_Changed"/></StackPanel>
               <StackPanel Grid.Column="4"><TextBlock Text="{l:T Settings_Countdown}" Style="{StaticResource Label}"/><TextBox x:Name="TxtCountdown"/></StackPanel>
             </Grid>
-            <CheckBox x:Name="ChkDefer" Style="{StaticResource Switch}" Content="{l:T Opt_AllowDefer}" Margin="0,16,0,0"/>
+            <CheckBox x:Name="ChkDefer" Style="{StaticResource Switch}" Content="{l:T Opt_AllowDefer}" Margin="0,16,0,0" Checked="Brand_Changed" Unchecked="Brand_Changed"/>
             <CheckBox x:Name="ChkBlock" Style="{StaticResource Switch}" Content="{l:T Opt_BlockExecution}"/>
             <CheckBox x:Name="ChkDisk" Style="{StaticResource Switch}" Content="{l:T Opt_CheckDisk}"/>
             <CheckBox x:Name="ChkRemovePrev" Style="{StaticResource Switch}" Content="{l:T Opt_RemovePrevious}"/>
             <TextBlock Text="{l:T Settings_Welcome}" Style="{StaticResource Label}"/>
-            <TextBox x:Name="TxtWelcome" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60" VerticalContentAlignment="Top"/>
+            <TextBox x:Name="TxtWelcome" TextChanged="Brand_Changed" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60" VerticalContentAlignment="Top"/>
             <TextBlock Text="{l:T Settings_Completion}" Style="{StaticResource Label}"/>
             <TextBox x:Name="TxtCompletion" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="50" VerticalContentAlignment="Top"/>
             <Grid Margin="0,4,0,0">
@@ -219,15 +235,34 @@
           </StackPanel>
         </Border>
 
-        <!-- Intune publishing (preview) -->
-        <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+        <!-- Microsoft Intune: the connection to the tenant (automatic app registration or typed by hand) -->
+        <Border x:Name="IntuneCard" Style="{StaticResource Card}" Margin="0,0,0,16">
           <StackPanel>
             <TextBlock Text="{l:T Settings_Intune}" Style="{StaticResource H2}"/>
-            <TextBlock Text="{l:T Settings_IntuneHint}" Style="{StaticResource MutedText}"/>
+            <TextBlock Text="{l:T Settings_IntuneHint}" Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
+            <Border x:Name="IntuneStatusBox" CornerRadius="10" Padding="16,12" Margin="0,14,0,0" Background="{StaticResource BrandSoft}">
+              <DockPanel>
+                <TextBlock x:Name="IntuneStatusIcon" DockPanel.Dock="Left" Style="{StaticResource Icon}" FontSize="18" Margin="0,2,12,0" VerticalAlignment="Top" Foreground="{StaticResource Brand}" Text="&#xE77B;"/>
+                <StackPanel>
+                  <TextBlock x:Name="IntuneStatusTitle" FontWeight="SemiBold" TextWrapping="Wrap" Foreground="{StaticResource Ink}"/>
+                  <TextBlock x:Name="IntuneStatusText" Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
+                </StackPanel>
+              </DockPanel>
+            </Border>
+            <WrapPanel Margin="0,12,0,0">
+              <Button x:Name="BtnIntuneSetup" Style="{StaticResource PrimaryButton}" Margin="0,0,8,8" Click="IntuneSetup_Click">
+                <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE945;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock Text="{l:T Settings_IntuneSetup}"/></StackPanel>
+              </Button>
+              <Button x:Name="BtnIntuneSignIn" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8" Click="IntuneSignIn_Click" Content="{l:T Publish_SignIn}"/>
+              <Button x:Name="BtnIntuneTest" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8" Click="IntuneTest_Click" Content="{l:T Settings_IntuneTest}"/>
+              <Button x:Name="BtnIntuneSignOut" Style="{StaticResource GhostButton}" Margin="0,0,8,8" Click="IntuneSignOut_Click" Content="{l:T Settings_IntuneSignOut}"/>
+            </WrapPanel>
+            <TextBlock x:Name="IntuneBusyText" Style="{StaticResource Hint}" Visibility="Collapsed" TextWrapping="Wrap"/>
+            <TextBlock Text="{l:T Settings_IntuneManual}" Style="{StaticResource Overline}" Margin="0,14,0,0"/>
             <Grid>
               <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/></Grid.ColumnDefinitions>
-              <StackPanel><TextBlock Text="{l:T Publish_Tenant}" Style="{StaticResource Label}"/><TextBox x:Name="TxtTenant" FontFamily="{StaticResource MonoFont}"/></StackPanel>
-              <StackPanel Grid.Column="2"><TextBlock Text="{l:T Publish_Client}" Style="{StaticResource Label}"/><TextBox x:Name="TxtClient" FontFamily="{StaticResource MonoFont}"/></StackPanel>
+              <StackPanel><TextBlock Text="{l:T Publish_Tenant}" Style="{StaticResource Label}"/><TextBox x:Name="TxtTenant" FontFamily="{StaticResource MonoFont}" TextChanged="IntuneFields_Changed"/></StackPanel>
+              <StackPanel Grid.Column="2"><TextBlock Text="{l:T Publish_Client}" Style="{StaticResource Label}"/><TextBox x:Name="TxtClient" FontFamily="{StaticResource MonoFont}" TextChanged="IntuneFields_Changed"/></StackPanel>
             </Grid>
             <Button Style="{StaticResource GhostButton}" HorizontalAlignment="Left" Padding="4,6" Margin="0,8,0,0" Click="PublishGuide_Click" Content="{l:T Settings_IntuneGuide}"/>
           </StackPanel>

@@ -115,6 +115,8 @@ namespace J365.IntunePSApp.Core
             var s = JsonSerializer.Deserialize<PackageSettings>(File.ReadAllText(file, Encoding.UTF8), Json.Options)
                     ?? throw new InvalidDataException(T("Err_ProjectInvalid"));
             Migrate(s);
+            // A project from another computer (or an output folder that was moved) builds into the folder of Settings.
+            if (!string.IsNullOrWhiteSpace(s.OutputRoot) && !Directory.Exists(s.OutputRoot)) s.OutputRoot = "";
             return s;
         }
 

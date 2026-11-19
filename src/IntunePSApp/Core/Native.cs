@@ -7,6 +7,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.RegularExpressions;
+using static J365.IntunePSApp.Localization.Loc;
 
 namespace J365.IntunePSApp.Core
 {
@@ -35,6 +36,14 @@ namespace J365.IntunePSApp.Core
         [DllImport("user32.dll")] public static extern bool DestroyIcon(IntPtr hIcon);
         [DllImport("kernel32.dll")] public static extern bool AttachConsole(int dwProcessId);
 
+        // ---------------- crypt32.dll (DPAPI: data readable only by the same Windows user)
+        [StructLayout(LayoutKind.Sequential)] public struct DATA_BLOB { public int cbData; public IntPtr pbData; }
+        [DllImport("crypt32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        public static extern bool CryptProtectData(ref DATA_BLOB pDataIn, string szDataDescr, ref DATA_BLOB pOptionalEntropy, IntPtr pvReserved, IntPtr pPromptStruct, int dwFlags, ref DATA_BLOB pDataOut);
+        [DllImport("crypt32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        public static extern bool CryptUnprotectData(ref DATA_BLOB pDataIn, IntPtr ppszDataDescr, ref DATA_BLOB pOptionalEntropy, IntPtr pvReserved, IntPtr pPromptStruct, int dwFlags, ref DATA_BLOB pDataOut);
+        [DllImport("kernel32.dll")] public static extern IntPtr LocalFree(IntPtr hMem);
+
         /// <summary>PF_VIRT_FIRMWARE_ENABLED: hardware virtualization is enabled in the firmware.</summary>
         public const uint PF_VIRT_FIRMWARE_ENABLED = 21;
         [DllImport("kernel32.dll")] public static extern bool IsProcessorFeaturePresent(uint processorFeature);
@@ -50,9 +59,9 @@ namespace J365.IntunePSApp.Core
             try
             {
                 uint r = NativeMethods.MsiOpenDatabase(path, IntPtr.Zero, out db);
-                if (r != 0) throw new IOException($"Não foi possível abrir o MSI (erro {r}). O arquivo pode estar corrompido ou em uso.");
+                if (r != 0) throw new IOException(T("Err_MsiOpen", r));
                 r = NativeMethods.MsiDatabaseOpenView(db, "SELECT `Property`, `Value` FROM `Property`", out view);
-                if (r != 0) throw new IOException($"MSI sem tabela Property (erro {r}).");
+                if (r != 0) throw new IOException(T("Err_MsiNoProperty", r));
                 NativeMethods.MsiViewExecute(view, IntPtr.Zero);
                 while (NativeMethods.MsiViewFetch(view, out IntPtr rec) == 0)
                 {

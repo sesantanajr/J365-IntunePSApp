@@ -82,10 +82,15 @@ namespace J365.IntunePSApp.Core
         /// <summary>Registry key, under HKLM (64-bit view) or HKCU, where every package writes its mark.</summary>
         public const string MarkRoot = @"SOFTWARE\J365\IntunePSApp\Apps";
 
-        /// <summary>Name of the mark key of an application: its name in ASCII, without characters a key name cannot have.</summary>
+        /// <summary>
+        /// Name of the mark key of an application, in ASCII, without characters a key name cannot have: the id of the
+        /// database entry when there is one (side-by-side products such as .NET 8 and .NET 9 share a name), otherwise the
+        /// name of the application.
+        /// </summary>
         public static string MarkId(PackageSettings s)
         {
-            string id = Regex.Replace(Ascii(s.AppName ?? "", '_'), @"[^A-Za-z0-9 ._+()\-]", "_");
+            string source = !string.IsNullOrWhiteSpace(s.CatalogId) ? s.CatalogId : s.AppName;
+            string id = Regex.Replace(Ascii(source ?? "", '_'), @"[^A-Za-z0-9 ._+()\-]", "_");
             id = Regex.Replace(id, @"\s+", " ").Trim().TrimEnd('.', ' ');
             if (id.Length > 80) id = id.Substring(0, 80).TrimEnd('.', ' ');
             return id.Length == 0 ? "App" : id;
@@ -187,6 +192,17 @@ namespace J365.IntunePSApp.Core
                 $"    AppScriptDate = '{DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}'",
                 $"    AppScriptAuthor = {Lit(author)}",
                 $"    RequireAdmin = {(s.InstallBehavior == "User" ? "$false" : "$true")}",
+            };
+            // "Automatic": the toolkit's Auto mode turns the deployment silent when none of the applications to close is
+            // running, so users only saw Intune's notification. Without that check the branded dialogs are shown whenever
+            // someone is signed in; with no user, or during OOBE/ESP, the deployment stays silent.
+            if (IsAutoWithDialogs(s.DeployMode))
+            {
+                L.Add("    # Dialogs whenever a user is signed in (silent with nobody signed in or during OOBE/ESP).");
+                L.Add("    NoProcessDetection = $true");
+            }
+            L.AddRange(new[]
+            {
                 "",
                 "    # Dialog titles.",
                 "    InstallName = ''",
@@ -197,9 +213,15 @@ namespace J365.IntunePSApp.Core
                 "    DeployAppScriptParameters = $PSBoundParameters",
                 $"    DeployAppScriptVersion = '{deployVersion}'",
                 "}"
-            };
+            });
             return string.Join("\r\n", L);
         }
+
+        /// <summary>
+        /// Display modes: "Auto" (dialogs whenever a user is signed in), "WhenNeeded" (the toolkit's own Auto: dialogs only
+        /// when an application to close is running), "Interactive" and "Silent". Unknown values behave as "Auto".
+        /// </summary>
+        public static bool IsAutoWithDialogs(string mode) => mode is not ("WhenNeeded" or "Interactive" or "Silent");
 
         private static string Function(string name, List<string> body)
         {
@@ -220,7 +242,7 @@ namespace J365.IntunePSApp.Core
 
         private static void AddActions(List<string> L, PackageSettings s, string phase)
         {
-            foreach (var a in s.Actions.Where(a => a.Phase == phase)) L.AddRange(ActionCatalog.Generate(a));
+            foreach (var a in s.Actions.Where(a => a.Phase == phase)) L.AddRange(ActionCatalog.Generate(a, s.InstallBehavior == "User"));
         }
 
         private static List<string> InstallBody(PackageSettings s, string installerRel)
@@ -252,6 +274,11 @@ namespace J365.IntunePSApp.Core
             else
             {
                 L.Add("    ## Welcome dialog disabled (no applications to close, no deferral and no custom message).");
+                if (s.CheckDiskSpace)
+                {
+                    L.Add("    ## Free disk space is still checked (no dialog is shown for it).");
+                    L.Add("    Show-ADTInstallationWelcome -CheckDiskSpace");
+                }
                 L.Add("");
             }
             L.Add("    ## Progress dialog.");

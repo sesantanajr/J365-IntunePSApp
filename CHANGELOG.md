@@ -2,6 +2,35 @@
 
 All notable changes to J365 IntunePSApp. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.3.0 - 2026-11-19
+
+### Added
+
+- **Connection to the tenant, with the app registration created automatically.** *Settings > Microsoft Intune > Set up automatically* (also in the publishing dialog): an administrator signs in in the browser (Microsoft Graph Command Line Tools, `Application.ReadWrite.All` and `DelegatedPermissionGrant.ReadWrite.All`, for this setup only) and the application creates the registration *J365 IntunePSApp*: single tenant, public client with `http://localhost`, no secret, only the delegated `DeviceManagementApps.ReadWrite.All`; then the enterprise application (retrying through the replication delay) and the admin consent for the organisation. A registration from an earlier setup is found and repaired. Without the right to consent, the registration is kept and the admin consent link is shown. Manual registration keeps working.
+- **Session remembered.** Sign-in with authorization code and PKCE on a loopback port; the refresh token is stored encrypted with DPAPI for the Windows user (`intune-session.dat`); *Test connection* and *Sign out*. Sign-in errors are explained in plain words (consent, redirect URI, public client, Conditional Access, wrong tenant...).
+- **Publishing inside the application.** With the session open, *Publish to Intune* runs the package's script without a window: the session goes in an environment variable of that process only, the steps are shown translated, with the upload progress, and can be cancelled. The script gained `-AppId` and reads the session from `J365_GRAPH_REFRESH_TOKEN`.
+- **A new version updates the app already in Intune.** The dialog lists the Win32 apps whose name starts with the name of the application ("7-Zip 25.01" for a "7-Zip 26.06" package): update one of them (its assignments are kept) or create a new app.
+- **Display modes:** *Automatic* (dialogs whenever a user is signed in; generated with `NoProcessDetection`), *Discreet* (the toolkit's own Auto), *Interactive*, *Silent*.
+- **Live preview of the dialog in Settings**, in the Fluent or the Classic style, and the Classic style in the editor preview. Accent colour swatches in Settings.
+- Home: the Intune connection is one of the indicators (opens Settings > Microsoft Intune).
+- Release workflow: optional code signing with Azure Trusted Signing before zipping, hashing and attesting ([docs/SIGNING.md](docs/SIGNING.md)); `SECURITY.md` goes into the release zip.
+
+### Fixed
+
+- **The branded PSAppDeployToolkit dialogs did not appear when the package ran from Intune** (only Intune's notification). In the toolkit's Auto mode, a list of applications to close with none of them running turns the deployment silent; *Automatic* now keeps the dialogs whenever a user is signed in, and stays silent with nobody signed in and during OOBE/ESP.
+- **Dialog style and accent colour in Settings had no visible effect**: they only applied to new packages. Saving Settings now updates the package open in the editor wherever it still had the previous defaults (what was changed in it is kept), and the preview shows the result.
+- Side-by-side products (.NET 8 / 9 / 10 desktop runtime, .NET runtime, ASP.NET Core, Visual C++ 2015+ per architecture, VC++ 2013) have their own uninstall pattern, and the package mark of a database package is keyed by its database id, so one version no longer satisfies the detection of another or gets uninstalled with it.
+- Two rows of a database entry with the same file name (x64 and ARM64 of Zoom) no longer overwrite each other in the download folder.
+- Updating or importing the database while Settings is open no longer throws away what was typed and not saved.
+- The output folder of Settings is used by every package (projects kept the folder they were first built in, or a folder of another computer).
+- Per-user packages: shortcuts go to the user's own desktop and Start menu and environment variables to the user scope; actions that need an administrator (services, scheduled tasks, HKLM, all profiles, dependencies, .reg) are flagged.
+- "Check the free disk space" works when no welcome dialog is generated.
+- "Show a message" that waits for OK no longer ends the deployment when nobody answers (`-NoExitOnTimeout`).
+- "Save as the company default" in the editor validates the colour and the logo before saving.
+- Opening a project while a package is being generated says so instead of doing nothing.
+- MSI read errors are in the language of the interface; the installer language preferred by default follows Windows.
+- The application refuses an update not signed by the same publisher once releases are signed.
+
 ## 2.2.0 - 2026-11-19
 
 ### Added

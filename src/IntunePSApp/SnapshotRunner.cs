@@ -104,6 +104,9 @@ namespace J365.IntunePSApp
                 await Shot("05-packages");
                 w.Navigate("settings");
                 await Shot("06-settings");
+                w.Settings.ShowIntune();
+                await Task.Delay(300);
+                await Shot("06-settings-intune");
                 w.Settings.ScrollToEnd();
                 await Shot("06-settings-end");
 

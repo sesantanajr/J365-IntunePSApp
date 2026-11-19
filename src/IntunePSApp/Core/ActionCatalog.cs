@@ -181,6 +181,13 @@ namespace J365.IntunePSApp.Core
             // Under the System account HKCU is the hive of SYSTEM itself: no user ever sees the value.
             if (!userContext && (a.Type == "SetRegistry" || a.Type == "RemoveRegistry") && Regex.IsMatch(a.P("Key").Trim(), @"^(HKCU|HKEY_CURRENT_USER):?\\", RegexOptions.IgnoreCase))
                 list.Add(T("Val_Warn_ActionHkcu", a.P("Key").Trim()));
+            // Installed for the user, the package runs without elevation: these actions need an administrator.
+            if (userContext)
+            {
+                bool machineKey = (a.Type == "SetRegistry" || a.Type == "RemoveRegistry") && Regex.IsMatch(a.P("Key").Trim(), @"^(HKLM|HKEY_LOCAL_MACHINE)", RegexOptions.IgnoreCase);
+                if (machineKey || a.Type is "StopService" or "DisableScheduledTask" or "CopyToUserProfiles" or "InstallDependency" or "ImportRegFile")
+                    list.Add(T("Val_Warn_ActionNeedsAdmin", Get(a.Type)?.Label ?? a.Type));
+            }
             return list;
         }
 
@@ -227,7 +234,8 @@ namespace J365.IntunePSApp.Core
         }
 
         /// <summary>PowerShell lines (4-space indented) for one action, including the optional try/catch wrapper.</summary>
-        public static List<string> Generate(PackageAction a)
+        /// <param name="userContext">The package installs for the user without elevation: shortcuts and environment variables go to the user's own folders and scope.</param>
+        public static List<string> Generate(PackageAction a, bool userContext = false)
         {
             var body = new List<string>();
             switch (a.Type)
@@ -254,14 +262,15 @@ namespace J365.IntunePSApp.Core
                         break;
                     }
                 case "RemoveDesktopShortcut":
-                    body.Add($"Remove-ADTFile {PathParameter(a.P("Name"))} (Join-Path -Path ([Environment]::GetFolderPath('CommonDesktopDirectory')) -ChildPath {L(Lnk(a.P("Name")))})");
+                    // A per-user installation puts its shortcut on the user's own desktop (and cannot touch the public one).
+                    body.Add($"Remove-ADTFile {PathParameter(a.P("Name"))} (Join-Path -Path ([Environment]::GetFolderPath('{(userContext ? "Desktop" : "CommonDesktopDirectory")}')) -ChildPath {L(Lnk(a.P("Name")))})");
                     break;
                 case "RemoveStartMenuShortcut":
-                    body.Add($"Get-ChildItem -LiteralPath ([Environment]::GetFolderPath('CommonPrograms')) -Filter {L(Lnk(a.P("Name")))} -Recurse -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue");
+                    body.Add($"Get-ChildItem -LiteralPath ([Environment]::GetFolderPath('{(userContext ? "Programs" : "CommonPrograms")}')) -Filter {L(Lnk(a.P("Name")))} -Recurse -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue");
                     break;
                 case "CreateShortcut":
                     {
-                        string folder = a.P("Location") == "StartMenu" ? "CommonPrograms" : "CommonDesktopDirectory";
+                        string folder = a.P("Location") == "StartMenu" ? (userContext ? "Programs" : "CommonPrograms") : (userContext ? "Desktop" : "CommonDesktopDirectory");
                         string cmd = $"New-ADTShortcut -LiteralPath (Join-Path -Path ([Environment]::GetFolderPath('{folder}')) -ChildPath {L(Lnk(a.P("Name")))}) -TargetPath {Exp(a.P("Target"))}";
                         if (!string.IsNullOrWhiteSpace(a.P("Arguments"))) cmd += $" -Arguments {L(a.P("Arguments"))}";
                         if (!string.IsNullOrWhiteSpace(a.P("Icon"))) cmd += $" -IconLocation {Exp(a.P("Icon"))}";
@@ -323,7 +332,7 @@ namespace J365.IntunePSApp.Core
                     body.Add($"Get-ScheduledTask -TaskName {L(a.P("Name"))} -ErrorAction SilentlyContinue | Disable-ScheduledTask | Out-Null");
                     break;
                 case "SetEnvironment":
-                    body.Add($"[Environment]::SetEnvironmentVariable({L(a.P("Name"))}, {L(a.P("Value"))}, 'Machine')");
+                    body.Add($"[Environment]::SetEnvironmentVariable({L(a.P("Name"))}, {L(a.P("Value"))}, '{(userContext ? "User" : "Machine")}')");
                     break;
                 case "RunProgram":
                     {
@@ -339,7 +348,8 @@ namespace J365.IntunePSApp.Core
                     body.AddRange(a.P("Code").Replace("\r\n", "\n").Split('\n'));
                     break;
                 case "ShowMessage":
-                    body.Add($"Show-ADTInstallationPrompt -Message {L(a.P("Text"))} -ButtonRightText 'OK' -Icon 'Information'" + (a.P("Wait") == "true" ? "" : " -NoWait"));
+                    // Waiting for OK: an unanswered prompt must not end the deployment when it times out (-NoExitOnTimeout).
+                    body.Add($"Show-ADTInstallationPrompt -Message {L(a.P("Text"))} -ButtonRightText 'OK' -Icon 'Information'" + (a.P("Wait") == "true" ? " -NoExitOnTimeout" : " -NoWait"));
                     break;
                 case "Wait":
                     body.Add($"Start-Sleep -Seconds {(int.TryParse(a.P("Seconds"), out var s) ? Math.Clamp(s, 1, 3600) : 10)}");

@@ -235,6 +235,8 @@ namespace J365.IntunePSApp.Core
         /// <summary>AllUsers | AllDevices | Group</summary>
         public string AssignTo { get; set; } = "AllUsers";
         public string GroupId { get; set; } = "";
+        /// <summary>Intune app to update with this package (a previous version); empty: looked up by name.</summary>
+        public string AppId { get; set; } = "";
     }
 
     /// <summary>Intune\publish-result.json, written by Publish-ToIntune.ps1 on every exit path.</summary>
@@ -298,7 +300,11 @@ namespace J365.IntunePSApp.Core
                 sb.Append(" -AssignIntent ").Append(o.AssignIntent).Append(" -AssignTo ").Append(o.AssignTo is "AllDevices" or "Group" ? o.AssignTo : "AllUsers");
                 if (o.AssignTo == "Group") sb.Append(" -GroupId ").Append(o.GroupId.Trim());
             }
+            if (IsGuid(o.AppId)) sb.Append(" -AppId ").Append(Guid.Parse(o.AppId.Trim()).ToString());
             if (pause) sb.Append(" -Pause");
+            // National clouds and test servers (the same variables the application uses for its own sign-in).
+            if (Environment.GetEnvironmentVariable("J365_GRAPH_URL") is { Length: > 0 } graph && Uri.IsWellFormedUriString(graph, UriKind.Absolute)) sb.Append(" -GraphUrl \"").Append(graph).Append('"');
+            if (Environment.GetEnvironmentVariable("J365_LOGIN_URL") is { Length: > 0 } login && Uri.IsWellFormedUriString(login, UriKind.Absolute)) sb.Append(" -LoginUrl \"").Append(login).Append('"');
             return sb.ToString();
         }
 
@@ -329,6 +335,30 @@ namespace J365.IntunePSApp.Core
             // this drops PowerShell 7 paths inherited from a parent process.
             psi.Environment.Remove("PSModulePath");
             return Process.Start(psi);
+        }
+
+        /// <summary>
+        /// Publishes inside the application: the script runs without a window, signs in with the session the user opened
+        /// in the application (its refresh token goes in an environment variable of that process only, never on the
+        /// command line), answers no question (<c>-Force</c>, so <paramref name="o"/> must say what to do with an app of
+        /// the same name) and reports every line it prints. The caller waits for the process and reads the result file.
+        /// </summary>
+        public static Process LaunchInApp(string publishScript, PublishOptions o, string refreshToken, Action<string> output)
+        {
+            if (Check(o) != null || o.IfExists is not ("Update" or "CreateNew" or "Fail")) throw new ArgumentException("Invalid publishing options.");
+            var psi = ToolsService.PowerShellStartInfo(Arguments(publishScript, o) + " -Force");
+            psi.WorkingDirectory = Path.GetDirectoryName(publishScript);
+            psi.StandardOutputEncoding = Encoding.UTF8;
+            psi.StandardErrorEncoding = Encoding.UTF8;
+            psi.Environment.Remove("PSModulePath");
+            psi.Environment["J365_GRAPH_REFRESH_TOKEN"] = refreshToken ?? "";
+            var p = new Process { StartInfo = psi, EnableRaisingEvents = true };
+            p.OutputDataReceived += (s, e) => { if (!string.IsNullOrWhiteSpace(e.Data)) output?.Invoke(e.Data.TrimEnd()); };
+            p.ErrorDataReceived += (s, e) => { if (!string.IsNullOrWhiteSpace(e.Data)) output?.Invoke(e.Data.TrimEnd()); };
+            p.Start();
+            p.BeginOutputReadLine();
+            p.BeginErrorReadLine();
+            return p;
         }
 
         /// <summary>Checks the package the way the publication does, without signing in. Returns the text the script printed.</summary>

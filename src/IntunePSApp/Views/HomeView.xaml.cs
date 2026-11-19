@@ -81,8 +81,7 @@ namespace J365.IntunePSApp.Views
             StatPackagesSub.Text = T("Home_StatPackagesSub");
             StatPsadt.Text = ToolsService.PsadtVersion ?? "—";
             StatPsadtSub.Text = ToolsService.PsadtVersion != null ? T("Home_StatPsadtSub") : T("Home_StatMissing");
-            StatIwau.Text = ToolsService.HasIntuneWinAppUtil ? T("Common_Ready") : "—";
-            StatIwauSub.Text = ToolsService.HasIntuneWinAppUtil ? "IntuneWinAppUtil.exe (Microsoft)" : T("Home_StatIwauMissing");
+            UpdateIntuneCard();
             Recent.ItemsSource = hist.Take(5).ToList();
             RecentEmpty.Visibility = hist.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             Notices.ItemsSource = BuildNotices(hist);
@@ -140,6 +139,21 @@ namespace J365.IntunePSApp.Views
                     ButtonText = T("Notice_PackagesButton"), Action = () => main.Navigate("packages")
                 });
             return list;
+        }
+
+        /// <summary>Connected, configured without a session, or not connected yet.</summary>
+        private void UpdateIntuneCard()
+        {
+            bool signedIn = IntuneConnection.IsSignedIn;
+            StatIntune.Text = signedIn ? T("Home_StatIntuneOn") : IntuneConnection.IsConfigured ? T("Home_StatIntuneReady") : T("Home_StatIntuneOff");
+            StatIntune.Foreground = (System.Windows.Media.Brush)FindResource(signedIn ? "Success" : "Ink");
+            StatIntuneSub.Text = signedIn ? IntuneConnection.Account : IntuneConnection.IsConfigured ? T("Home_StatIntuneSignIn") : T("Home_StatIntuneSetup");
+        }
+
+        private void Intune_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            MainWindow.Current.Navigate("settings");
+            MainWindow.Current.Settings.ShowIntune();
         }
 
         private void Notice_Click(object sender, RoutedEventArgs e)

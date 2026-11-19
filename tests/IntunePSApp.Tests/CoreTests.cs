@@ -318,6 +318,22 @@ namespace J365.IntunePSApp.Tests
         }
     }
 
+    public class DownloadPathTests
+    {
+        [Fact]
+        public void Each_variant_of_an_installer_gets_its_own_download_folder()
+        {
+            // Zoom publishes x64 and ARM64 under the same file name: one must not overwrite the other.
+            var app = new CatalogApp { Id = "Zoom.Zoom", Name = "Zoom", Version = "6.0" };
+            var x64 = new CatalogInstaller { Url = "https://zoom.us/client/latest/ZoomInstallerFull.msi?archType=x64", Arch = "x64", Type = "msi" };
+            var arm = new CatalogInstaller { Url = "https://zoom.us/client/latest/ZoomInstallerFull.msi?archType=winarm64", Arch = "arm64", Type = "msi" };
+            string a = CatalogService.LocalInstallerPath(app, x64), b = CatalogService.LocalInstallerPath(app, arm);
+            Assert.NotEqual(a, b);
+            Assert.Equal("ZoomInstallerFull.msi", Path.GetFileName(a));
+            Assert.Equal("x64", Path.GetFileName(Path.GetDirectoryName(a)));
+        }
+    }
+
     public class IntunePublisherTests
     {
         [Theory]

@@ -44,7 +44,7 @@
   <FontFamily x:Key="IconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
   <FontFamily x:Key="MonoFont">Cascadia Mono, Consolas</FontFamily>
 
-  <DropShadowEffect x:Key="CardShadow" BlurRadius="18" ShadowDepth="2" Direction="270" Opacity="0.07" Color="#0B1A33"/>
+  <DropShadowEffect x:Key="CardShadow" BlurRadius="26" ShadowDepth="3" Direction="270" Opacity="0.075" Color="#0B1A33"/>
   <DropShadowEffect x:Key="PopShadow" BlurRadius="30" ShadowDepth="6" Direction="270" Opacity="0.18" Color="#0B1A33"/>
 
   <!-- ===================== Typography ===================== -->
@@ -103,7 +103,7 @@
     <Setter Property="Background" Value="{StaticResource CardBg}"/>
     <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
     <Setter Property="BorderThickness" Value="1"/>
-    <Setter Property="CornerRadius" Value="12"/>
+    <Setter Property="CornerRadius" Value="14"/>
     <Setter Property="Padding" Value="22,18"/>
     <Setter Property="Effect" Value="{StaticResource CardShadow}"/>
   </Style>

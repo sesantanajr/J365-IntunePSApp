@@ -69,30 +69,31 @@
       <UniformGrid x:Name="Stats" Columns="4" Margin="-8,18,-8,0">
         <Border Style="{StaticResource Card}" Margin="8,0,8,16">
           <StackPanel>
-            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8F1;" Style="{StaticResource Icon}" Foreground="{StaticResource Brand}" Margin="0,0,8,0"/><TextBlock Text="{l:T Home_StatApps}" Style="{StaticResource MutedText}"/></StackPanel>
+            <StackPanel Orientation="Horizontal"><Border Width="32" Height="32" CornerRadius="16" Background="{StaticResource BrandSoft}" Margin="0,0,10,0"><TextBlock Text="&#xE8F1;" Style="{StaticResource Icon}" Foreground="{StaticResource Brand}" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><TextBlock Text="{l:T Home_StatApps}" Style="{StaticResource MutedText}" VerticalAlignment="Center"/></StackPanel>
             <TextBlock x:Name="StatApps" Text="—" FontFamily="{StaticResource DisplayFont}" FontSize="28" FontWeight="SemiBold" Foreground="{StaticResource Ink}" Margin="0,8,0,0"/>
             <TextBlock x:Name="StatAppsSub" Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
           </StackPanel>
         </Border>
         <Border Style="{StaticResource Card}" Margin="8,0,8,16">
           <StackPanel>
-            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE7B8;" Style="{StaticResource Icon}" Foreground="{StaticResource Brand}" Margin="0,0,8,0"/><TextBlock Text="{l:T Home_StatPackages}" Style="{StaticResource MutedText}"/></StackPanel>
+            <StackPanel Orientation="Horizontal"><Border Width="32" Height="32" CornerRadius="16" Background="{StaticResource BrandSoft}" Margin="0,0,10,0"><TextBlock Text="&#xE7B8;" Style="{StaticResource Icon}" Foreground="{StaticResource Brand}" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><TextBlock Text="{l:T Home_StatPackages}" Style="{StaticResource MutedText}" VerticalAlignment="Center"/></StackPanel>
             <TextBlock x:Name="StatPackages" Text="0" FontFamily="{StaticResource DisplayFont}" FontSize="28" FontWeight="SemiBold" Foreground="{StaticResource Ink}" Margin="0,8,0,0"/>
             <TextBlock x:Name="StatPackagesSub" Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
           </StackPanel>
         </Border>
         <Border Style="{StaticResource Card}" Margin="8,0,8,16">
           <StackPanel>
-            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE90F;" Style="{StaticResource Icon}" Foreground="{StaticResource Brand}" Margin="0,0,8,0"/><TextBlock Text="PSAppDeployToolkit" Style="{StaticResource MutedText}"/></StackPanel>
+            <StackPanel Orientation="Horizontal"><Border Width="32" Height="32" CornerRadius="16" Background="{StaticResource BrandSoft}" Margin="0,0,10,0"><TextBlock Text="&#xE90F;" Style="{StaticResource Icon}" Foreground="{StaticResource Brand}" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><TextBlock Text="PSAppDeployToolkit" Style="{StaticResource MutedText}" VerticalAlignment="Center"/></StackPanel>
             <TextBlock x:Name="StatPsadt" Text="—" FontFamily="{StaticResource DisplayFont}" FontSize="28" FontWeight="SemiBold" Foreground="{StaticResource Ink}" Margin="0,8,0,0"/>
             <TextBlock x:Name="StatPsadtSub" Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
           </StackPanel>
         </Border>
-        <Border Style="{StaticResource Card}" Margin="8,0,8,16">
+        <!-- Microsoft Intune: the connection to the tenant (opens Settings > Microsoft Intune) -->
+        <Border x:Name="IntuneCard" Style="{StaticResource Card}" Margin="8,0,8,16" Cursor="Hand" MouseLeftButtonUp="Intune_Click" ToolTip="{l:T Home_StatIntuneTip}">
           <StackPanel>
-            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE72E;" Style="{StaticResource Icon}" Foreground="{StaticResource Brand}" Margin="0,0,8,0"/><TextBlock Text="Content Prep Tool" Style="{StaticResource MutedText}"/></StackPanel>
-            <TextBlock x:Name="StatIwau" Text="—" FontFamily="{StaticResource DisplayFont}" FontSize="28" FontWeight="SemiBold" Foreground="{StaticResource Ink}" Margin="0,8,0,0"/>
-            <TextBlock x:Name="StatIwauSub" Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
+            <StackPanel Orientation="Horizontal"><Border Width="32" Height="32" CornerRadius="16" Background="{StaticResource BrandSoft}" Margin="0,0,10,0"><TextBlock Text="&#xE753;" Style="{StaticResource Icon}" Foreground="{StaticResource Brand}" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><TextBlock Text="Microsoft Intune" Style="{StaticResource MutedText}" VerticalAlignment="Center"/></StackPanel>
+            <TextBlock x:Name="StatIntune" Text="—" FontFamily="{StaticResource DisplayFont}" FontSize="28" FontWeight="SemiBold" Foreground="{StaticResource Ink}" Margin="0,8,0,0" TextTrimming="CharacterEllipsis"/>
+            <TextBlock x:Name="StatIntuneSub" Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
           </StackPanel>
         </Border>
       </UniformGrid>

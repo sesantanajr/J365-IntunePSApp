@@ -23,6 +23,11 @@ jobs:
   build:
     name: Test and build (win-x64)
     runs-on: windows-latest
+    env:
+      # Code signing with Azure Trusted Signing (docs/SIGNING.md). Repository variables; empty = unsigned build.
+      SIGNING_ENDPOINT: ${{ vars.SIGNING_ENDPOINT }}
+      SIGNING_ACCOUNT: ${{ vars.SIGNING_ACCOUNT }}
+      SIGNING_PROFILE: ${{ vars.SIGNING_PROFILE }}
     steps:
       - uses: actions/checkout@v4
 
@@ -44,11 +49,32 @@ jobs:
       - name: Build the database generator
         run: dotnet build tools/CatalogBuilder -c Release
 
-      - name: Publish the portable application and the source package
+      - name: Publish the portable application
+        shell: pwsh
+        run: dotnet publish src/IntunePSApp -c Release -r win-x64 -o publish -p:Version=$env:VERSION -p:ContinuousIntegrationBuild=true
+
+      # Signs the executable before it is zipped, hashed and attested. Runs only when the repository has the
+      # variables above and the secrets of the signing identity; nothing changes for builds without them.
+      - name: Sign the executable (Azure Trusted Signing)
+        if: env.SIGNING_ACCOUNT != '' && github.event_name != 'pull_request'
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        run: |
+          Install-Module -Name TrustedSigning -Scope CurrentUser -Force -AllowClobber
+          $exe = (Resolve-Path publish/J365.IntunePSApp.exe).Path
+          Invoke-TrustedSigning -Endpoint $env:SIGNING_ENDPOINT -CodeSigningAccountName $env:SIGNING_ACCOUNT -CertificateProfileName $env:SIGNING_PROFILE `
+            -Files $exe -FileDigest SHA256 -TimestampRfc3161 'http://timestamp.acs.microsoft.com' -TimestampDigest SHA256
+          $sig = Get-AuthenticodeSignature -FilePath $exe
+          if ($sig.Status -ne 'Valid') { throw "The signature of the executable is not valid: $($sig.Status) $($sig.StatusMessage)" }
+          Write-Host "Signed by: $($sig.SignerCertificate.Subject)"
+
+      - name: Package the release files
         shell: pwsh
         run: |
-          dotnet publish src/IntunePSApp -c Release -r win-x64 -o publish -p:Version=$env:VERSION -p:ContinuousIntegrationBuild=true
-          Copy-Item README.md, LICENSE, NOTICE.md, THIRD-PARTY-NOTICES.md, CHANGELOG.md publish/
+          Copy-Item README.md, LICENSE, NOTICE.md, THIRD-PARTY-NOTICES.md, CHANGELOG.md, SECURITY.md publish/
           New-Item -ItemType Directory dist | Out-Null
           $app = "dist/J365-IntunePSApp-$env:VERSION-win-x64.zip"
           Compress-Archive -Path publish/* -DestinationPath $app

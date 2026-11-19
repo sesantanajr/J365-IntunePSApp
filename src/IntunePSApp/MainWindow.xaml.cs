@@ -55,6 +55,7 @@ namespace J365.IntunePSApp
             Loaded += OnLoaded;
             CatalogService.Instance.Changed += () => Dispatcher.Invoke(() => UpdateCatalogStatus());
             UpdateService.Changed += () => Dispatcher.Invoke(() => { if (PageHost.Content == Home) Home.Refresh(); });
+            IntuneConnection.Changed += () => Dispatcher.BeginInvoke(new Action(() => { if (PageHost.Content == Home) Home.Refresh(); }));
             Loc.Instance.LanguageChanged += OnLanguageChanged;
             SyncLanguageToggles();
             ApplyStaticTexts();
@@ -216,7 +217,9 @@ namespace J365.IntunePSApp
                 CatalogCount.Text = "—";
                 if (!_catalogUpdating) CatalogDate.Text = T("Main_NotDownloaded");
             }
-            if (refreshPage && PageHost.Content is IRefreshable r && PageHost.Content != Editor) r.Refresh();
+            // Settings is a form: reloading it would throw away what the user typed and did not save yet.
+            if (refreshPage && PageHost.Content == Settings) Settings.RefreshInfo();
+            else if (refreshPage && PageHost.Content is IRefreshable r && PageHost.Content != Editor) r.Refresh();
         }
 
         public void Toast(string text, string kind = "info")
@@ -281,6 +284,19 @@ namespace J365.IntunePSApp
         }
 
         public void HideBusy() => BusyOverlay.Visibility = Visibility.Collapsed;
+
+        /// <summary>Text under the title of the busy overlay; <paramref name="indeterminate"/> restarts the moving bar.</summary>
+        public void BusyStatus(string text, bool indeterminate = true)
+        {
+            BusyText.Text = text;
+            if (indeterminate) BusyProgress.IsIndeterminate = true;
+        }
+
+        public void BusyPercent(int percent)
+        {
+            BusyProgress.IsIndeterminate = false;
+            BusyProgress.Value = Math.Clamp(percent, 0, 100);
+        }
 
         private void BusyCancel_Click(object sender, RoutedEventArgs e) => _busyCts?.Cancel();
 

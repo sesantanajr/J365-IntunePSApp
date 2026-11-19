@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -418,21 +420,34 @@ namespace J365.IntunePSApp.Views
         }
     }
 
-    /// <summary>"Publish to Intune (preview)": collects the tenant and app registration and starts Publish-ToIntune.ps1.</summary>
+    /// <summary>
+    /// Publishing to Intune. Connected to the tenant (Settings > Microsoft Intune), the package is published inside the
+    /// application with its progress, without a PowerShell window or a new sign-in. Not connected yet, the same dialog
+    /// signs in or sets the connection up automatically. Running the script in its own window stays available.
+    /// </summary>
     public class PublishDialog : DialogWindow
     {
         private readonly TextBox _tenant, _client, _group, _command;
         private readonly CheckBox _deviceCode;
         private readonly ComboBox _ifExists, _assign;
-        private readonly StackPanel _groupPanel;
-        private readonly string _script;
+        private readonly StackPanel _groupPanel, _connection, _advanced, _matches;
+        private readonly TextBlock _status, _existsNote;
+        private readonly Button _publish, _toggleAdvanced;
+        private readonly string _script, _displayName, _appName;
+        private CancellationTokenSource _cts;
+        private bool _busy;
 
-        /// <summary>The PowerShell process of the publication, when the dialog was confirmed.</summary>
+        /// <summary>The PowerShell window of the publication, when "Run in a PowerShell window" was chosen.</summary>
         public Process Started { get; private set; }
 
-        public PublishDialog(string publishScript, string appTitle)
+        /// <summary>The options of a publication inside the application (the session is open).</summary>
+        public PublishOptions InAppOptions { get; private set; }
+
+        public PublishDialog(string publishScript, string appTitle, string displayName, string appName)
         {
             _script = publishScript;
+            _displayName = string.IsNullOrWhiteSpace(displayName) ? appTitle : displayName;
+            _appName = string.IsNullOrWhiteSpace(appName) ? _displayName : appName;
             Title = T("Publish_Title");
             Width = 720;
             SizeToContent = SizeToContent.Height;
@@ -441,26 +456,12 @@ namespace J365.IntunePSApp.Views
 
             var root = new StackPanel { Margin = new Thickness(24, 20, 24, 20) };
             root.Children.Add(new TextBlock { Text = T("Publish_Heading", appTitle), Style = S("H2"), TextWrapping = TextWrapping.Wrap });
-            root.Children.Add(new TextBlock { Text = T("Publish_Intro"), Style = S("MutedText"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 2) });
+            root.Children.Add(new TextBlock { Text = T("Publish_IntroInApp"), Style = S("MutedText"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 2) });
 
-            var ids = new Grid();
-            ids.ColumnDefinitions.Add(new ColumnDefinition());
-            ids.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(16) });
-            ids.ColumnDefinitions.Add(new ColumnDefinition());
-            var left = new StackPanel();
-            left.Children.Add(Label(T("Publish_Tenant")));
-            _tenant = new TextBox { Text = cfg.IntuneTenantId ?? "" };
-            left.Children.Add(_tenant);
-            left.Children.Add(Hint(T("Publish_TenantHint")));
-            var right = new StackPanel();
-            Grid.SetColumn(right, 2);
-            right.Children.Add(Label(T("Publish_Client")));
-            _client = new TextBox { Text = cfg.IntuneClientId ?? "" };
-            right.Children.Add(_client);
-            ids.Children.Add(left);
-            ids.Children.Add(right);
-            root.Children.Add(ids);
-            root.Children.Add(Hint(T("Publish_ClientHint")));
+            _connection = new StackPanel();
+            root.Children.Add(_connection);
+            _status = new TextBlock { Style = S("Hint"), Margin = new Thickness(0, 8, 0, 0), Visibility = Visibility.Collapsed, TextWrapping = TextWrapping.Wrap };
+            root.Children.Add(_status);
 
             root.Children.Add(Label(T("Publish_IfExists")));
             _ifExists = new ComboBox();
@@ -468,6 +469,10 @@ namespace J365.IntunePSApp.Views
                 _ifExists.Items.Add(new ComboBoxItem { Tag = tag, Content = T(key) });
             _ifExists.SelectedIndex = 0;
             root.Children.Add(_ifExists);
+            _existsNote = new TextBlock { Style = S("Hint"), Foreground = Ui.Brush("Warning"), Visibility = Visibility.Collapsed, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
+            root.Children.Add(_existsNote);
+            _matches = new StackPanel { Visibility = Visibility.Collapsed, Margin = new Thickness(0, 6, 0, 0) };
+            root.Children.Add(_matches);
 
             root.Children.Add(Label(T("Publish_Assign")));
             _assign = new ComboBox();
@@ -486,12 +491,40 @@ namespace J365.IntunePSApp.Views
             _groupPanel.Children.Add(_group);
             root.Children.Add(_groupPanel);
 
+            // Advanced: the registration typed by hand and the script in its own PowerShell window (as in 2.2).
+            _toggleAdvanced = MakeButton(T("Publish_ShowAdvanced"), "GhostButton", (s, e) => ToggleAdvanced(), 0);
+            _toggleAdvanced.HorizontalAlignment = HorizontalAlignment.Left;
+            _toggleAdvanced.Margin = new Thickness(-8, 14, 0, 0);
+            root.Children.Add(_toggleAdvanced);
+            _advanced = new StackPanel { Visibility = Visibility.Collapsed };
+            var ids = new Grid();
+            ids.ColumnDefinitions.Add(new ColumnDefinition());
+            ids.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(16) });
+            ids.ColumnDefinitions.Add(new ColumnDefinition());
+            var left = new StackPanel();
+            left.Children.Add(Label(T("Publish_Tenant")));
+            _tenant = new TextBox { Text = cfg.IntuneTenantId ?? "" };
+            left.Children.Add(_tenant);
+            left.Children.Add(Hint(T("Publish_TenantHint")));
+            var right = new StackPanel();
+            Grid.SetColumn(right, 2);
+            right.Children.Add(Label(T("Publish_Client")));
+            _client = new TextBox { Text = cfg.IntuneClientId ?? "" };
+            right.Children.Add(_client);
+            ids.Children.Add(left);
+            ids.Children.Add(right);
+            _advanced.Children.Add(ids);
+            _advanced.Children.Add(Hint(T("Publish_ClientHint")));
             _deviceCode = new CheckBox { Style = S("Switch"), Content = T("Publish_DeviceCode"), Margin = new Thickness(0, 16, 0, 0) };
-            root.Children.Add(_deviceCode);
-
-            root.Children.Add(Label(T("Publish_Command")));
+            _advanced.Children.Add(_deviceCode);
+            _advanced.Children.Add(Label(T("Publish_Command")));
             _command = new TextBox { IsReadOnly = true, FontFamily = Ui.Font("MonoFont"), FontSize = 12, TextWrapping = TextWrapping.Wrap, MinHeight = 58, VerticalContentAlignment = VerticalAlignment.Top };
-            root.Children.Add(_command);
+            _advanced.Children.Add(_command);
+            var advancedBar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 10, 0, 0) };
+            advancedBar.Children.Add(MakeButton(T("Publish_RunWindow"), "SecondaryButton", (s, e) => RunInWindow(), 0));
+            advancedBar.Children.Add(MakeButton(T("Publish_CopyCommand"), "SecondaryButton", (s, e) => { if (Check(false) is PublishOptions o) Ui.CopyText(IntunePublisher.CommandLine(_script, o)); }));
+            _advanced.Children.Add(advancedBar);
+            root.Children.Add(_advanced);
 
             var bar = new DockPanel { Margin = new Thickness(0, 22, 0, 0), LastChildFill = false };
             var guide = MakeButton(T("Publish_Guide"), "GhostButton", (s, e) => Ui.OpenPath(AppInfo.PublishDocsUrl), 0);
@@ -500,13 +533,10 @@ namespace J365.IntunePSApp.Views
             var validate = MakeButton(T("Publish_Validate"), "GhostButton", async (s, e) => await ValidatePackageAsync((Button)s), 4);
             DockPanel.SetDock(validate, Dock.Left);
             bar.Children.Add(validate);
-            var run = MakeButton(T("Publish_Run"), "PrimaryButton", (s, e) => Run());
-            DockPanel.SetDock(run, Dock.Right);
-            bar.Children.Add(run);
-            var copy = MakeButton(T("Publish_CopyCommand"), "SecondaryButton", (s, e) => { if (Check(false) is PublishOptions o) Ui.CopyText(IntunePublisher.CommandLine(_script, o)); });
-            DockPanel.SetDock(copy, Dock.Right);
-            bar.Children.Add(copy);
-            var cancel = MakeButton(T("Common_Cancel"), "SecondaryButton", (s, e) => DialogResult = false);
+            _publish = MakeButton(T("Publish_PublishNow"), "PrimaryButton", async (s, e) => await PublishAsync());
+            DockPanel.SetDock(_publish, Dock.Right);
+            bar.Children.Add(_publish);
+            var cancel = MakeButton(T("Common_Cancel"), "SecondaryButton", (s, e) => { _cts?.Cancel(); DialogResult = false; });
             DockPanel.SetDock(cancel, Dock.Right);
             bar.Children.Add(cancel);
             root.Children.Add(bar);
@@ -518,12 +548,98 @@ namespace J365.IntunePSApp.Views
             _group.TextChanged += (s, e) => UpdateCommand();
             _deviceCode.Checked += (s, e) => UpdateCommand();
             _deviceCode.Unchecked += (s, e) => UpdateCommand();
-            _ifExists.SelectionChanged += (s, e) => UpdateCommand();
+            _ifExists.SelectionChanged += (s, e) => { _existsNote.Visibility = Visibility.Collapsed; _matches.Visibility = Visibility.Collapsed; UpdateCommand(); };
             _assign.SelectionChanged += (s, e) => UpdateCommand();
+            Closed += (s, e) => _cts?.Cancel();
             UpdateCommand();
+            RenderConnection();
+            // Not connected and nothing configured: the manual fields are where the user expects them.
+            if (!IntuneConnection.IsConfigured && (_tenant.Text.Length > 0 || _client.Text.Length > 0)) ToggleAdvanced();
         }
 
         private static string TagOf(ComboBox combo) => (combo.SelectedItem as ComboBoxItem)?.Tag as string ?? "";
+
+        private void ToggleAdvanced()
+        {
+            bool show = _advanced.Visibility != Visibility.Visible;
+            _advanced.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            _toggleAdvanced.Content = show ? T("Publish_HideAdvanced") : T("Publish_ShowAdvanced");
+        }
+
+        /// <summary>The connection card: signed in, registration known but no session, or nothing configured.</summary>
+        private void RenderConnection()
+        {
+            _connection.Children.Clear();
+            bool signedIn = IntuneConnection.IsSignedIn;
+            var box = new Border
+            {
+                Background = Ui.Brush(signedIn ? "SuccessSoft" : "BrandSoft"),
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(16, 12, 14, 12),
+                Margin = new Thickness(0, 14, 0, 0)
+            };
+            var dock = new DockPanel();
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
+            DockPanel.SetDock(buttons, Dock.Right);
+            var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            var icon = new TextBlock { Text = signedIn ? "" : "", Style = S("Icon"), FontSize = 18, Foreground = Ui.Brush(signedIn ? "Success" : "Brand"), Margin = new Thickness(0, 2, 12, 0), VerticalAlignment = VerticalAlignment.Top };
+            DockPanel.SetDock(icon, Dock.Left);
+            if (signedIn)
+            {
+                text.Children.Add(new TextBlock { Text = T("Publish_ConnectedAs", IntuneConnection.Account), FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
+                text.Children.Add(new TextBlock { Text = T("Publish_ConnectedHint", IntuneConnection.SessionTenant.Length > 0 ? IntuneConnection.SessionTenant : IntuneConnection.TenantId), Style = S("MutedText"), TextWrapping = TextWrapping.Wrap });
+                buttons.Children.Add(MakeButton(T("Publish_SwitchAccount"), "SecondaryButton", async (s, e) => await ConnectAsync(false), 0));
+            }
+            else if (IntuneConnection.IsConfigured)
+            {
+                text.Children.Add(new TextBlock { Text = T("Publish_NotSignedIn"), FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
+                text.Children.Add(new TextBlock { Text = T("Publish_NotSignedInHint"), Style = S("MutedText"), TextWrapping = TextWrapping.Wrap });
+                buttons.Children.Add(MakeButton(T("Publish_SignIn"), "SecondaryButton", async (s, e) => await ConnectAsync(false), 0));
+            }
+            else
+            {
+                text.Children.Add(new TextBlock { Text = T("Publish_NotConnected"), FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
+                text.Children.Add(new TextBlock { Text = T("Publish_NotConnectedHint", IntuneConnection.RegistrationName), Style = S("MutedText"), TextWrapping = TextWrapping.Wrap });
+                buttons.Children.Add(MakeButton(T("Publish_SetupAuto"), "PrimaryButton", async (s, e) => await ConnectAsync(true), 0));
+            }
+            dock.Children.Add(icon);
+            dock.Children.Add(buttons);
+            dock.Children.Add(text);
+            box.Child = dock;
+            _connection.Children.Add(box);
+            _publish.Content = signedIn ? T("Publish_PublishNow") : T("Publish_SignInAndPublish");
+        }
+
+        private void SetBusy(bool busy, string status = null)
+        {
+            _busy = busy;
+            _publish.IsEnabled = !busy;
+            _connection.IsEnabled = !busy;
+            _status.Text = status ?? "";
+            _status.Visibility = string.IsNullOrEmpty(status) ? Visibility.Collapsed : Visibility.Visible;
+        }
+
+        private async Task ConnectAsync(bool setup)
+        {
+            if (_busy) return;
+            _cts = new CancellationTokenSource();
+            SetBusy(true, setup ? T("Connect_StepAdminSignIn") : T("Publish_SigningIn"));
+            try
+            {
+                if (setup) await IntuneConnectUi.SetupAsync(s => Dispatcher.Invoke(() => SetBusy(true, string.IsNullOrEmpty(s) ? null : s)), _cts.Token);
+                else await IntuneConnectUi.SignInAsync(null, _cts.Token);
+            }
+            finally
+            {
+                SetBusy(false);
+                if (IsLoaded)
+                {
+                    _tenant.Text = ConfigStore.Current.IntuneTenantId ?? "";
+                    _client.Text = ConfigStore.Current.IntuneClientId ?? "";
+                    RenderConnection();
+                }
+            }
+        }
 
         private PublishOptions Options()
         {
@@ -555,29 +671,100 @@ namespace J365.IntunePSApp.Views
         {
             var o = Options();
             string problem = IntunePublisher.Check(o);
-            if (problem != null) { Ui.Warn(Localization.Loc.T(problem)); return null; }
-            if (save)
+            if (problem != null)
+            {
+                Ui.Warn(problem is "Publish_InvalidTenant" or "Publish_InvalidClient" && !IntuneConnection.IsConfigured ? T("Publish_SetupFirst") : T(problem));
+                return null;
+            }
+            if (save && (o.TenantId != (ConfigStore.Current.IntuneTenantId ?? "") || o.ClientId != (ConfigStore.Current.IntuneClientId ?? "")))
             {
                 ConfigStore.Current.IntuneTenantId = o.TenantId;
                 ConfigStore.Current.IntuneClientId = o.ClientId;
                 ConfigStore.Save();
+                RenderConnection();
             }
             return o;
         }
 
-        private async System.Threading.Tasks.Task ValidatePackageAsync(Button button)
+        private async Task ValidatePackageAsync(Button button)
         {
             button.IsEnabled = false;
             try
             {
-                var result = await System.Threading.Tasks.Task.Run(() => IntunePublisher.Validate(_script));
+                var result = await Task.Run(() => IntunePublisher.Validate(_script));
                 new TextViewerWindow(T("Publish_ValidateTitle"), result.Output) { Owner = this, Width = 760, Height = 460 }.ShowDialog();
             }
             catch (Exception ex) { Ui.Error(ex.Message); }
             finally { button.IsEnabled = true; }
         }
 
-        private void Run()
+        /// <summary>Publishes inside the application: signs in when needed and settles what to do with an app of the same name.</summary>
+        private async Task PublishAsync()
+        {
+            if (_busy) return;
+            var o = Check(true);
+            if (o == null) return;
+            if (!IntuneConnection.IsSignedIn)
+            {
+                await ConnectAsync(false);
+                if (!IntuneConnection.IsSignedIn) return;
+            }
+            _cts = new CancellationTokenSource();
+            if (o.IfExists == "Ask" && _matches.Visibility == Visibility.Visible)
+            {
+                // Second click: the app chosen in the list (a previous version to update, or a new app).
+                var chosen = _matches.Children.OfType<RadioButton>().FirstOrDefault(r => r.IsChecked == true)?.Tag as string;
+                if (chosen == null) return;
+                if (chosen == "new") o.IfExists = "CreateNew";
+                else { o.IfExists = "Update"; o.AppId = chosen; }
+            }
+            else if (o.IfExists == "Ask")
+            {
+                SetBusy(true, T("Publish_LookingForApp"));
+                try
+                {
+                    var found = await IntuneConnection.FindRelatedAppsAsync(_appName, _cts.Token);
+                    SetBusy(false);
+                    if (found.Count > 0)
+                    {
+                        // The user decides here, before anything is sent: update one of them (a new version keeps its
+                        // assignments) or create another app.
+                        _existsNote.Text = T("Publish_RelatedFound", _appName, found.Count);
+                        _existsNote.Visibility = Visibility.Visible;
+                        _matches.Children.Clear();
+                        bool any = false;
+                        foreach (var (id, name, version) in found.Take(8))
+                        {
+                            bool same = string.Equals(name, _displayName, StringComparison.OrdinalIgnoreCase);
+                            _matches.Children.Add(new RadioButton
+                            {
+                                GroupName = "intuneApp", Tag = id, Margin = new Thickness(0, 4, 0, 0), IsChecked = !any,
+                                Content = same ? T("Publish_UpdateSame", name) : T("Publish_UpdateOlder", name, string.IsNullOrEmpty(version) ? "?" : version)
+                            });
+                            any = true;
+                        }
+                        _matches.Children.Add(new RadioButton { GroupName = "intuneApp", Tag = "new", Margin = new Thickness(0, 4, 0, 0), Content = T("Publish_CreateNewApp", _displayName) });
+                        _matches.Visibility = Visibility.Visible;
+                        return;
+                    }
+                    o.IfExists = "Fail";   // nothing with this name: create (and stop if one appears meanwhile)
+                }
+                catch (Exception ex)
+                {
+                    SetBusy(false);
+                    Ui.Error(T("Auth_Failed", ex.Message));
+                    RenderConnection();
+                    return;
+                }
+            }
+            bool broad = o.AssignIntent == "required" && o.AssignTo != "Group";
+            if (broad && !Ui.Confirm(T("Publish_ConfirmBroad"), danger: true)) return;
+            InAppOptions = o;
+            DialogResult = true;
+        }
+
+        /// <summary>The publication in its own PowerShell window (it signs in by itself).</summary>
+        private void RunInWindow()
         {
             var o = Check(true);
             if (o == null) return;

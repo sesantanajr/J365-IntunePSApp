@@ -37,6 +37,7 @@ Everything a package needs is in `PackageSettings`, saved as `project.json` next
 | `SummaryWriter.cs` | The Intune instructions (HTML and text). |
 | `ToolsService.cs` | Downloads and validates PSAppDeployToolkit and IntuneWinAppUtil; `PowerShellValidator` parses generated scripts with Windows PowerShell 5.1. |
 | `SetupService.cs` | First-run dependency setup and the update checks. |
+| `IntuneConnection.cs` | Entra ID sign-in (authorization code + PKCE on a loopback port), the session kept with DPAPI, the automatic app registration (application, enterprise application, admin consent) and the Graph calls of publishing (test, earlier versions of an app). |
 | `AppUpdater.cs` | Updates the application while it is open: reads the latest GitHub release, downloads the zip, checks it against `SHA256SUMS.txt`, puts the new executable in place of the running one and restarts. |
 | `InstallService.cs` | Optional per-user installation (also over an installed copy that is open), shortcuts, uninstall. |
 | `Integrations.cs` | Windows Sandbox: state of the Windows feature (ready, open, turned off, not in this edition), enabling it with DISM, the `.wsb` configuration and the result of the test. Launcher of the publishing script. |
@@ -63,6 +64,10 @@ HKLM\SOFTWARE\J365\IntunePSApp\Apps\<application>     (HKCU for packages install
 ```
 
 The detection script first applies the rule (name/version, product code or file) and then requires the mark with a version equal to or higher than the minimum. A copy without the mark is reported as not installed (the script writes `Not detected: ...` and exits 1), so Intune runs the package, which removes that copy and installs its own version. The mark is written at the end of *Post-Install* (a failed step leaves none) and of *Repair*, and removed after the uninstallation. It can be turned off per package (*Require the mark of this package*).
+
+## Display modes
+
+PSAppDeployToolkit 4.1 resolves `-DeployMode Auto` at the start of the session: silent with nobody signed in, during OOBE/ESP, and also when `AppProcessesToClose` lists applications and none of them is running. That last rule made the branded dialogs disappear for most deployments. The *Automatic* mode of the application writes `NoProcessDetection = $true` in `$adtSession` (passed to `Open-ADTSession`), so the dialogs are shown whenever a user is signed in; *Discreet* keeps the toolkit's rule; *Interactive* and *Silent* go on the command line.
 
 ## Updating the application
 
