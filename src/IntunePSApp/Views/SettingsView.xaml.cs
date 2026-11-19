@@ -149,7 +149,7 @@ namespace J365.IntunePSApp.Views
                 InstallService.Uninstall(purge);
                 if (AppPaths.IsInstalledCopy)
                 {
-                    Ui.Info(T("Install_Uninstalled"));
+                    // This is the installed copy: it closes now so that its own folder can be removed.
                     Application.Current.Shutdown();
                     return;
                 }

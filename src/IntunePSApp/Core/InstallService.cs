@@ -133,10 +133,11 @@ namespace J365.IntunePSApp.Core
                 if (runningInstalledCopy) continue; // handled below: a running executable cannot delete itself
                 try { if (Directory.Exists(f)) Directory.Delete(f, true); folders.Remove(f); } catch { }
             }
-            if (folders.Count > 0)
+            foreach (var folder in folders)
             {
-                // Detached cmd waits a moment for this process to exit and then removes the folders.
-                string cmd = "/c ping -n 4 127.0.0.1 >nul & " + string.Join(" & ", folders.Select(f => $"rmdir /s /q \"{f}\""));
+                // A running executable cannot delete itself: a detached cmd keeps trying (about two minutes)
+                // until this process has exited and the folder is gone.
+                string cmd = $"/c for /l %i in (1,1,120) do @(rmdir /s /q \"{folder}\" 2>nul & if not exist \"{folder}\" exit 0 & ping -n 2 127.0.0.1 >nul)";
                 Process.Start(new ProcessStartInfo("cmd.exe", cmd)
                 {
                     CreateNoWindow = true,

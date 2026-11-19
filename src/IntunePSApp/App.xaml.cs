@@ -121,7 +121,8 @@ namespace J365.IntunePSApp
             }
             InstallService.Uninstall(purge);
             Console.WriteLine(T("Install_Uninstalled"));
-            if (!quiet) Ui.Info(T("Install_Uninstalled"));
+            // The installed copy must exit right away so its own folder can be removed: no dialog in that case.
+            if (!quiet && !AppPaths.IsInstalledCopy) Ui.Info(T("Install_Uninstalled"));
             return 0;
         }
 
