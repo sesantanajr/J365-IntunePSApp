@@ -277,6 +277,8 @@ namespace J365.IntunePSApp.Core
             Log.Step(T("Log_BuildStart", s.AppName, s.AppVersion));
             Log.Step(T("Log_CheckingPsadt"));
             string template = await ToolsService.EnsurePsadtAsync(ct);
+            // Checked again before every build: the copy in the tools folder could have been changed since it was installed.
+            await Task.Run(() => ToolsService.VerifyPsadt(template), ct);
             string psadtVersion = Path.GetFileName(template);
             Log.Ok($"{AppInfo.PsadtName} {psadtVersion}");
 

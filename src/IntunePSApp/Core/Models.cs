@@ -103,6 +103,8 @@ namespace J365.IntunePSApp.Core
         /// removes that copy and installs this version.
         /// </summary>
         public bool DetectionRequireMark { get; set; } = true;
+        /// <summary>A newer version already installed is kept (the package does not downgrade it; it only writes its mark).</summary>
+        public bool KeepNewerVersion { get; set; } = true;
         // Output
         public string OutputRoot { get; set; } = "";
 
@@ -133,6 +135,7 @@ namespace J365.IntunePSApp.Core
     {
         // Application
         public string UiLanguage { get; set; } = "auto";      // auto | en | pt-BR
+        public string AppTheme { get; set; } = "System";      // System | Light | Dark
         public bool SetupCompleted { get; set; }
         public bool CheckForUpdates { get; set; } = true;
         public DateTime? LastUpdateCheck { get; set; }

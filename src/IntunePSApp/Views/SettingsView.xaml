@@ -3,19 +3,26 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:l="clr-namespace:J365.IntunePSApp.Localization"
              xmlns:v="clr-namespace:J365.IntunePSApp.Views">
+  <UserControl.Resources>
+    <Style x:Key="SectionCard" TargetType="Border" BasedOn="{StaticResource Card}">
+      <Setter Property="Margin" Value="0,0,0,16"/>
+    </Style>
+    <!-- One line of the security notes: a check and a sentence -->
+    <Style x:Key="CheckLine" TargetType="TextBlock" BasedOn="{StaticResource Body}">
+      <Setter Property="Margin" Value="10,0,0,0"/>
+      <Setter Property="FontSize" Value="13"/>
+    </Style>
+  </UserControl.Resources>
+
   <Grid>
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
       <RowDefinition Height="*"/>
     </Grid.RowDefinitions>
-    <!-- The first column takes the available width up to the reading width of the cards. -->
-    <Grid.ColumnDefinitions>
-      <ColumnDefinition Width="1000*" MaxWidth="1036"/>
-      <ColumnDefinition Width="*"/>
-    </Grid.ColumnDefinitions>
 
     <!-- Header (does not scroll, so Save is always at hand) -->
-    <DockPanel Margin="28,6,28,14">
+    <DockPanel Margin="32,6,32,0" MaxWidth="1100" HorizontalAlignment="Stretch">
       <Button DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" VerticalAlignment="Center" Click="Save_Click">
         <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE74E;" Style="{StaticResource Icon}" Foreground="White" Margin="0,0,8,0"/><TextBlock Text="{l:T Settings_Save}"/></StackPanel>
       </Button>
@@ -25,280 +32,438 @@
       </StackPanel>
     </DockPanel>
 
-    <ScrollViewer x:Name="PageScroll" Grid.Row="1" Grid.ColumnSpan="2" VerticalScrollBarVisibility="Auto">
-      <StackPanel Margin="28,0,28,28" MaxWidth="980" HorizontalAlignment="Left">
+    <!-- Sections -->
+    <Border Grid.Row="1" Style="{StaticResource SegmentTrack}" Margin="32,18,32,16" HorizontalAlignment="Left">
+      <WrapPanel x:Name="SectionBar">
+        <RadioButton x:Name="SecGeneral" Style="{StaticResource SegmentItem}" GroupName="settingsSection" Tag="general" Checked="Section_Checked">
+          <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE713;" Style="{StaticResource Icon}" FontSize="13" Margin="0,0,8,0"/><TextBlock Text="{l:T Settings_SecGeneral}"/></StackPanel>
+        </RadioButton>
+        <RadioButton x:Name="SecAppearance" Style="{StaticResource SegmentItem}" GroupName="settingsSection" Tag="appearance" Checked="Section_Checked">
+          <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE790;" Style="{StaticResource Icon}" FontSize="13" Margin="0,0,8,0"/><TextBlock Text="{l:T Settings_SecAppearance}"/></StackPanel>
+        </RadioButton>
+        <RadioButton x:Name="SecCompany" Style="{StaticResource SegmentItem}" GroupName="settingsSection" Tag="company" Checked="Section_Checked">
+          <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE731;" Style="{StaticResource Icon}" FontSize="13" Margin="0,0,8,0"/><TextBlock Text="{l:T Settings_SecCompany}"/></StackPanel>
+        </RadioButton>
+        <RadioButton x:Name="SecDefaults" Style="{StaticResource SegmentItem}" GroupName="settingsSection" Tag="defaults" Checked="Section_Checked">
+          <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE7B8;" Style="{StaticResource Icon}" FontSize="13" Margin="0,0,8,0"/><TextBlock Text="{l:T Settings_SecDefaults}"/></StackPanel>
+        </RadioButton>
+        <RadioButton x:Name="SecIntune" Style="{StaticResource SegmentItem}" GroupName="settingsSection" Tag="intune" Checked="Section_Checked">
+          <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE753;" Style="{StaticResource Icon}" FontSize="13" Margin="0,0,8,0"/><TextBlock Text="Microsoft Intune"/></StackPanel>
+        </RadioButton>
+        <RadioButton x:Name="SecTools" Style="{StaticResource SegmentItem}" GroupName="settingsSection" Tag="tools" Checked="Section_Checked">
+          <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE90F;" Style="{StaticResource Icon}" FontSize="13" Margin="0,0,8,0"/><TextBlock Text="{l:T Settings_SecTools}"/></StackPanel>
+        </RadioButton>
+        <RadioButton x:Name="SecAbout" Style="{StaticResource SegmentItem}" GroupName="settingsSection" Tag="about" Checked="Section_Checked">
+          <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE946;" Style="{StaticResource Icon}" FontSize="13" Margin="0,0,8,0"/><TextBlock Text="{l:T Settings_SecAbout}"/></StackPanel>
+        </RadioButton>
+      </WrapPanel>
+    </Border>
 
-        <!-- Application -->
-        <Border Style="{StaticResource Card}" Margin="0,0,0,16">
-          <StackPanel>
-            <TextBlock Text="{l:T Settings_App}" Style="{StaticResource H2}"/>
-            <Grid>
-              <Grid.ColumnDefinitions><ColumnDefinition Width="300"/><ColumnDefinition Width="24"/><ColumnDefinition/></Grid.ColumnDefinitions>
-              <StackPanel>
-                <TextBlock Text="{l:T Settings_UiLanguage}" Style="{StaticResource Label}"/>
-                <ComboBox x:Name="CmbUiLanguage" SelectionChanged="UiLanguage_Changed">
-                  <ComboBoxItem Tag="auto" Content="{l:T Settings_UiLanguageAuto}"/>
-                  <ComboBoxItem Tag="en" Content="English"/>
-                  <ComboBoxItem Tag="pt-BR" Content="Português (Brasil)"/>
-                </ComboBox>
-                <TextBlock Text="{l:T Settings_UiLanguageHint}" Style="{StaticResource Hint}"/>
-              </StackPanel>
-              <StackPanel Grid.Column="2">
-                <TextBlock Text="{l:T Settings_Updates}" Style="{StaticResource Label}"/>
-                <CheckBox x:Name="ChkUpdates" Style="{StaticResource Switch}" Content="{l:T Settings_CheckUpdates}" Margin="0,4,0,0"/>
-                <!-- DockPanel: the text takes the remaining width and wraps (a horizontal StackPanel clipped it on narrow windows). -->
-                <DockPanel Margin="0,10,0,0">
-                  <Button DockPanel.Dock="Left" Style="{StaticResource SecondaryButton}" Content="{l:T Settings_CheckNow}" VerticalAlignment="Top" Click="CheckUpdates_Click"/>
-                  <TextBlock x:Name="UpdateInfoText" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="12,0,0,0" TextWrapping="Wrap"/>
-                </DockPanel>
-                <Button x:Name="BtnUpdateNow" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left" Margin="0,10,0,0" Visibility="Collapsed" Click="UpdateNow_Click">
-                  <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE896;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock x:Name="BtnUpdateNowText"/></StackPanel>
-                </Button>
-              </StackPanel>
-            </Grid>
+    <ScrollViewer x:Name="PageScroll" Grid.Row="2" VerticalScrollBarVisibility="Auto">
+      <Grid Margin="32,0,32,32" MaxWidth="1100" HorizontalAlignment="Stretch">
 
-            <Border Background="{StaticResource Subtle}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="10" Padding="14,12" Margin="0,18,0,0">
-              <DockPanel>
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
-                  <Button x:Name="BtnInstall" Style="{StaticResource SecondaryButton}" Content="{l:T Settings_Install}" Click="Install_Click"/>
-                  <Button x:Name="BtnUninstall" Style="{StaticResource SecondaryButton}" Content="{l:T Install_Uninstall}" Click="Uninstall_Click" Margin="8,0,0,0"/>
-                </StackPanel>
+        <!-- ===================== General ===================== -->
+        <StackPanel x:Name="PanelGeneral">
+          <Border Style="{StaticResource SectionCard}">
+            <StackPanel>
+              <TextBlock Text="{l:T Settings_App}" Style="{StaticResource H2}"/>
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="300"/><ColumnDefinition Width="28"/><ColumnDefinition/></Grid.ColumnDefinitions>
                 <StackPanel>
-                  <TextBlock Text="{l:T Settings_Installation}" Style="{StaticResource H3}"/>
-                  <TextBlock x:Name="InstallInfo" Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
-                  <CheckBox x:Name="ChkDesktopShortcut" Style="{StaticResource Switch}" Content="{l:T Settings_DesktopShortcut}" Margin="0,10,0,0" Click="DesktopShortcut_Click"/>
+                  <TextBlock Text="{l:T Settings_UiLanguage}" Style="{StaticResource Label}"/>
+                  <ComboBox x:Name="CmbUiLanguage" SelectionChanged="UiLanguage_Changed">
+                    <ComboBoxItem Tag="auto" Content="{l:T Settings_UiLanguageAuto}"/>
+                    <ComboBoxItem Tag="en" Content="English"/>
+                    <ComboBoxItem Tag="pt-BR" Content="Português (Brasil)"/>
+                  </ComboBox>
+                  <TextBlock Text="{l:T Settings_UiLanguageHint}" Style="{StaticResource Hint}"/>
                 </StackPanel>
-              </DockPanel>
-            </Border>
-          </StackPanel>
-        </Border>
+                <StackPanel Grid.Column="2">
+                  <TextBlock Text="{l:T Settings_Updates}" Style="{StaticResource Label}"/>
+                  <CheckBox x:Name="ChkUpdates" Style="{StaticResource Switch}" Content="{l:T Settings_CheckUpdates}" Margin="0,4,0,0"/>
+                  <!-- DockPanel: the text takes the remaining width and wraps. -->
+                  <DockPanel Margin="0,12,0,0">
+                    <Button DockPanel.Dock="Left" Style="{StaticResource SecondaryButton}" Content="{l:T Settings_CheckNow}" VerticalAlignment="Top" Click="CheckUpdates_Click"/>
+                    <TextBlock x:Name="UpdateInfoText" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="12,0,0,0" TextWrapping="Wrap"/>
+                  </DockPanel>
+                  <Button x:Name="BtnUpdateNow" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left" Margin="0,10,0,0" Visibility="Collapsed" Click="UpdateNow_Click">
+                    <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE896;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock x:Name="BtnUpdateNowText"/></StackPanel>
+                  </Button>
+                </StackPanel>
+              </Grid>
 
-        <!-- Company: the fields and, beside them (below on narrow windows), the welcome dialog as it will look -->
-        <Border Style="{StaticResource Card}" Margin="0,0,0,16">
-          <Grid x:Name="CompanyGrid">
-            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-          <StackPanel>
-            <TextBlock Text="{l:T Settings_Company}" Style="{StaticResource H2}"/>
-            <TextBlock Text="{l:T Settings_CompanyHint}" Style="{StaticResource MutedText}"/>
-            <Grid>
-              <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/></Grid.ColumnDefinitions>
-              <StackPanel><TextBlock Text="{l:T Settings_CompanyName}" Style="{StaticResource Label}"/><TextBox x:Name="TxtCompany" TextChanged="Brand_Changed"/></StackPanel>
-              <StackPanel Grid.Column="2"><TextBlock Text="{l:T Settings_Author}" Style="{StaticResource Label}"/><TextBox x:Name="TxtAuthor"/></StackPanel>
-            </Grid>
-            <TextBlock Text="{l:T Settings_Logo}" Style="{StaticResource Label}"/>
-            <Grid>
-              <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-              <Border Width="40" Height="40" CornerRadius="8" BorderBrush="{StaticResource Line}" BorderThickness="1" Margin="0,0,10,0" Background="{StaticResource Subtle}">
-                <Image x:Name="LogoThumb" Margin="4"/>
-              </Border>
-              <TextBox x:Name="TxtLogo" Grid.Column="1" TextChanged="Logo_Changed"/>
-              <Button Grid.Column="2" Style="{StaticResource SecondaryButton}" Content="{l:T Common_Browse}" Margin="8,0,0,0" Click="Logo_Click"/>
-            </Grid>
-            <Grid>
-              <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/></Grid.ColumnDefinitions>
-              <StackPanel><TextBlock Text="{l:T Settings_Accent}" Style="{StaticResource Label}"/>
+              <Border Style="{StaticResource Inset}" Margin="0,20,0,0">
                 <DockPanel>
-                  <Border x:Name="AccentSwatch" DockPanel.Dock="Left" Width="30" Height="30" CornerRadius="6" Margin="0,0,8,0" Background="{StaticResource Brand}" BorderBrush="{StaticResource Line}" BorderThickness="1"/>
-                  <TextBox x:Name="TxtAccent" FontFamily="{StaticResource MonoFont}" TextChanged="Brand_Changed"/>
+                  <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
+                    <Button x:Name="BtnInstall" Style="{StaticResource SecondaryButton}" Content="{l:T Settings_Install}" Click="Install_Click"/>
+                    <Button x:Name="BtnUninstall" Style="{StaticResource SecondaryButton}" Content="{l:T Install_Uninstall}" Click="Uninstall_Click" Margin="8,0,0,0"/>
+                  </StackPanel>
+                  <StackPanel>
+                    <TextBlock Text="{l:T Settings_Installation}" Style="{StaticResource H3}"/>
+                    <TextBlock x:Name="InstallInfo" Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
+                    <CheckBox x:Name="ChkDesktopShortcut" Style="{StaticResource Switch}" Content="{l:T Settings_DesktopShortcut}" Margin="0,10,0,0" Click="DesktopShortcut_Click"/>
+                  </StackPanel>
                 </DockPanel>
-                <WrapPanel x:Name="SwatchPanel" Margin="0,6,0,0"/>
-              </StackPanel>
-              <StackPanel Grid.Column="2"><TextBlock Text="{l:T Settings_DialogStyle}" Style="{StaticResource Label}"/>
-                <ComboBox x:Name="CmbStyle" SelectionChanged="Brand_Changed"><ComboBoxItem Tag="Fluent" Content="{l:T Opt_StyleFluent}"/><ComboBoxItem Tag="Classic" Content="{l:T Opt_StyleClassic}"/></ComboBox>
-              </StackPanel>
-              <StackPanel Grid.Column="4"><TextBlock Text="{l:T Settings_DialogLanguage}" Style="{StaticResource Label}"/>
-                <ComboBox x:Name="CmbLanguage"><ComboBoxItem Tag="Auto" Content="{l:T Opt_LangAuto}"/><ComboBoxItem Tag="pt-BR" Content="Português (Brasil)"/><ComboBoxItem Tag="en" Content="English"/><ComboBoxItem Tag="es" Content="Español"/></ComboBox>
-              </StackPanel>
-            </Grid>
-            <CheckBox x:Name="ChkImeLogs" Style="{StaticResource Switch}" Content="{l:T Settings_ImeLogs}" Margin="0,16,0,0"/>
-          </StackPanel>
-            <StackPanel x:Name="BrandPreviewPanel" Grid.Column="1" Width="340" Margin="24,0,0,0">
-              <TextBlock Text="{l:T Settings_PreviewOverline}" Style="{StaticResource Overline}"/>
-              <TextBlock Text="{l:T Settings_PreviewHint}" Style="{StaticResource Hint}" Margin="0,2,0,10" TextWrapping="Wrap"/>
-              <v:DialogPreview x:Name="BrandPreview"/>
+              </Border>
             </StackPanel>
-          </Grid>
-        </Border>
+          </Border>
 
-        <!-- Defaults -->
-        <Border Style="{StaticResource Card}" Margin="0,0,0,16">
-          <StackPanel>
-            <TextBlock Text="{l:T Settings_Defaults}" Style="{StaticResource H2}"/>
-            <TextBlock Text="{l:T Settings_DefaultsHint}" Style="{StaticResource MutedText}"/>
-            <Grid>
-              <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition Width="160"/><ColumnDefinition Width="16"/><ColumnDefinition Width="220"/></Grid.ColumnDefinitions>
-              <StackPanel><TextBlock Text="{l:T Settings_Mode}" Style="{StaticResource Label}"/>
-                <ComboBox x:Name="CmbMode"><ComboBoxItem Tag="Auto" Content="{l:T Opt_ModeAuto}"/><ComboBoxItem Tag="WhenNeeded" Content="{l:T Opt_ModeWhenNeeded}"/><ComboBoxItem Tag="Silent" Content="{l:T Opt_ModeSilent}"/><ComboBoxItem Tag="Interactive" Content="{l:T Opt_ModeInteractive}"/></ComboBox>
-              </StackPanel>
-              <StackPanel Grid.Column="2"><TextBlock Text="{l:T Settings_Deferrals}" Style="{StaticResource Label}"/><TextBox x:Name="TxtDefer" TextChanged="Brand_Changed"/></StackPanel>
-              <StackPanel Grid.Column="4"><TextBlock Text="{l:T Settings_Countdown}" Style="{StaticResource Label}"/><TextBox x:Name="TxtCountdown"/></StackPanel>
-            </Grid>
-            <CheckBox x:Name="ChkDefer" Style="{StaticResource Switch}" Content="{l:T Opt_AllowDefer}" Margin="0,16,0,0" Checked="Brand_Changed" Unchecked="Brand_Changed"/>
-            <CheckBox x:Name="ChkBlock" Style="{StaticResource Switch}" Content="{l:T Opt_BlockExecution}"/>
-            <CheckBox x:Name="ChkDisk" Style="{StaticResource Switch}" Content="{l:T Opt_CheckDisk}"/>
-            <CheckBox x:Name="ChkRemovePrev" Style="{StaticResource Switch}" Content="{l:T Opt_RemovePrevious}"/>
-            <TextBlock Text="{l:T Settings_Welcome}" Style="{StaticResource Label}"/>
-            <TextBox x:Name="TxtWelcome" TextChanged="Brand_Changed" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60" VerticalContentAlignment="Top"/>
-            <TextBlock Text="{l:T Settings_Completion}" Style="{StaticResource Label}"/>
-            <TextBox x:Name="TxtCompletion" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="50" VerticalContentAlignment="Top"/>
-            <Grid Margin="0,4,0,0">
-              <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/></Grid.ColumnDefinitions>
-              <StackPanel><TextBlock Text="{l:T Settings_PrefArch}" Style="{StaticResource Label}"/>
-                <ComboBox x:Name="CmbArch"><ComboBoxItem Tag="x64" Content="{l:T Opt_ArchX64}"/><ComboBoxItem Tag="x86" Content="{l:T Opt_ArchX86}"/><ComboBoxItem Tag="arm64" Content="ARM64"/></ComboBox>
-              </StackPanel>
-              <StackPanel Grid.Column="2"><TextBlock Text="{l:T Settings_PrefLocale}" Style="{StaticResource Label}"/>
-                <ComboBox x:Name="CmbLocale"><ComboBoxItem Tag="pt-BR" Content="Português (Brasil)"/><ComboBoxItem Tag="en-US" Content="English (United States)"/><ComboBoxItem Tag="es-ES" Content="Español"/></ComboBox>
-              </StackPanel>
-            </Grid>
-          </StackPanel>
-        </Border>
+          <Border Style="{StaticResource SectionCard}">
+            <StackPanel>
+              <TextBlock Text="{l:T Settings_Folders}" Style="{StaticResource H2}"/>
+              <TextBlock Text="{l:T Settings_Output}" Style="{StaticResource Label}"/>
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <TextBox x:Name="TxtOutput"/>
+                <Button Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="{l:T Common_Browse}" Margin="8,0,0,0" Click="Output_Click"/>
+              </Grid>
+              <TextBlock Text="{l:T Settings_Data}" Style="{StaticResource Label}"/>
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <TextBox x:Name="TxtData" IsReadOnly="True"/>
+                <Button Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="{l:T Common_Open}" Margin="8,0,0,0" Click="OpenData_Click"/>
+                <Button Grid.Column="2" Style="{StaticResource SecondaryButton}" Content="{l:T Settings_OpenLogs}" Margin="8,0,0,0" Click="OpenLogs_Click"/>
+              </Grid>
+              <TextBlock x:Name="PortableInfo" Style="{StaticResource Hint}"/>
+            </StackPanel>
+          </Border>
+        </StackPanel>
 
-        <!-- Folders -->
-        <Border Style="{StaticResource Card}" Margin="0,0,0,16">
-          <StackPanel>
-            <TextBlock Text="{l:T Settings_Folders}" Style="{StaticResource H2}"/>
-            <TextBlock Text="{l:T Settings_Output}" Style="{StaticResource Label}"/>
-            <Grid>
+        <!-- ===================== Appearance ===================== -->
+        <StackPanel x:Name="PanelAppearance" Visibility="Collapsed">
+          <Border Style="{StaticResource SectionCard}">
+            <StackPanel>
+              <TextBlock Text="{l:T Settings_Appearance}" Style="{StaticResource H2}"/>
+              <TextBlock Text="{l:T Settings_AppearanceHint}" Style="{StaticResource MutedText}" Margin="0,2,0,0"/>
+              <UniformGrid x:Name="ThemeCards" Columns="3" Margin="-7,18,-7,0">
+                <RadioButton x:Name="ThemeSystem" Style="{StaticResource ChoiceCard}" GroupName="appTheme" Tag="System" Margin="7" Checked="Theme_Checked">
+                  <StackPanel>
+                    <Border Height="92" CornerRadius="10" BorderBrush="{DynamicResource Line}" BorderThickness="1" ClipToBounds="True">
+                      <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+                        <Grid Background="#F4F6FB">
+                          <Grid.ColumnDefinitions><ColumnDefinition Width="22"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                          <Border Background="#0B1530"/>
+                          <StackPanel Grid.Column="1" Margin="8,10,6,0">
+                            <Border Height="7" Width="36" CornerRadius="3.5" Background="#0B1324" HorizontalAlignment="Left"/>
+                            <Border Height="28" CornerRadius="6" Background="White" BorderBrush="#E4E8F1" BorderThickness="1" Margin="0,8,0,0"/>
+                            <Border Height="6" Width="42" CornerRadius="3" Background="#2457E6" HorizontalAlignment="Left" Margin="0,8,0,0"/>
+                          </StackPanel>
+                        </Grid>
+                        <Grid Grid.Column="1" Background="#0B0F18">
+                          <StackPanel Margin="8,10,8,0">
+                            <Border Height="7" Width="36" CornerRadius="3.5" Background="#EEF2F8" HorizontalAlignment="Left"/>
+                            <Border Height="28" CornerRadius="6" Background="#121826" BorderBrush="#222B3D" BorderThickness="1" Margin="0,8,0,0"/>
+                            <Border Height="6" Width="42" CornerRadius="3" Background="#4C7DFF" HorizontalAlignment="Left" Margin="0,8,0,0"/>
+                          </StackPanel>
+                        </Grid>
+                      </Grid>
+                    </Border>
+                    <TextBlock Text="{l:T Settings_ThemeSystem}" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" Margin="0,12,0,0"/>
+                    <TextBlock Text="{l:T Settings_ThemeSystemHint}" Style="{StaticResource MutedText}" Margin="0,2,0,0"/>
+                  </StackPanel>
+                </RadioButton>
+                <RadioButton x:Name="ThemeLight" Style="{StaticResource ChoiceCard}" GroupName="appTheme" Tag="Light" Margin="7" Checked="Theme_Checked">
+                  <StackPanel>
+                    <Border Height="92" CornerRadius="10" BorderBrush="{DynamicResource Line}" BorderThickness="1" ClipToBounds="True">
+                      <Grid Background="#F4F6FB">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                        <Border Background="#0B1530"/>
+                        <StackPanel Grid.Column="1" Margin="10,10,10,0">
+                          <Border Height="7" Width="54" CornerRadius="3.5" Background="#0B1324" HorizontalAlignment="Left"/>
+                          <Border Height="28" CornerRadius="6" Background="White" BorderBrush="#E4E8F1" BorderThickness="1" Margin="0,8,0,0"/>
+                          <Border Height="6" Width="64" CornerRadius="3" Background="#2457E6" HorizontalAlignment="Left" Margin="0,8,0,0"/>
+                        </StackPanel>
+                      </Grid>
+                    </Border>
+                    <TextBlock Text="{l:T Settings_ThemeLight}" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" Margin="0,12,0,0"/>
+                    <TextBlock Text="{l:T Settings_ThemeLightHint}" Style="{StaticResource MutedText}" Margin="0,2,0,0"/>
+                  </StackPanel>
+                </RadioButton>
+                <RadioButton x:Name="ThemeDark" Style="{StaticResource ChoiceCard}" GroupName="appTheme" Tag="Dark" Margin="7" Checked="Theme_Checked">
+                  <StackPanel>
+                    <Border Height="92" CornerRadius="10" BorderBrush="{DynamicResource Line}" BorderThickness="1" ClipToBounds="True">
+                      <Grid Background="#0B0F18">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                        <Border Background="#070A12"/>
+                        <StackPanel Grid.Column="1" Margin="10,10,10,0">
+                          <Border Height="7" Width="54" CornerRadius="3.5" Background="#EEF2F8" HorizontalAlignment="Left"/>
+                          <Border Height="28" CornerRadius="6" Background="#121826" BorderBrush="#222B3D" BorderThickness="1" Margin="0,8,0,0"/>
+                          <Border Height="6" Width="64" CornerRadius="3" Background="#4C7DFF" HorizontalAlignment="Left" Margin="0,8,0,0"/>
+                        </StackPanel>
+                      </Grid>
+                    </Border>
+                    <TextBlock Text="{l:T Settings_ThemeDark}" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" Margin="0,12,0,0"/>
+                    <TextBlock Text="{l:T Settings_ThemeDarkHint}" Style="{StaticResource MutedText}" Margin="0,2,0,0"/>
+                  </StackPanel>
+                </RadioButton>
+              </UniformGrid>
+              <TextBlock Text="{l:T Settings_ThemeNote}" Style="{StaticResource Hint}" Margin="0,12,0,0"/>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <!-- ===================== Company: fields and, beside them (below on narrow windows), the dialog as it will look ===================== -->
+        <StackPanel x:Name="PanelCompany" Visibility="Collapsed">
+          <Border Style="{StaticResource SectionCard}">
+            <Grid x:Name="CompanyGrid">
               <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-              <TextBox x:Name="TxtOutput"/>
-              <Button Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="{l:T Common_Browse}" Margin="8,0,0,0" Click="Output_Click"/>
-            </Grid>
-            <TextBlock Text="{l:T Settings_Data}" Style="{StaticResource Label}"/>
-            <Grid>
-              <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-              <TextBox x:Name="TxtData" IsReadOnly="True"/>
-              <Button Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="{l:T Common_Open}" Margin="8,0,0,0" Click="OpenData_Click"/>
-              <Button Grid.Column="2" Style="{StaticResource SecondaryButton}" Content="{l:T Settings_OpenLogs}" Margin="8,0,0,0" Click="OpenLogs_Click"/>
-            </Grid>
-            <TextBlock x:Name="PortableInfo" Style="{StaticResource Hint}"/>
-          </StackPanel>
-        </Border>
-
-        <!-- Database -->
-        <Border Style="{StaticResource Card}" Margin="0,0,0,16">
-          <StackPanel>
-            <TextBlock Text="{l:T Settings_Database}" Style="{StaticResource H2}"/>
-            <TextBlock x:Name="CatalogInfo" Style="{StaticResource Body}" Margin="0,6,0,0"/>
-            <TextBlock Text="{l:T Settings_CatalogUrl}" Style="{StaticResource Label}"/>
-            <TextBox x:Name="TxtCatalogUrl" FontFamily="{StaticResource MonoFont}"/>
-            <TextBlock Style="{StaticResource Hint}" Text="{l:T Settings_CatalogHint}"/>
-            <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
-              <TextBlock Text="{l:T Settings_CatalogEvery}" VerticalAlignment="Center"/>
-              <TextBox x:Name="TxtCatalogDays" Width="60" Margin="10,0,8,0" HorizontalContentAlignment="Center"/>
-              <TextBlock Text="{l:T Settings_CatalogDays}" VerticalAlignment="Center"/>
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
-              <Button Style="{StaticResource SecondaryButton}" Click="CatalogUpdate_Click">
-                <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE72C;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock Text="{l:T Main_CheckUpdates}"/></StackPanel>
-              </Button>
-              <Button Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Click="CatalogForce_Click" Content="{l:T Settings_CatalogForce}"/>
-              <Button Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Click="CatalogImport_Click">
-                <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8B5;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock Text="{l:T Settings_CatalogImport}"/></StackPanel>
-              </Button>
-            </StackPanel>
-          </StackPanel>
-        </Border>
-
-        <!-- Dependencies -->
-        <Border Style="{StaticResource Card}" Margin="0,0,0,16">
-          <StackPanel>
-            <TextBlock Text="{l:T Settings_Dependencies}" Style="{StaticResource H2}"/>
-            <TextBlock Text="{l:T Settings_DependenciesHint}" Style="{StaticResource MutedText}" Margin="0,0,0,12"/>
-            <ItemsControl x:Name="DependencyList" Focusable="False">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                  <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="0,10">
-                    <Grid>
-                      <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                      <TextBlock Text="{Binding Glyph}" Style="{StaticResource Icon}" Foreground="{Binding Color}" FontSize="17" Margin="2,2,14,0" VerticalAlignment="Top"/>
-                      <StackPanel Grid.Column="1">
-                        <TextBlock Text="{Binding Title}" Style="{StaticResource H3}"/>
-                        <TextBlock Text="{Binding Description}" Style="{StaticResource MutedText}" FontSize="12.5"/>
-                        <TextBlock Text="{Binding Detail}" Foreground="{Binding Color}" FontSize="12.5" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        <ProgressBar Height="4" Margin="0,6,0,0" Minimum="0" Maximum="100" Value="{Binding Progress, Mode=OneWay}" IsIndeterminate="{Binding IsIndeterminate, Mode=OneWay}"
-                                     Visibility="{Binding IsWorking, Converter={StaticResource BoolToVis}}"/>
-                      </StackPanel>
-                      <TextBlock Grid.Column="2" Text="{Binding StateLabel}" Foreground="{Binding Color}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Top" Margin="14,2,0,0"/>
-                    </Grid>
+              <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+              <StackPanel>
+                <TextBlock Text="{l:T Settings_Company}" Style="{StaticResource H2}"/>
+                <TextBlock Text="{l:T Settings_CompanyHint}" Style="{StaticResource MutedText}"/>
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                  <StackPanel><TextBlock Text="{l:T Settings_CompanyName}" Style="{StaticResource Label}"/><TextBox x:Name="TxtCompany" TextChanged="Brand_Changed"/></StackPanel>
+                  <StackPanel Grid.Column="2"><TextBlock Text="{l:T Settings_Author}" Style="{StaticResource Label}"/><TextBox x:Name="TxtAuthor"/></StackPanel>
+                </Grid>
+                <TextBlock Text="{l:T Settings_Logo}" Style="{StaticResource Label}"/>
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <Border Width="40" Height="40" CornerRadius="10" BorderBrush="{DynamicResource Line}" BorderThickness="1" Margin="0,0,10,0" Background="{DynamicResource Subtle}">
+                    <Image x:Name="LogoThumb" Margin="4"/>
                   </Border>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-            <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
-              <Button x:Name="BtnRepair" Style="{StaticResource SecondaryButton}" Click="Repair_Click">
-                <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE90F;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock Text="{l:T Settings_Repair}"/></StackPanel>
-              </Button>
-              <Button x:Name="BtnRefreshTools" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Click="RefreshTools_Click" Content="{l:T Settings_UpdateAll}"/>
-              <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OpenTools_Click" Content="{l:T Settings_OpenTools}"/>
-            </StackPanel>
-          </StackPanel>
-        </Border>
-
-        <!-- Microsoft Intune: the connection to the tenant (automatic app registration or typed by hand) -->
-        <Border x:Name="IntuneCard" Style="{StaticResource Card}" Margin="0,0,0,16">
-          <StackPanel>
-            <TextBlock Text="{l:T Settings_Intune}" Style="{StaticResource H2}"/>
-            <TextBlock Text="{l:T Settings_IntuneHint}" Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
-            <Border x:Name="IntuneStatusBox" CornerRadius="10" Padding="16,12" Margin="0,14,0,0" Background="{StaticResource BrandSoft}">
-              <DockPanel>
-                <TextBlock x:Name="IntuneStatusIcon" DockPanel.Dock="Left" Style="{StaticResource Icon}" FontSize="18" Margin="0,2,12,0" VerticalAlignment="Top" Foreground="{StaticResource Brand}" Text="&#xE77B;"/>
-                <StackPanel>
-                  <TextBlock x:Name="IntuneStatusTitle" FontWeight="SemiBold" TextWrapping="Wrap" Foreground="{StaticResource Ink}"/>
-                  <TextBlock x:Name="IntuneStatusText" Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
-                </StackPanel>
-              </DockPanel>
-            </Border>
-            <WrapPanel Margin="0,12,0,0">
-              <Button x:Name="BtnIntuneSetup" Style="{StaticResource PrimaryButton}" Margin="0,0,8,8" Click="IntuneSetup_Click">
-                <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE945;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock Text="{l:T Settings_IntuneSetup}"/></StackPanel>
-              </Button>
-              <Button x:Name="BtnIntuneSignIn" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8" Click="IntuneSignIn_Click" Content="{l:T Publish_SignIn}"/>
-              <Button x:Name="BtnIntuneTest" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8" Click="IntuneTest_Click" Content="{l:T Settings_IntuneTest}"/>
-              <Button x:Name="BtnIntuneSignOut" Style="{StaticResource GhostButton}" Margin="0,0,8,8" Click="IntuneSignOut_Click" Content="{l:T Settings_IntuneSignOut}"/>
-            </WrapPanel>
-            <TextBlock x:Name="IntuneBusyText" Style="{StaticResource Hint}" Visibility="Collapsed" TextWrapping="Wrap"/>
-            <TextBlock Text="{l:T Settings_IntuneManual}" Style="{StaticResource Overline}" Margin="0,14,0,0"/>
-            <Grid>
-              <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/></Grid.ColumnDefinitions>
-              <StackPanel><TextBlock Text="{l:T Publish_Tenant}" Style="{StaticResource Label}"/><TextBox x:Name="TxtTenant" FontFamily="{StaticResource MonoFont}" TextChanged="IntuneFields_Changed"/></StackPanel>
-              <StackPanel Grid.Column="2"><TextBlock Text="{l:T Publish_Client}" Style="{StaticResource Label}"/><TextBox x:Name="TxtClient" FontFamily="{StaticResource MonoFont}" TextChanged="IntuneFields_Changed"/></StackPanel>
+                  <TextBox x:Name="TxtLogo" Grid.Column="1" TextChanged="Logo_Changed"/>
+                  <Button Grid.Column="2" Style="{StaticResource SecondaryButton}" Content="{l:T Common_Browse}" Margin="8,0,0,0" Click="Logo_Click"/>
+                </Grid>
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                  <StackPanel><TextBlock Text="{l:T Settings_Accent}" Style="{StaticResource Label}"/>
+                    <DockPanel>
+                      <Border x:Name="AccentSwatch" DockPanel.Dock="Left" Width="32" Height="32" CornerRadius="8" Margin="0,0,8,0" Background="{DynamicResource Brand}" BorderBrush="{DynamicResource Line}" BorderThickness="1"/>
+                      <TextBox x:Name="TxtAccent" FontFamily="{StaticResource MonoFont}" TextChanged="Brand_Changed"/>
+                    </DockPanel>
+                    <WrapPanel x:Name="SwatchPanel" Margin="0,8,0,0"/>
+                  </StackPanel>
+                  <StackPanel Grid.Column="2"><TextBlock Text="{l:T Settings_DialogStyle}" Style="{StaticResource Label}"/>
+                    <ComboBox x:Name="CmbStyle" SelectionChanged="Brand_Changed"><ComboBoxItem Tag="Fluent" Content="{l:T Opt_StyleFluent}"/><ComboBoxItem Tag="Classic" Content="{l:T Opt_StyleClassic}"/></ComboBox>
+                  </StackPanel>
+                  <StackPanel Grid.Column="4"><TextBlock Text="{l:T Settings_DialogLanguage}" Style="{StaticResource Label}"/>
+                    <ComboBox x:Name="CmbLanguage"><ComboBoxItem Tag="Auto" Content="{l:T Opt_LangAuto}"/><ComboBoxItem Tag="pt-BR" Content="Português (Brasil)"/><ComboBoxItem Tag="en" Content="English"/><ComboBoxItem Tag="es" Content="Español"/></ComboBox>
+                  </StackPanel>
+                </Grid>
+                <CheckBox x:Name="ChkImeLogs" Style="{StaticResource Switch}" Content="{l:T Settings_ImeLogs}" Margin="0,18,0,0"/>
+              </StackPanel>
+              <StackPanel x:Name="BrandPreviewPanel" Grid.Column="1" Width="340" Margin="28,0,0,0">
+                <TextBlock Text="{l:T Settings_PreviewOverline}" Style="{StaticResource Overline}"/>
+                <TextBlock Text="{l:T Settings_PreviewHint}" Style="{StaticResource Hint}" Margin="0,2,0,10" TextWrapping="Wrap"/>
+                <v:DialogPreview x:Name="BrandPreview"/>
+              </StackPanel>
             </Grid>
-            <Button Style="{StaticResource GhostButton}" HorizontalAlignment="Left" Padding="4,6" Margin="0,8,0,0" Click="PublishGuide_Click" Content="{l:T Settings_IntuneGuide}"/>
-          </StackPanel>
-        </Border>
+          </Border>
+        </StackPanel>
 
-        <!-- About -->
-        <Border CornerRadius="12" Background="{StaticResource HeroBrush}" Padding="24,22">
-          <Grid>
-            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/></Grid.ColumnDefinitions>
-            <!-- The author: photo (opens LinkedIn), who he is and where to find him. -->
-            <Button Style="{StaticResource AvatarButton}" Width="112" Height="112" Margin="0,2,24,0" VerticalAlignment="Top" Click="LinkedIn_Click" ToolTip="{l:T Credits_LinkedInTip}">
-              <Ellipse Width="104" Height="104">
-                <Ellipse.Fill>
-                  <ImageBrush ImageSource="/Assets/author.jpg" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
-                </Ellipse.Fill>
-              </Ellipse>
-            </Button>
-            <StackPanel Grid.Column="1">
-              <TextBlock x:Name="AboutTitle" Foreground="White" FontFamily="{StaticResource DisplayFont}" FontSize="20" FontWeight="SemiBold"/>
-              <WrapPanel Margin="0,4,0,0">
-                <TextBlock Text="{l:T Credits_CreatedBy}" Foreground="#C9DBF0" VerticalAlignment="Center"/>
-                <TextBlock x:Name="AboutAuthor" Foreground="White" FontWeight="SemiBold" Margin="5,0,0,0" VerticalAlignment="Center"/>
-              </WrapPanel>
-              <TextBlock Text="{l:T About_AuthorBio}" Foreground="#E3EEFA" TextWrapping="Wrap" Margin="0,6,0,0"/>
-              <TextBlock Text="{l:T About_BasedOn}" Foreground="White" TextWrapping="Wrap" Margin="0,12,0,0"/>
-              <TextBlock Text="{l:T About_Licences}" Foreground="#C9DBF0" TextWrapping="Wrap" Margin="0,6,0,0" FontSize="12.5"/>
-              <WrapPanel Margin="0,16,0,0">
-                <Button Style="{StaticResource HeroButton}" Padding="14,7" FontSize="13" Margin="0,0,8,6" Click="LinkedIn_Click" Content="LinkedIn"/>
-                <Button Style="{StaticResource HeroOutlineButton}" Padding="14,7" FontSize="13" Margin="0,0,8,6" Click="Blog_Click" Content="jornada365.cloud"/>
-                <Button Style="{StaticResource HeroOutlineButton}" Padding="14,7" FontSize="13" Margin="0,0,8,6" Click="Repo_Click" Content="{l:T About_Source}"/>
-                <Button Style="{StaticResource HeroOutlineButton}" Padding="14,7" FontSize="13" Margin="0,0,8,6" Click="Psadt_Click" Content="PSAppDeployToolkit"/>
+        <!-- ===================== Package defaults ===================== -->
+        <StackPanel x:Name="PanelDefaults" Visibility="Collapsed">
+          <Border Style="{StaticResource SectionCard}">
+            <StackPanel>
+              <TextBlock Text="{l:T Settings_Defaults}" Style="{StaticResource H2}"/>
+              <TextBlock Text="{l:T Settings_DefaultsHint}" Style="{StaticResource MutedText}"/>
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition Width="160"/><ColumnDefinition Width="16"/><ColumnDefinition Width="220"/></Grid.ColumnDefinitions>
+                <StackPanel><TextBlock Text="{l:T Settings_Mode}" Style="{StaticResource Label}"/>
+                  <ComboBox x:Name="CmbMode"><ComboBoxItem Tag="Auto" Content="{l:T Opt_ModeAuto}"/><ComboBoxItem Tag="WhenNeeded" Content="{l:T Opt_ModeWhenNeeded}"/><ComboBoxItem Tag="Silent" Content="{l:T Opt_ModeSilent}"/><ComboBoxItem Tag="Interactive" Content="{l:T Opt_ModeInteractive}"/></ComboBox>
+                </StackPanel>
+                <StackPanel Grid.Column="2"><TextBlock Text="{l:T Settings_Deferrals}" Style="{StaticResource Label}"/><TextBox x:Name="TxtDefer" TextChanged="Brand_Changed"/></StackPanel>
+                <StackPanel Grid.Column="4"><TextBlock Text="{l:T Settings_Countdown}" Style="{StaticResource Label}"/><TextBox x:Name="TxtCountdown"/></StackPanel>
+              </Grid>
+              <CheckBox x:Name="ChkDefer" Style="{StaticResource Switch}" Content="{l:T Opt_AllowDefer}" Margin="0,18,0,0" Checked="Brand_Changed" Unchecked="Brand_Changed"/>
+              <CheckBox x:Name="ChkBlock" Style="{StaticResource Switch}" Content="{l:T Opt_BlockExecution}"/>
+              <CheckBox x:Name="ChkDisk" Style="{StaticResource Switch}" Content="{l:T Opt_CheckDisk}"/>
+              <CheckBox x:Name="ChkRemovePrev" Style="{StaticResource Switch}" Content="{l:T Opt_RemovePrevious}"/>
+              <TextBlock Text="{l:T Settings_Welcome}" Style="{StaticResource Label}"/>
+              <TextBox x:Name="TxtWelcome" TextChanged="Brand_Changed" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60" VerticalContentAlignment="Top"/>
+              <TextBlock Text="{l:T Settings_Completion}" Style="{StaticResource Label}"/>
+              <TextBox x:Name="TxtCompletion" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="50" VerticalContentAlignment="Top"/>
+              <Grid Margin="0,4,0,0">
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                <StackPanel><TextBlock Text="{l:T Settings_PrefArch}" Style="{StaticResource Label}"/>
+                  <ComboBox x:Name="CmbArch"><ComboBoxItem Tag="x64" Content="{l:T Opt_ArchX64}"/><ComboBoxItem Tag="x86" Content="{l:T Opt_ArchX86}"/><ComboBoxItem Tag="arm64" Content="ARM64"/></ComboBox>
+                </StackPanel>
+                <StackPanel Grid.Column="2"><TextBlock Text="{l:T Settings_PrefLocale}" Style="{StaticResource Label}"/>
+                  <ComboBox x:Name="CmbLocale"><ComboBoxItem Tag="pt-BR" Content="Português (Brasil)"/><ComboBoxItem Tag="en-US" Content="English (United States)"/><ComboBoxItem Tag="es-ES" Content="Español"/></ComboBox>
+                </StackPanel>
+              </Grid>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <!-- ===================== Microsoft Intune ===================== -->
+        <StackPanel x:Name="PanelIntune" Visibility="Collapsed">
+          <Border x:Name="IntuneCard" Style="{StaticResource SectionCard}" Padding="0">
+            <StackPanel>
+              <Border x:Name="IntuneStatusBox" CornerRadius="15,15,0,0" Padding="24,22" Background="{DynamicResource BrandSoft}">
+                <DockPanel>
+                  <Border DockPanel.Dock="Left" Width="54" Height="54" CornerRadius="16" Background="{DynamicResource CardBg}" Margin="0,0,18,0" VerticalAlignment="Top" Effect="{DynamicResource SoftShadow}">
+                    <TextBlock x:Name="IntuneStatusIcon" Style="{StaticResource Icon}" FontSize="23" Foreground="{DynamicResource Brand}" HorizontalAlignment="Center" Text="&#xE753;"/>
+                  </Border>
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock x:Name="IntuneStatusTitle" Style="{StaticResource H2}" TextWrapping="Wrap"/>
+                    <TextBlock x:Name="IntuneStatusText" Style="{StaticResource MutedText}" FontSize="13" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                  </StackPanel>
+                </DockPanel>
+              </Border>
+              <StackPanel Margin="24,18,24,22">
+                <!-- Tenant, registration and permission of the current connection -->
+                <Grid x:Name="IntuneDetails" Margin="0,0,0,4">
+                  <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Text="{l:T Settings_IntuneTenantLabel}" Style="{StaticResource Overline}"/>
+                    <TextBlock x:Name="IntuneTenantValue" FontFamily="{StaticResource MonoFont}" FontSize="12.5" Foreground="{DynamicResource Ink2}" TextTrimming="CharacterEllipsis" Margin="0,4,0,0"/>
+                  </StackPanel>
+                  <StackPanel Grid.Column="2">
+                    <TextBlock Text="{l:T Settings_IntuneClientLabel}" Style="{StaticResource Overline}"/>
+                    <TextBlock x:Name="IntuneClientValue" FontFamily="{StaticResource MonoFont}" FontSize="12.5" Foreground="{DynamicResource Ink2}" TextTrimming="CharacterEllipsis" Margin="0,4,0,0"/>
+                  </StackPanel>
+                  <StackPanel Grid.Column="4">
+                    <TextBlock Text="{l:T Settings_IntunePermissionLabel}" Style="{StaticResource Overline}"/>
+                    <TextBlock Text="DeviceManagementApps.ReadWrite.All" FontFamily="{StaticResource MonoFont}" FontSize="12.5" Foreground="{DynamicResource Ink2}" TextTrimming="CharacterEllipsis" Margin="0,4,0,0"/>
+                  </StackPanel>
+                </Grid>
+                <WrapPanel Margin="0,14,0,0">
+                  <Button x:Name="BtnIntuneSetup" Style="{StaticResource PrimaryButton}" Margin="0,0,8,8" Click="IntuneSetup_Click">
+                    <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE945;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock x:Name="BtnIntuneSetupText" Text="{l:T Settings_IntuneConnect}"/></StackPanel>
+                  </Button>
+                  <Button x:Name="BtnIntuneSignIn" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8" Click="IntuneSignIn_Click" Content="{l:T Publish_SignIn}"/>
+                  <Button x:Name="BtnIntuneTest" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8" Click="IntuneTest_Click" Content="{l:T Settings_IntuneTest}"/>
+                  <Button x:Name="BtnIntuneCopyCode" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8" Click="IntuneCopyCode_Click" ToolTip="{l:T Settings_IntuneCopyCodeTip}">
+                    <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8C8;" Style="{StaticResource Icon}" FontSize="13" Margin="0,0,8,0"/><TextBlock Text="{l:T Settings_IntuneCopyCode}"/></StackPanel>
+                  </Button>
+                  <Button x:Name="BtnIntuneSignOut" Style="{StaticResource GhostButton}" Margin="0,0,8,8" Click="IntuneSignOut_Click" Content="{l:T Settings_IntuneSignOut}"/>
+                </WrapPanel>
+                <TextBlock x:Name="IntuneBusyText" Style="{StaticResource Hint}" Visibility="Collapsed" TextWrapping="Wrap"/>
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+          <Border Style="{StaticResource SectionCard}">
+            <StackPanel>
+              <TextBlock Text="{l:T Settings_IntuneManualTitle}" Style="{StaticResource H2}"/>
+              <TextBlock Text="{l:T Settings_IntuneManualHint}" Style="{StaticResource MutedText}" Margin="0,2,0,0"/>
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                <StackPanel><TextBlock Text="{l:T Publish_Tenant}" Style="{StaticResource Label}"/><TextBox x:Name="TxtTenant" FontFamily="{StaticResource MonoFont}" TextChanged="IntuneFields_Changed"/></StackPanel>
+                <StackPanel Grid.Column="2"><TextBlock Text="{l:T Publish_Client}" Style="{StaticResource Label}"/><TextBox x:Name="TxtClient" FontFamily="{StaticResource MonoFont}" TextChanged="IntuneFields_Changed"/></StackPanel>
+              </Grid>
+              <WrapPanel Margin="0,12,0,0">
+                <Button Style="{StaticResource SecondaryButton}" Margin="0,0,8,0" Click="IntunePasteCode_Click">
+                  <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE77F;" Style="{StaticResource Icon}" FontSize="13" Margin="0,0,8,0"/><TextBlock Text="{l:T Settings_IntunePasteCode}"/></StackPanel>
+                </Button>
+                <Button Style="{StaticResource GhostButton}" Click="PublishGuide_Click" Content="{l:T Settings_IntuneGuide}"/>
               </WrapPanel>
             </StackPanel>
-          </Grid>
-        </Border>
-      </StackPanel>
+          </Border>
+
+          <Border Style="{StaticResource SectionCard}">
+            <StackPanel>
+              <TextBlock Text="{l:T Settings_IntuneSecurityTitle}" Style="{StaticResource H2}"/>
+              <StackPanel Margin="0,12,0,0">
+                <DockPanel Margin="0,0,0,8"><TextBlock DockPanel.Dock="Left" Text="&#xE72E;" Style="{StaticResource Icon}" FontSize="14" Foreground="{DynamicResource Success}" VerticalAlignment="Top" Margin="0,2,0,0"/><TextBlock Text="{l:T Settings_IntuneSec1}" Style="{StaticResource CheckLine}"/></DockPanel>
+                <DockPanel Margin="0,0,0,8"><TextBlock DockPanel.Dock="Left" Text="&#xE72E;" Style="{StaticResource Icon}" FontSize="14" Foreground="{DynamicResource Success}" VerticalAlignment="Top" Margin="0,2,0,0"/><TextBlock Text="{l:T Settings_IntuneSec2}" Style="{StaticResource CheckLine}"/></DockPanel>
+                <DockPanel Margin="0,0,0,8"><TextBlock DockPanel.Dock="Left" Text="&#xE72E;" Style="{StaticResource Icon}" FontSize="14" Foreground="{DynamicResource Success}" VerticalAlignment="Top" Margin="0,2,0,0"/><TextBlock Text="{l:T Settings_IntuneSec3}" Style="{StaticResource CheckLine}"/></DockPanel>
+                <DockPanel><TextBlock DockPanel.Dock="Left" Text="&#xE72E;" Style="{StaticResource Icon}" FontSize="14" Foreground="{DynamicResource Success}" VerticalAlignment="Top" Margin="0,2,0,0"/><TextBlock Text="{l:T Settings_IntuneSec4}" Style="{StaticResource CheckLine}"/></DockPanel>
+              </StackPanel>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <!-- ===================== Components: database and dependencies ===================== -->
+        <StackPanel x:Name="PanelTools" Visibility="Collapsed">
+          <Border Style="{StaticResource SectionCard}">
+            <StackPanel>
+              <TextBlock Text="{l:T Settings_Database}" Style="{StaticResource H2}"/>
+              <TextBlock x:Name="CatalogInfo" Style="{StaticResource Body}" Margin="0,6,0,0"/>
+              <TextBlock Text="{l:T Settings_CatalogUrl}" Style="{StaticResource Label}"/>
+              <TextBox x:Name="TxtCatalogUrl" FontFamily="{StaticResource MonoFont}"/>
+              <TextBlock Style="{StaticResource Hint}" Text="{l:T Settings_CatalogHint}"/>
+              <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                <TextBlock Text="{l:T Settings_CatalogEvery}" VerticalAlignment="Center" Foreground="{DynamicResource Ink2}"/>
+                <TextBox x:Name="TxtCatalogDays" Width="64" Margin="10,0,8,0" HorizontalContentAlignment="Center"/>
+                <TextBlock Text="{l:T Settings_CatalogDays}" VerticalAlignment="Center" Foreground="{DynamicResource Ink2}"/>
+              </StackPanel>
+              <WrapPanel Margin="0,16,0,0">
+                <Button Style="{StaticResource SecondaryButton}" Margin="0,0,8,8" Click="CatalogUpdate_Click">
+                  <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE72C;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock Text="{l:T Main_CheckUpdates}"/></StackPanel>
+                </Button>
+                <Button Style="{StaticResource SecondaryButton}" Margin="0,0,8,8" Click="CatalogForce_Click" Content="{l:T Settings_CatalogForce}"/>
+                <Button Style="{StaticResource SecondaryButton}" Margin="0,0,8,8" Click="CatalogImport_Click">
+                  <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8B5;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock Text="{l:T Settings_CatalogImport}"/></StackPanel>
+                </Button>
+              </WrapPanel>
+            </StackPanel>
+          </Border>
+
+          <Border Style="{StaticResource SectionCard}">
+            <StackPanel>
+              <TextBlock Text="{l:T Settings_Dependencies}" Style="{StaticResource H2}"/>
+              <TextBlock Text="{l:T Settings_DependenciesHint}" Style="{StaticResource MutedText}" Margin="0,0,0,12"/>
+              <ItemsControl x:Name="DependencyList" Focusable="False">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Padding="0,11">
+                      <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <Border Width="34" Height="34" CornerRadius="10" Background="{DynamicResource Subtle}" BorderBrush="{DynamicResource Line}" BorderThickness="1" VerticalAlignment="Top" Margin="0,0,14,0">
+                          <TextBlock Text="{Binding Glyph}" Style="{StaticResource Icon}" Foreground="{Binding Color}" FontSize="15" HorizontalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1">
+                          <TextBlock Text="{Binding Title}" Style="{StaticResource H3}"/>
+                          <TextBlock Text="{Binding Description}" Style="{StaticResource MutedText}" FontSize="12.5"/>
+                          <TextBlock Text="{Binding Detail}" Foreground="{Binding Color}" FontSize="12.5" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                          <ProgressBar Height="4" Margin="0,6,0,0" Minimum="0" Maximum="100" Value="{Binding Progress, Mode=OneWay}" IsIndeterminate="{Binding IsIndeterminate, Mode=OneWay}"
+                                       Visibility="{Binding IsWorking, Converter={StaticResource BoolToVis}}"/>
+                        </StackPanel>
+                        <TextBlock Grid.Column="2" Text="{Binding StateLabel}" Foreground="{Binding Color}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Top" Margin="14,2,0,0"/>
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <WrapPanel Margin="0,16,0,0">
+                <Button x:Name="BtnRepair" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8" Click="Repair_Click">
+                  <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE90F;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock Text="{l:T Settings_Repair}"/></StackPanel>
+                </Button>
+                <Button x:Name="BtnRefreshTools" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8" Click="RefreshTools_Click" Content="{l:T Settings_UpdateAll}"/>
+                <Button Style="{StaticResource GhostButton}" Margin="0,0,8,8" Click="OpenTools_Click" Content="{l:T Settings_OpenTools}"/>
+              </WrapPanel>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <!-- ===================== About ===================== -->
+        <StackPanel x:Name="PanelAbout" Visibility="Collapsed">
+          <Border CornerRadius="18" Background="{DynamicResource HeroBrush}" Padding="30,28" Effect="{DynamicResource CardShadow}" ClipToBounds="True">
+            <Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/></Grid.ColumnDefinitions>
+              <!-- The author: photo (opens LinkedIn), who he is and where to find him. -->
+              <Button Style="{StaticResource AvatarButton}" Width="116" Height="116" Margin="0,2,28,0" VerticalAlignment="Top" Click="LinkedIn_Click" ToolTip="{l:T Credits_LinkedInTip}">
+                <Ellipse Width="108" Height="108">
+                  <Ellipse.Fill>
+                    <ImageBrush ImageSource="/Assets/author.jpg" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
+                  </Ellipse.Fill>
+                </Ellipse>
+              </Button>
+              <StackPanel Grid.Column="1">
+                <TextBlock x:Name="AboutTitle" Foreground="{DynamicResource HeroText}" FontFamily="{StaticResource DisplayFont}" FontSize="21" FontWeight="SemiBold"/>
+                <WrapPanel Margin="0,4,0,0">
+                  <TextBlock Text="{l:T Credits_CreatedBy}" Foreground="{DynamicResource HeroMuted}" VerticalAlignment="Center"/>
+                  <TextBlock x:Name="AboutAuthor" Foreground="{DynamicResource HeroText}" FontWeight="SemiBold" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                </WrapPanel>
+                <TextBlock Text="{l:T About_AuthorBio}" Foreground="{DynamicResource HeroMuted}" TextWrapping="Wrap" Margin="0,8,0,0" LineHeight="20"/>
+                <TextBlock Text="{l:T About_BasedOn}" Foreground="{DynamicResource HeroText}" TextWrapping="Wrap" Margin="0,12,0,0"/>
+                <TextBlock Text="{l:T About_Licences}" Foreground="{DynamicResource HeroMuted}" TextWrapping="Wrap" Margin="0,6,0,0" FontSize="12.5"/>
+                <WrapPanel Margin="0,18,0,0">
+                  <Button Style="{StaticResource HeroButton}" Padding="14,7" FontSize="13" Margin="0,0,8,6" Click="LinkedIn_Click" Content="LinkedIn"/>
+                  <Button Style="{StaticResource HeroOutlineButton}" Padding="14,7" FontSize="13" Margin="0,0,8,6" Click="Blog_Click" Content="jornada365.cloud"/>
+                  <Button Style="{StaticResource HeroOutlineButton}" Padding="14,7" FontSize="13" Margin="0,0,8,6" Click="Repo_Click" Content="{l:T About_Source}"/>
+                  <Button Style="{StaticResource HeroOutlineButton}" Padding="14,7" FontSize="13" Margin="0,0,8,6" Click="Psadt_Click" Content="PSAppDeployToolkit"/>
+                </WrapPanel>
+              </StackPanel>
+            </Grid>
+          </Border>
+        </StackPanel>
+
+      </Grid>
     </ScrollViewer>
   </Grid>
 </UserControl>

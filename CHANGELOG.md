@@ -2,6 +2,32 @@
 
 All notable changes to J365 IntunePSApp. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.4.0 - 2026-11-19
+
+### Added
+
+- **Connection window.** *Connect to Intune* (Settings, sidebar, publishing dialog) offers three ways: the automatic setup, a registration that already exists (a *connection code* `J365-CONNECT tenant=... client=...` that an administrator copies in Settings, or the two IDs) and **Azure Cloud Shell** (a Bash or PowerShell command that creates the same registration with the Azure CLI, already authorised in every tenant, and prints a connection code). Every step is listed with its state; a failure names the step and lists the likely causes with their action (try again, activate a role in PIM, try another account, use Azure Cloud Shell, open or copy the consent link, copy the details). The administrator account can be typed beforehand (login hint).
+- **Themes.** Light, dark or same as Windows (*Settings > Appearance*, or the sidebar button), applied live. The WPF Fluent controls use the brand accent instead of the Windows accent colour; dialog windows draw their title bar in the theme; Windows 11 rounded corners and a dark frame in the dark theme.
+- **Redesign.** New palette and typography, sidebar with the Intune connection and a compact database card, catalog search from any page (Ctrl+K), Home with clickable indicators, Settings in sections (General, Appearance, Company, Defaults, Microsoft Intune, Components, About), toasts as cards.
+- *Keep a newer version that is already installed* (step 5, on by default): a package that finds a newer version of the application keeps it, writes its mark and returns success, instead of downgrading it.
+- The editor asks before *New*, *Open project*, a dropped project or *Reopen* replace a package with changes that were neither saved nor generated, and so does closing the application.
+- Publishing: *Cancel* asks the script to stop at its next safe point (`-CancelFile`); it is killed only if it does not stop within 90 seconds.
+
+### Fixed
+
+- **Microsoft's "sign-in cancelled" answer during the setup was a dead end.** `access_denied` with `error_subcode=cancel` is recognised and explained (closed consent screen, account without an active administrator role, tenant that blocks or saturated Microsoft Graph Command Line Tools); a sign-in that may not create applications is reported as such (HTTP 403 of Microsoft Graph); AADSTS7000112 is explained. The page the browser shows after the sign-in says what to do.
+- **Downgrade of applications that updated themselves.** The detection accepted only a package mark whose version reached the minimum, so Firefox 134 with the mark of package 132 was "not detected" for package 133, which then removed 134 and installed 133. A mark of any version now counts (the version is checked on the installed application).
+- **False "uninstalled".** An `.exe` that registers no silent uninstaller was skipped by the toolkit, the mark was removed and the package returned 0. The uninstallation now checks that nothing matching the name is left (with a short wait) and fails otherwise, keeping the mark.
+- **Updating an app in Intune changed it before its new content existed.** The settings and the detection were sent first, then the content; a failure in between left the old content with the new detection. The new content is now uploaded and committed first, and one change switches settings, detection, version and content together.
+- **Cancelling a publication** killed the script, which could leave a half-created app; the script now removes it.
+- "Set environment variable" with *Path* (or *PSModulePath*, *PATHEXT*, or a value that refers to the variable itself) replaced the whole value with the literal text (for example `%PATH%;C:\Tools`) and could drop System32 from the PATH of the devices. The entries are now appended, and the value keeps its variables (REG_EXPAND_SZ).
+- The PSAppDeployToolkit template had to be signed only in theory (a warning was logged). The module and the launcher must now have a valid signature of the toolkit publisher, checked when the template is installed and before every build.
+- Typographic double quotes in the company name cut it short in the dialogs (PowerShell takes them as quotes when the toolkit expands its config).
+- A failed removal of the previous version left its exit code behind and made the installation report a failure.
+- The *Uninstall application* action did not wait for uninstallers that run from a copy of themselves (`-WaitForChildProcesses`).
+- Publishing behind a proxy that asks for the Windows sign-in (NTLM or Kerberos) failed with HTTP 407.
+- The *Website* button of the catalog opened any scheme; only http and https now.
+
 ## 2.3.0 - 2026-11-19
 
 ### Added

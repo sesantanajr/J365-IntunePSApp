@@ -32,6 +32,7 @@ namespace J365.IntunePSApp
         {
             Args = e.Args ?? Array.Empty<string>();
             Loc.Instance.SetLanguage(Loc.Resolve(Arg("--lang") ?? ConfigStore.Current.UiLanguage));
+            ThemeManager.Initialize(Arg("--theme"));
 
             DispatcherUnhandledException += OnUiException;
             AppDomain.CurrentDomain.UnhandledException += (s, ex) => Log.Error(T("Log_Unhandled", ex.ExceptionObject));

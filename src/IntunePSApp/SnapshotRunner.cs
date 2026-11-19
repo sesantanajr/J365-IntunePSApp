@@ -38,6 +38,26 @@ namespace J365.IntunePSApp
                     enc.Save(fs);
                 }
 
+                // A dialog drawn off-screen, captured, then closed.
+                async Task ShotWindow(Views.ConnectWindow win, string name, Action<Views.ConnectWindow> prepare)
+                {
+                    win.WindowStartupLocation = WindowStartupLocation.Manual;
+                    win.Left = -32000; win.Top = 0;
+                    win.ShowActivated = false;
+                    win.ShowInTaskbar = false;
+                    win.Show();
+                    prepare?.Invoke(win);
+                    await Task.Delay(700);
+                    win.UpdateLayout();
+                    var root = (FrameworkElement)VisualTreeHelper.GetChild(win, 0);
+                    var rtb = new RenderTargetBitmap((int)root.ActualWidth, (int)root.ActualHeight, 96, 96, PixelFormats.Pbgra32);
+                    rtb.Render(root);
+                    var enc = new PngBitmapEncoder();
+                    enc.Frames.Add(BitmapFrame.Create(rtb));
+                    using (var fs = File.Create(Path.Combine(dir, name + ".png"))) enc.Save(fs);
+                    win.CloseForSnapshot();
+                }
+
                 if (App.HasArg("--snapshot-setup"))
                 {
                     var setup = w.ShowSetupAsync(refresh: false);
@@ -90,6 +110,8 @@ namespace J365.IntunePSApp
                     // Steps taller than the window: a second capture shows their last part.
                     if (w.Editor.ScrollToEnd()) await Shot($"03-editor-{i + 1}-end");
                 }
+                // Walking through the steps changes nothing: the package must not count as "unsaved".
+                File.WriteAllText(Path.Combine(dir, "editor-state.txt"), "unsaved=" + w.Editor.HasUnsavedChanges);
                 if (App.HasArg("--snapshot-build"))
                 {
                     var s = w.Editor.Collect();
@@ -104,11 +126,20 @@ namespace J365.IntunePSApp
                 await Shot("05-packages");
                 w.Navigate("settings");
                 await Shot("06-settings");
-                w.Settings.ShowIntune();
-                await Task.Delay(300);
-                await Shot("06-settings-intune");
-                w.Settings.ScrollToEnd();
-                await Shot("06-settings-end");
+                foreach (var section in new[] { "appearance", "company", "defaults", "intune", "tools", "about" })
+                {
+                    w.Settings.ShowSection(section);
+                    await Task.Delay(300);
+                    await Shot("06-settings-" + section);
+                }
+                w.Settings.ShowSection("general");
+
+                // The connection window, page by page (nothing is sent: the pages are only drawn).
+                await ShotWindow(new Views.ConnectWindow(), "08-connect-choose", null);
+                await ShotWindow(new Views.ConnectWindow(), "08-connect-shell", c => c.SnapshotPage("shell"));
+                await ShotWindow(new Views.ConnectWindow(), "08-connect-progress", c => c.SnapshotPage("progress"));
+                await ShotWindow(new Views.ConnectWindow(), "08-connect-failed", c => c.SnapshotPage("failed"));
+                await ShotWindow(new Views.ConnectWindow(), "08-connect-done", c => c.SnapshotPage("done"));
 
                 // Switches the language while everything is loaded, to check that every page follows it live.
                 string relang = App.Arg("--snapshot-relang");

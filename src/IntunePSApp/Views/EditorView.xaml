@@ -36,7 +36,7 @@
         <ColumnDefinition Width="*"/>
         <ColumnDefinition Width="Auto"/>
       </Grid.ColumnDefinitions>
-      <Border x:Name="HeaderAvatar" Width="54" Height="54" CornerRadius="14" Background="{StaticResource Navy}">
+      <Border x:Name="HeaderAvatar" Width="54" Height="54" CornerRadius="14" Background="{DynamicResource Navy}">
         <Grid>
           <TextBlock x:Name="HeaderInitials" Text="&#xE7B8;" Style="{StaticResource Icon}" FontSize="22" Foreground="White" HorizontalAlignment="Center"/>
           <Image x:Name="HeaderIcon" Width="34" Height="34" RenderOptions.BitmapScalingMode="HighQuality"/>
@@ -60,7 +60,7 @@
     </Grid>
 
     <!-- Steps -->
-    <Border Grid.Row="1" Background="White" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="22" Padding="5" Margin="0,16,0,14" HorizontalAlignment="Left">
+    <Border Grid.Row="1" Background="{DynamicResource CardBg}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="22" Padding="5" Margin="0,16,0,14" HorizontalAlignment="Left" Effect="{DynamicResource SoftShadow}">
       <!-- WrapPanel: on narrow windows the steps continue on a second line instead of being cut off. -->
       <WrapPanel x:Name="Stepper" Orientation="Horizontal">
         <RadioButton Style="{StaticResource StepItem}" GroupName="step" Tag="0" Content="{l:T Step_1}" Checked="Step_Checked"/>
@@ -88,21 +88,21 @@
             <Border x:Name="UpdateBanner" Style="{StaticResource Notice}" Margin="0,0,0,14" Visibility="Collapsed">
               <DockPanel>
                 <Button DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Padding="14,7" VerticalAlignment="Center" Margin="16,0,0,0" Click="UpdateInstaller_Click" Content="{l:T Ed_UpdateInstaller}"/>
-                <TextBlock DockPanel.Dock="Left" Text="&#xE895;" Style="{StaticResource Icon}" Foreground="{StaticResource Brand}" FontSize="18" Margin="2,0,14,0" VerticalAlignment="Center"/>
+                <TextBlock DockPanel.Dock="Left" Text="&#xE895;" Style="{StaticResource Icon}" Foreground="{DynamicResource Brand}" FontSize="18" Margin="2,0,14,0" VerticalAlignment="Center"/>
                 <StackPanel VerticalAlignment="Center">
-                  <TextBlock x:Name="UpdateBannerTitle" FontWeight="SemiBold" Foreground="{StaticResource Ink}" TextWrapping="Wrap"/>
-                  <TextBlock Text="{l:T Ed_UpdateBannerText}" Foreground="{StaticResource Ink2}" FontSize="12.5" TextWrapping="Wrap"/>
+                  <TextBlock x:Name="UpdateBannerTitle" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" TextWrapping="Wrap"/>
+                  <TextBlock Text="{l:T Ed_UpdateBannerText}" Foreground="{DynamicResource Ink2}" FontSize="12.5" TextWrapping="Wrap"/>
                 </StackPanel>
               </DockPanel>
             </Border>
-            <Border x:Name="DropZone" Background="White" CornerRadius="14" Height="186" Cursor="Hand" MouseLeftButtonUp="DropZone_Click">
+            <Border x:Name="DropZone" Background="{DynamicResource CardBg}" CornerRadius="16" Height="186" Cursor="Hand" MouseLeftButtonUp="DropZone_Click">
               <Grid>
-                <Rectangle x:Name="DropRect" StrokeDashArray="6 4" Stroke="#94A3B8" StrokeThickness="1.6" RadiusX="14" RadiusY="14"/>
+                <Rectangle x:Name="DropRect" StrokeDashArray="6 4" Stroke="{DynamicResource Faint}" StrokeThickness="1.6" RadiusX="16" RadiusY="16"/>
                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                  <Border Width="58" Height="58" CornerRadius="29" Background="{StaticResource BrandSoft}" HorizontalAlignment="Center">
-                    <TextBlock Text="&#xE896;" Style="{StaticResource Icon}" FontSize="24" Foreground="{StaticResource Brand}" HorizontalAlignment="Center"/>
+                  <Border Width="58" Height="58" CornerRadius="29" Background="{DynamicResource BrandSoft}" HorizontalAlignment="Center">
+                    <TextBlock Text="&#xE896;" Style="{StaticResource Icon}" FontSize="24" Foreground="{DynamicResource Brand}" HorizontalAlignment="Center"/>
                   </Border>
-                  <TextBlock x:Name="DropText" FontSize="15.5" FontWeight="SemiBold" Foreground="{StaticResource Ink}" Margin="0,14,0,0" HorizontalAlignment="Center"/>
+                  <TextBlock x:Name="DropText" FontSize="15.5" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" Margin="0,14,0,0" HorizontalAlignment="Center"/>
                   <TextBlock Text="{l:T Ed_DropHint}" Style="{StaticResource MutedText}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
                 </StackPanel>
               </Grid>
@@ -119,8 +119,8 @@
             <Border x:Name="AnalysisCard" Style="{StaticResource Section}" Margin="0,16,0,16" Visibility="Collapsed">
               <StackPanel>
                 <StackPanel Orientation="Horizontal">
-                  <Border Width="28" Height="28" CornerRadius="14" Background="{StaticResource SuccessSoft}" Margin="0,0,10,0">
-                    <TextBlock Text="&#xE73E;" Style="{StaticResource Icon}" FontSize="13" Foreground="{StaticResource Success}" HorizontalAlignment="Center"/>
+                  <Border Width="28" Height="28" CornerRadius="14" Background="{DynamicResource SuccessSoft}" Margin="0,0,10,0">
+                    <TextBlock Text="&#xE73E;" Style="{StaticResource Icon}" FontSize="13" Foreground="{DynamicResource Success}" HorizontalAlignment="Center"/>
                   </Border>
                   <TextBlock x:Name="AnalysisTitle" Style="{StaticResource H2}" VerticalAlignment="Center"/>
                 </StackPanel>
@@ -131,7 +131,7 @@
                     <DataTemplate>
                       <Grid Margin="0,4">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                        <TextBlock Text="&#xE946;" Style="{StaticResource Icon}" FontSize="13" Foreground="{StaticResource Brand}" VerticalAlignment="Top" Margin="0,2,10,0"/>
+                        <TextBlock Text="&#xE946;" Style="{StaticResource Icon}" FontSize="13" Foreground="{DynamicResource Brand}" VerticalAlignment="Top" Margin="0,2,10,0"/>
                         <TextBlock Grid.Column="1" Text="{Binding}" Style="{StaticResource Body}"/>
                       </Grid>
                     </DataTemplate>
@@ -145,8 +145,8 @@
             <Border Style="{StaticResource Section}" Margin="0,18,0,0">
               <StackPanel>
                 <StackPanel Orientation="Horizontal">
-                  <Border Width="28" Height="28" CornerRadius="14" Background="{StaticResource BrandSoft}" Margin="0,0,10,0">
-                    <TextBlock Text="&#xE777;" Style="{StaticResource Icon}" FontSize="13" Foreground="{StaticResource Brand}" HorizontalAlignment="Center"/>
+                  <Border Width="28" Height="28" CornerRadius="14" Background="{DynamicResource BrandSoft}" Margin="0,0,10,0">
+                    <TextBlock Text="&#xE777;" Style="{StaticResource Icon}" FontSize="13" Foreground="{DynamicResource Brand}" HorizontalAlignment="Center"/>
                   </Border>
                   <TextBlock Text="{l:T Ed_ExistingTitle}" Style="{StaticResource H2}" VerticalAlignment="Center"/>
                 </StackPanel>
@@ -208,7 +208,7 @@
                 <TextBlock Text="{l:T Ed_AppIcon}" Style="{StaticResource Label}"/>
                 <Grid>
                   <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                  <Border Width="40" Height="40" CornerRadius="8" BorderBrush="{StaticResource Line}" BorderThickness="1" Margin="0,0,10,0" Background="{StaticResource Subtle}">
+                  <Border Width="40" Height="40" CornerRadius="8" BorderBrush="{DynamicResource Line}" BorderThickness="1" Margin="0,0,10,0" Background="{DynamicResource Subtle}">
                     <Image x:Name="AppIconThumb" Margin="3" RenderOptions.BitmapScalingMode="HighQuality"/>
                   </Border>
                   <TextBox x:Name="TxtAppIcon" Grid.Column="1" TextChanged="AppIcon_Changed"/>
@@ -292,13 +292,13 @@
                 <ItemsControl x:Name="DependencyList" Focusable="False">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                      <Border Background="{StaticResource Subtle}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="10" Padding="12,10" Margin="0,0,0,8">
+                      <Border Background="{DynamicResource Subtle}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="10" Padding="12,10" Margin="0,0,0,8">
                         <DockPanel>
                           <Button DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Padding="12,6" VerticalAlignment="Center" Margin="12,0,0,0" Tag="{Binding}" Click="IncludeDependency_Click"
                                   Content="{l:T Ed_IncludeDependency}" Visibility="{Binding CanInclude, Converter={StaticResource BoolToVis}}"/>
                           <TextBlock DockPanel.Dock="Right" Text="{Binding StatusLabel}" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="12,0,0,0"/>
-                          <Border DockPanel.Dock="Left" Width="36" Height="36" CornerRadius="9" Background="{StaticResource BrandSoft}" Margin="0,0,12,0">
-                            <TextBlock Text="&#xE7B8;" Style="{StaticResource Icon}" Foreground="{StaticResource Brand}" HorizontalAlignment="Center"/>
+                          <Border DockPanel.Dock="Left" Width="36" Height="36" CornerRadius="9" Background="{DynamicResource BrandSoft}" Margin="0,0,12,0">
+                            <TextBlock Text="&#xE7B8;" Style="{StaticResource Icon}" Foreground="{DynamicResource Brand}" HorizontalAlignment="Center"/>
                           </Border>
                           <StackPanel VerticalAlignment="Center">
                             <TextBlock Text="{Binding Title}" Style="{StaticResource H3}"/>
@@ -328,16 +328,16 @@
                 <ItemsControl x:Name="ActionsList" Margin="0,12,0,0">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                      <Border Background="{StaticResource Subtle}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="10" Padding="12,10" Margin="0,0,0,8">
+                      <Border Background="{DynamicResource Subtle}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="10" Padding="12,10" Margin="0,0,0,8">
                         <Grid>
                           <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                          <Border Width="36" Height="36" CornerRadius="9" Background="{StaticResource BrandSoft}">
-                            <TextBlock Text="{Binding Glyph}" Style="{StaticResource Icon}" Foreground="{StaticResource Brand}" HorizontalAlignment="Center"/>
+                          <Border Width="36" Height="36" CornerRadius="9" Background="{DynamicResource BrandSoft}">
+                            <TextBlock Text="{Binding Glyph}" Style="{StaticResource Icon}" Foreground="{DynamicResource Brand}" HorizontalAlignment="Center"/>
                           </Border>
                           <StackPanel Grid.Column="1" Margin="12,0" VerticalAlignment="Center">
                             <StackPanel Orientation="Horizontal">
                               <TextBlock Text="{Binding TypeLabel}" Style="{StaticResource H3}"/>
-                              <Border Style="{StaticResource Chip}" Margin="10,0,0,0" Padding="8,1"><TextBlock Text="{Binding PhaseLabel}" FontSize="11.5" Foreground="{StaticResource Brand}"/></Border>
+                              <Border Style="{StaticResource Chip}" Margin="10,0,0,0" Padding="8,1"><TextBlock Text="{Binding PhaseLabel}" FontSize="11.5" Foreground="{DynamicResource Brand}"/></Border>
                             </StackPanel>
                             <TextBlock Text="{Binding Summary}" Style="{StaticResource MutedText}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" FontFamily="{StaticResource MonoFont}"/>
                           </StackPanel>
@@ -345,7 +345,7 @@
                             <Button Style="{StaticResource IconButton}" ToolTip="{l:T Ed_MoveUp}" Tag="{Binding}" Click="ActionUp_Click"><TextBlock Text="&#xE70E;" Style="{StaticResource Icon}" FontSize="12"/></Button>
                             <Button Style="{StaticResource IconButton}" ToolTip="{l:T Ed_MoveDown}" Tag="{Binding}" Click="ActionDown_Click"><TextBlock Text="&#xE70D;" Style="{StaticResource Icon}" FontSize="12"/></Button>
                             <Button Style="{StaticResource IconButton}" ToolTip="{l:T Ed_Edit}" Tag="{Binding}" Click="ActionEdit_Click"><TextBlock Text="&#xE70F;" Style="{StaticResource Icon}" FontSize="13"/></Button>
-                            <Button Style="{StaticResource IconButton}" ToolTip="{l:T Common_Remove}" Tag="{Binding}" Click="ActionDelete_Click"><TextBlock Text="&#xE74D;" Style="{StaticResource Icon}" FontSize="13" Foreground="{StaticResource Danger}"/></Button>
+                            <Button Style="{StaticResource IconButton}" ToolTip="{l:T Common_Remove}" Tag="{Binding}" Click="ActionDelete_Click"><TextBlock Text="&#xE74D;" Style="{StaticResource Icon}" FontSize="13" Foreground="{DynamicResource Danger}"/></Button>
                           </StackPanel>
                         </Grid>
                       </Border>
@@ -366,11 +366,11 @@
                     <TextBlock Text="{l:T Ed_ExtraFilesHint}" Style="{StaticResource MutedText}"/>
                   </StackPanel>
                 </DockPanel>
-                <ListBox x:Name="ExtraFilesList" Margin="0,12,0,0" MaxHeight="160" BorderBrush="{StaticResource Line}" BorderThickness="1" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                <ListBox x:Name="ExtraFilesList" Margin="0,12,0,0" MaxHeight="160" BorderBrush="{DynamicResource Line}" BorderThickness="1" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                   <ListBox.ItemTemplate>
                     <DataTemplate>
                       <DockPanel ToolTip="{Binding}">
-                        <TextBlock DockPanel.Dock="Left" Text="&#xE8A5;" Style="{StaticResource Icon}" FontSize="13" Foreground="{StaticResource Brand}" Margin="0,0,10,0"/>
+                        <TextBlock DockPanel.Dock="Left" Text="&#xE8A5;" Style="{StaticResource Icon}" FontSize="13" Foreground="{DynamicResource Brand}" Margin="0,0,10,0"/>
                         <TextBlock DockPanel.Dock="Left" Text="{Binding Converter={StaticResource PathName}}" FontWeight="SemiBold" Margin="0,0,12,0" VerticalAlignment="Center"/>
                         <TextBlock Text="{Binding}" Style="{StaticResource MutedText}" FontSize="11.5" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" VerticalAlignment="Center"/>
                       </DockPanel>
@@ -391,6 +391,8 @@
                 <CheckBox x:Name="ChkRemovePrev" Style="{StaticResource Switch}" Content="{l:T Ed_RemovePrev}" FontWeight="SemiBold" Margin="0,16,0,0"
                           Checked="RemovePrev_Changed" Unchecked="RemovePrev_Changed"/>
                 <TextBlock Text="{l:T Ed_RemovePrevHint}" Style="{StaticResource Hint}" Margin="52,6,0,0"/>
+                <CheckBox x:Name="ChkKeepNewer" Style="{StaticResource Switch}" Content="{l:T Ed_KeepNewer}" Margin="0,14,0,0"/>
+                <TextBlock Text="{l:T Ed_KeepNewerHint}" Style="{StaticResource Hint}" Margin="52,6,0,0"/>
                 <TextBlock Text="{l:T Ed_ProgramName}" Style="{StaticResource Label}"/>
                 <Grid>
                   <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -399,8 +401,8 @@
                 </Grid>
                 <TextBlock Style="{StaticResource Hint}" Text="{l:T Ed_PatternHint}"/>
                 <!-- Other applications of the database the pattern also matches (they would be removed and would satisfy detection) -->
-                <Border x:Name="PatternOthers" Background="{StaticResource WarningSoft}" CornerRadius="8" Padding="12,8" Margin="0,8,0,0" Visibility="Collapsed">
-                  <TextBlock x:Name="PatternOthersText" TextWrapping="Wrap" Foreground="{StaticResource Warning}" FontSize="12.5"/>
+                <Border x:Name="PatternOthers" Background="{DynamicResource WarningSoft}" CornerRadius="8" Padding="12,8" Margin="0,8,0,0" Visibility="Collapsed">
+                  <TextBlock x:Name="PatternOthersText" TextWrapping="Wrap" Foreground="{DynamicResource Warning}" FontSize="12.5"/>
                 </Border>
                 <ListView x:Name="InstalledList" Margin="0,12,0,0" MaxHeight="200" Visibility="Collapsed">
                   <ListView.View>
@@ -475,7 +477,7 @@
                 <TextBlock Text="{l:T Settings_Logo}" Style="{StaticResource Label}"/>
                 <Grid>
                   <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                  <Border Width="40" Height="40" CornerRadius="8" BorderBrush="{StaticResource Line}" BorderThickness="1" Margin="0,0,10,0" Background="{StaticResource Subtle}">
+                  <Border Width="40" Height="40" CornerRadius="8" BorderBrush="{DynamicResource Line}" BorderThickness="1" Margin="0,0,10,0" Background="{DynamicResource Subtle}">
                     <Image x:Name="LogoThumb" Margin="4" RenderOptions.BitmapScalingMode="HighQuality"/>
                   </Border>
                   <TextBox x:Name="TxtLogo" Grid.Column="1" TextChanged="Logo_Changed"/>
@@ -486,7 +488,7 @@
                 <TextBlock Text="{l:T Ed_Accent}" Style="{StaticResource Label}"/>
                 <StackPanel Orientation="Horizontal">
                   <TextBox x:Name="TxtAccent" Width="110" Style="{StaticResource Mono}" TextChanged="Preview_Changed"/>
-                  <Border x:Name="AccentSwatch" Width="34" Height="34" CornerRadius="8" Margin="10,0,16,0" BorderBrush="{StaticResource Line2}" BorderThickness="1"/>
+                  <Border x:Name="AccentSwatch" Width="34" Height="34" CornerRadius="8" Margin="10,0,16,0" BorderBrush="{DynamicResource Line2}" BorderThickness="1"/>
                   <WrapPanel x:Name="Swatches" VerticalAlignment="Center"/>
                 </StackPanel>
                 <Grid Margin="0,4,0,0">
@@ -520,11 +522,11 @@
 
           <!-- 8. Generate -->
           <StackPanel x:Name="Step7" Visibility="Collapsed">
-            <Border x:Name="ResultCard" Style="{StaticResource Section}" Visibility="Collapsed" BorderBrush="#9AD7B0">
+            <Border x:Name="ResultCard" Style="{StaticResource Section}" Visibility="Collapsed" BorderBrush="{DynamicResource SuccessLine}">
               <StackPanel>
                 <StackPanel Orientation="Horizontal">
-                  <Border Width="34" Height="34" CornerRadius="17" Background="{StaticResource SuccessSoft}" Margin="0,0,12,0">
-                    <TextBlock Text="&#xE73E;" Style="{StaticResource Icon}" Foreground="{StaticResource Success}" HorizontalAlignment="Center"/>
+                  <Border Width="34" Height="34" CornerRadius="17" Background="{DynamicResource SuccessSoft}" Margin="0,0,12,0">
+                    <TextBlock Text="&#xE73E;" Style="{StaticResource Icon}" Foreground="{DynamicResource Success}" HorizontalAlignment="Center"/>
                   </Border>
                   <StackPanel VerticalAlignment="Center">
                     <TextBlock Text="{l:T Ed_ResultTitle}" Style="{StaticResource H2}"/>
@@ -563,19 +565,19 @@
                   </Button>
                 </WrapPanel>
                 <!-- Result of the Windows Sandbox test, read from Sandbox\Results\result.json -->
-                <Border x:Name="SandboxStatus" CornerRadius="10" Padding="14,10" Margin="0,6,0,0" Background="{StaticResource BrandSoft}" Visibility="Collapsed">
+                <Border x:Name="SandboxStatus" CornerRadius="10" Padding="14,10" Margin="0,6,0,0" Background="{DynamicResource BrandSoft}" Visibility="Collapsed">
                   <DockPanel>
                     <Button x:Name="BtnSandboxLogs" DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Content="{l:T Ed_SandboxLogs}" Margin="10,0,0,0" VerticalAlignment="Center" Click="SandboxLogs_Click" Visibility="Collapsed"/>
-                    <TextBlock x:Name="SandboxStatusIcon" DockPanel.Dock="Left" Text="&#xE7F8;" Style="{StaticResource Icon}" Margin="0,0,10,0" Foreground="{StaticResource Brand}"/>
-                    <TextBlock x:Name="SandboxStatusText" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="{StaticResource Ink2}"/>
+                    <TextBlock x:Name="SandboxStatusIcon" DockPanel.Dock="Left" Text="&#xE7F8;" Style="{StaticResource Icon}" Margin="0,0,10,0" Foreground="{DynamicResource Brand}"/>
+                    <TextBlock x:Name="SandboxStatusText" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="{DynamicResource Ink2}"/>
                   </DockPanel>
                 </Border>
                 <!-- Outcome of the publication, read from Intune\publish-result.json -->
-                <Border x:Name="PublishStatus" CornerRadius="10" Padding="14,10" Margin="0,6,0,0" Background="{StaticResource BrandSoft}" Visibility="Collapsed">
+                <Border x:Name="PublishStatus" CornerRadius="10" Padding="14,10" Margin="0,6,0,0" Background="{DynamicResource BrandSoft}" Visibility="Collapsed">
                   <DockPanel>
                     <Button x:Name="BtnPublishOpen" DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Content="{l:T Ed_PublishOpen}" Margin="10,0,0,0" VerticalAlignment="Center" Click="PublishOpen_Click" Visibility="Collapsed"/>
-                    <TextBlock x:Name="PublishStatusIcon" DockPanel.Dock="Left" Text="&#xE898;" Style="{StaticResource Icon}" Margin="0,0,10,0" Foreground="{StaticResource Brand}"/>
-                    <TextBlock x:Name="PublishStatusText" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="{StaticResource Ink2}"/>
+                    <TextBlock x:Name="PublishStatusIcon" DockPanel.Dock="Left" Text="&#xE898;" Style="{StaticResource Icon}" Margin="0,0,10,0" Foreground="{DynamicResource Brand}"/>
+                    <TextBlock x:Name="PublishStatusText" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="{DynamicResource Ink2}"/>
                   </DockPanel>
                 </Border>
               </StackPanel>
@@ -599,9 +601,21 @@
                 <ItemsControl x:Name="ValidationList" Margin="0,12,0,0">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                      <Border Background="{Binding Item1}" CornerRadius="8" Padding="12,8" Margin="0,0,0,6">
-                        <TextBlock Text="{Binding Item2}" Foreground="{Binding Item3}" TextWrapping="Wrap"/>
+                      <Border x:Name="bd" Background="{DynamicResource SuccessSoft}" BorderBrush="{DynamicResource SuccessLine}" BorderThickness="1" CornerRadius="10" Padding="12,8" Margin="0,0,0,6">
+                        <TextBlock x:Name="tx" Text="{Binding Item2}" Foreground="{DynamicResource SuccessText}" TextWrapping="Wrap"/>
                       </Border>
+                      <DataTemplate.Triggers>
+                        <DataTrigger Binding="{Binding Item1}" Value="error">
+                          <Setter TargetName="bd" Property="Background" Value="{DynamicResource DangerSoft}"/>
+                          <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource DangerLine}"/>
+                          <Setter TargetName="tx" Property="Foreground" Value="{DynamicResource DangerText}"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Item1}" Value="warn">
+                          <Setter TargetName="bd" Property="Background" Value="{DynamicResource WarningSoft}"/>
+                          <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource WarningLine}"/>
+                          <Setter TargetName="tx" Property="Foreground" Value="{DynamicResource WarningText}"/>
+                        </DataTrigger>
+                      </DataTemplate.Triggers>
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
@@ -630,8 +644,8 @@
                       <Grid Margin="0,2">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="22"/><ColumnDefinition Width="64"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                         <TextBlock Text="{Binding Glyph}" Style="{StaticResource Icon}" FontSize="12" Foreground="{Binding Color}" VerticalAlignment="Top" Margin="0,2,0,0"/>
-                        <TextBlock Grid.Column="1" Text="{Binding TimeLabel}" FontFamily="{StaticResource MonoFont}" FontSize="12" Foreground="{StaticResource Muted}"/>
-                        <TextBlock Grid.Column="2" Text="{Binding Text}" TextWrapping="Wrap" FontSize="12.5" Foreground="{StaticResource Ink2}"/>
+                        <TextBlock Grid.Column="1" Text="{Binding TimeLabel}" FontFamily="{StaticResource MonoFont}" FontSize="12" Foreground="{DynamicResource Muted}"/>
+                        <TextBlock Grid.Column="2" Text="{Binding Text}" TextWrapping="Wrap" FontSize="12.5" Foreground="{DynamicResource Ink2}"/>
                       </Grid>
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
@@ -650,10 +664,10 @@
             <TextBlock Text="{l:T Ed_PreviewHint}" Style="{StaticResource Hint}" Margin="0,2,0,12"/>
             <v:DialogPreview x:Name="PrevDialog"/>
             <TextBlock x:Name="PrevDoneLabel" Text="{l:T Ed_PreviewDone}" Style="{StaticResource Overline}" Margin="0,20,0,8"/>
-            <Border x:Name="PrevDoneBox" Background="White" CornerRadius="10" BorderBrush="{StaticResource Line2}" BorderThickness="1" Padding="16,12">
+            <Border x:Name="PrevDoneBox" Background="White" CornerRadius="10" BorderBrush="#D6DAE1" BorderThickness="1" Padding="16,12">
               <StackPanel>
-                <TextBlock x:Name="PrevDone" Style="{StaticResource Body}"/>
-                <Border x:Name="PrevOkBtn" CornerRadius="5" Padding="16,5" HorizontalAlignment="Right" Margin="0,12,0,0" Background="{StaticResource Brand}"><TextBlock Text="OK" Foreground="White"/></Border>
+                <TextBlock x:Name="PrevDone" Style="{StaticResource Body}" Foreground="#3B3B3B"/>
+                <Border x:Name="PrevOkBtn" CornerRadius="5" Padding="16,5" HorizontalAlignment="Right" Margin="0,12,0,0" Background="{DynamicResource Brand}"><TextBlock Text="OK" Foreground="White"/></Border>
               </StackPanel>
             </Border>
             <TextBlock x:Name="PrevNote" Style="{StaticResource Hint}" Margin="0,14,0,0"/>
@@ -663,7 +677,7 @@
     </Grid>
 
     <!-- Footer -->
-    <Border Grid.Row="3" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="0,12,0,14">
+    <Border Grid.Row="3" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="0,12,0,14">
       <DockPanel>
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
           <Button x:Name="BtnBack" Style="{StaticResource SecondaryButton}" Click="Back_Click">

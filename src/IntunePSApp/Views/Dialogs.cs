@@ -98,7 +98,9 @@ namespace J365.IntunePSApp.Views
         public DialogWindow()
         {
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
-            Background = Ui.Brush("PageBg");
+            // Title bar drawn in the application theme (light or dark), with the close button of the theme.
+            Style = Ui.Style("DialogWindowStyle");
+            CommandBindings.Add(new System.Windows.Input.CommandBinding(SystemCommands.CloseWindowCommand, (s, e) => SystemCommands.CloseWindow(this)));
             FontFamily = Ui.Font("UiFont");
             FontSize = 13.5;
             UseLayoutRounding = true;
@@ -115,6 +117,7 @@ namespace J365.IntunePSApp.Views
         protected override void OnSourceInitialized(EventArgs e)
         {
             base.OnSourceInitialized(e);
+            ThemeManager.ApplyWindowFrame(this);
             if (MinWidth > MaxWidth) MinWidth = MaxWidth;
             if (MinHeight > MaxHeight) MinHeight = MaxHeight;
         }
@@ -144,10 +147,10 @@ namespace J365.IntunePSApp.Views
 
             var (glyph, color, soft) = kind switch
             {
-                MessageKind.Warning => ("", "#B45309", "#FEF4E2"),
-                MessageKind.Error => ("", "#DC2626", "#FDECEC"),
-                MessageKind.Question => ("", "#0A5CA8", "#E8F1FB"),
-                _ => ("", "#0A5CA8", "#E8F1FB")
+                MessageKind.Warning => ("", "Warning", "WarningSoft"),
+                MessageKind.Error => ("", "Danger", "DangerSoft"),
+                MessageKind.Question => ("", "BrandText", "BrandSoft"),
+                _ => ("", "BrandText", "BrandSoft")
             };
 
             var root = new DockPanel { Margin = new Thickness(24, 22, 24, 20) };
@@ -159,8 +162,8 @@ namespace J365.IntunePSApp.Views
             bar.Children.Add(ok);
             root.Children.Add(bar);
 
-            var icon = new Border { Width = 44, Height = 44, CornerRadius = new CornerRadius(22), Background = Ui.Hex(soft), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 0, 16, 0) };
-            icon.Child = new TextBlock { Text = glyph, FontFamily = Ui.Font("IconFont"), FontSize = 20, Foreground = Ui.Hex(color), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            var icon = new Border { Width = 46, Height = 46, CornerRadius = new CornerRadius(14), Background = Ui.Brush(soft), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 0, 16, 0) };
+            icon.Child = new TextBlock { Text = glyph, FontFamily = Ui.Font("IconFont"), FontSize = 20, Foreground = Ui.Brush(color), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             DockPanel.SetDock(icon, Dock.Left);
             root.Children.Add(icon);
 
@@ -623,10 +626,11 @@ namespace J365.IntunePSApp.Views
         {
             if (_busy) return;
             _cts = new CancellationTokenSource();
-            SetBusy(true, setup ? T("Connect_StepAdminSignIn") : T("Publish_SigningIn"));
+            SetBusy(true, setup ? null : T("Publish_SigningIn"));
             try
             {
-                if (setup) await IntuneConnectUi.SetupAsync(s => Dispatcher.Invoke(() => SetBusy(true, string.IsNullOrEmpty(s) ? null : s)), _cts.Token);
+                // The connection window shows its own steps, over this dialog.
+                if (setup) ConnectWindow.Run(this);
                 else await IntuneConnectUi.SignInAsync(null, _cts.Token);
             }
             finally

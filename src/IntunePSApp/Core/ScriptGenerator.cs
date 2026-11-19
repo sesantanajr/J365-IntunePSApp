@@ -250,6 +250,7 @@ namespace J365.IntunePSApp.Core
             var L = new List<string>();
             bool userContext = s.InstallBehavior == "User";
             Mark(L, "Pre-Install", "\"Pre-$($adtSession.DeploymentType)\"");
+            L.AddRange(KeepNewerLines(s));
             bool hasProc = s.ProcessesToClose.Count > 0;
             bool hasMsg = !string.IsNullOrWhiteSpace(s.WelcomeMessage);
             if (hasProc || s.AllowDefer || hasMsg)
@@ -313,6 +314,46 @@ namespace J365.IntunePSApp.Core
             return L;
         }
 
+        /// <summary>
+        /// A newer version than the package is already installed (the application updated itself, or another tool put
+        /// it there): the package keeps it, because installing would downgrade it, and only records its mark so the
+        /// detection reports it as installed. Browsers and similar applications refuse a profile written by a newer
+        /// version, so a downgrade is never done silently.
+        /// </summary>
+        private static List<string> KeepNewerLines(PackageSettings s)
+        {
+            var L = new List<string>();
+            string version = MarkVersion(s);
+            string pattern = (string.IsNullOrWhiteSpace(s.UninstallPattern) ? s.DetectionNamePattern : s.UninstallPattern)?.Trim() ?? "";
+            if (!s.KeepNewerVersion || !Regex.IsMatch(version, @"\d") || pattern.Trim('*', '?', ' ').Length < 3) return L;
+            string pat = Lit(pattern);
+            L.Add("    ## A newer version than this package is already installed (the application updated itself, or it was installed");
+            L.Add("    ## some other way): it is kept, because installing this package would downgrade it.");
+            L.Add("    function Test-J365NewerVersion([string]$Installed, [string]$Package)");
+            L.Add("    {");
+            L.Add("        $a = @([regex]::Matches([string]$Installed, '\\d+') | Select-Object -First 4 | ForEach-Object { [decimal]$_.Value })");
+            L.Add("        $b = @([regex]::Matches([string]$Package, '\\d+') | Select-Object -First 4 | ForEach-Object { [decimal]$_.Value })");
+            L.Add("        if ($a.Count -eq 0 -or $b.Count -eq 0) { return $false }");
+            L.Add("        for ($i = 0; $i -lt 4; $i++)");
+            L.Add("        {");
+            L.Add("            $x = 0; if ($i -lt $a.Count) { $x = $a[$i] }");
+            L.Add("            $y = 0; if ($i -lt $b.Count) { $y = $b[$i] }");
+            L.Add("            if ($x -gt $y) { return $true }");
+            L.Add("            if ($x -lt $y) { return $false }");
+            L.Add("        }");
+            L.Add("        return $false");
+            L.Add("    }");
+            L.Add($"    $newerApps = @(Get-ADTApplication -Name {pat} -NameMatch 'Wildcard' | Where-Object {{ Test-J365NewerVersion -Installed $_.DisplayVersion -Package {Lit(version)} }})");
+            L.Add("    if ($newerApps.Count -gt 0)");
+            L.Add("    {");
+            L.Add("        Write-ADTLogEntry -Message ('A newer version is already installed and is kept (this package would downgrade it): ' + (($newerApps | ForEach-Object { \"$($_.DisplayName) $($_.DisplayVersion)\".Trim() }) -join '; '))");
+            if (s.DetectionRequireMark) L.AddRange(WriteMarkLines(s).Select(x => x.Length > 0 ? "    " + x : x));
+            L.Add("        return");
+            L.Add("    }");
+            L.Add("");
+            return L;
+        }
+
         private static List<string> UninstallBody(PackageSettings s)
         {
             var L = new List<string>();
@@ -331,6 +372,7 @@ namespace J365.IntunePSApp.Core
             Mark(L, "Uninstall", "$adtSession.DeploymentType");
             L.AddRange(RemoveLines(s, false));
             L.Add("");
+            L.AddRange(VerifyRemovedLines(s));
             if (s.DetectionRequireMark) L.AddRange(RemoveMarkLines(s));
             L.Add("");
             Mark(L, "Post-Uninstallation", "\"Post-$($adtSession.DeploymentType)\"");
@@ -379,6 +421,32 @@ namespace J365.IntunePSApp.Core
             return cmd;
         }
 
+        /// <summary>
+        /// After the uninstallation: anything still registered with the name makes the deployment fail, instead of
+        /// reporting "uninstalled" to Intune while the program stays (an .exe that registers no silent uninstaller is
+        /// skipped by the toolkit). The package mark stays, so the detection keeps telling the truth.
+        /// </summary>
+        private static List<string> VerifyRemovedLines(PackageSettings s)
+        {
+            string pat = Lit(s.UninstallPattern);
+            string find = $"@(Get-ADTApplication -Name {pat} -NameMatch 'Wildcard')";
+            return new List<string>
+            {
+                "    ## Checks that nothing is left (a few seconds are allowed for uninstallers that finish in the background).",
+                $"    $remainingApps = {find}",
+                "    for ($wait = 0; $wait -lt 3 -and $remainingApps.Count -gt 0; $wait++)",
+                "    {",
+                "        Start-Sleep -Seconds 5",
+                $"        $remainingApps = {find}",
+                "    }",
+                "    if ($remainingApps.Count -gt 0)",
+                "    {",
+                "        throw ('Still installed after the uninstallation (no silent uninstaller was found, or it failed): ' + (($remainingApps | ForEach-Object { \"$($_.DisplayName) $($_.DisplayVersion)\".Trim() }) -join '; '))",
+                "    }",
+                ""
+            };
+        }
+
         private static List<string> RemoveLines(PackageSettings s, bool continueOnError)
         {
             string pat = Lit(s.UninstallPattern);
@@ -408,6 +476,9 @@ namespace J365.IntunePSApp.Core
                 L.Add("    else");
                 L.Add("    {");
                 L.Add("        Write-ADTLogEntry -Message ('Versions already installed, removed before installing: ' + " + describe.Replace("$_ |", "$existingApps |") + ")");
+                // The toolkit records the exit code of a failed process before it throws: restored, so a failed
+                // removal that is only logged does not make the whole installation report that code.
+                L.Add("        $j365ExitCode = $adtSession.GetExitCode()");
                 foreach (var c in new[] { msi, exe })
                 {
                     L.Add("        try");
@@ -417,6 +488,7 @@ namespace J365.IntunePSApp.Core
                     L.Add("        catch");
                     L.Add("        {");
                     L.Add("            Write-ADTLogEntry -Message \"Could not remove the previous version: $($_.Exception.Message)\" -Severity 2");
+                    L.Add("            $adtSession.SetExitCode($j365ExitCode)");
                     L.Add("        }");
                 }
                 L.Add($"        $remainingApps = {find}");
@@ -444,11 +516,19 @@ namespace J365.IntunePSApp.Core
             return rx.Replace(text, m => m.Groups[1].Value + value, 1);
         }
 
+        /// <summary>
+        /// A value that PowerShell expands as a double-quoted string reaches it as plain text: "$" and "`" are escaped,
+        /// and so are the typographic double quotes, which PowerShell also takes as quotes (unescaped, they cut the text
+        /// short). Straight double quotes stay as they are: ExpandString keeps them, and escaped they cut the text.
+        /// </summary>
+        public static string EscapeExpandable(string text)
+            => Regex.Replace(text ?? "", "[`$\u201C\u201D\u201E]", "`$0");
+
         public static void UpdateConfig(string configPath, PackageSettings s)
         {
             var (t, bom) = TextFiles.Read(configPath);
             // PSAppDeployToolkit expands variables in every value of the config: "$" and "`" must reach it as plain text.
-            if (!string.IsNullOrWhiteSpace(s.CompanyName)) t = SetPsd1Value(t, "Toolkit", "CompanyName", Lit(s.CompanyName.Replace("`", "``").Replace("$", "`$")));
+            if (!string.IsNullOrWhiteSpace(s.CompanyName)) t = SetPsd1Value(t, "Toolkit", "CompanyName", Lit(EscapeExpandable(s.CompanyName)));
             if (s.LogsInIntuneFolder) t = SetPsd1Value(t, "Toolkit", "LogPath", "'$envProgramData\\Microsoft\\IntuneManagementExtension\\Logs'");
             t = SetPsd1Value(t, "UI", "DialogStyle", s.DialogStyle == "Classic" ? "'Classic'" : "'Fluent'");
             var hex = (s.AccentColor ?? "").Trim().TrimStart('#');
@@ -541,13 +621,13 @@ function Test-VersionOk([string]$Installed)
 
 function Test-PackageMark
 {
-    # The package writes this key when the installation finishes (Version = the version it installed).
+    # The package writes this key when the installation finishes. A mark of any version counts: the version is checked
+    # on the installed application, which may have updated itself since an older package wrote the mark.
     $base = " + MarkHive(s) + @"
     $k = $base.OpenSubKey($MarkPath)
     if (-not $k) { return $false }
-    $v = [string]$k.GetValue('Version')
     $k.Close()
-    return (Test-VersionOk $v)
+    return $true
 }
 ");
             if (s.DetectionMethod == "File")

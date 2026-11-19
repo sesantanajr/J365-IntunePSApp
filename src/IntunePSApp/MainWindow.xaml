@@ -3,12 +3,32 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:l="clr-namespace:J365.IntunePSApp.Localization"
         Title="J365 IntunePSApp" Width="1360" Height="880" MinWidth="900" MinHeight="580"
-        WindowStartupLocation="CenterScreen" Background="{StaticResource PageBg}"
+        WindowStartupLocation="CenterScreen" Background="{DynamicResource PageBg}"
         FontFamily="{StaticResource UiFont}" FontSize="13.5" UseLayoutRounding="True"
         TextOptions.TextFormattingMode="Display" Icon="Assets/app.ico">
   <WindowChrome.WindowChrome>
-    <WindowChrome CaptionHeight="46" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0" UseAeroCaptionButtons="False"/>
+    <WindowChrome CaptionHeight="52" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0" UseAeroCaptionButtons="False"/>
   </WindowChrome.WindowChrome>
+
+  <Window.Resources>
+    <!-- Text field without the Fluent frame (the global search draws its own box) -->
+    <Style x:Key="BareTextBox" TargetType="TextBox">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
+      <Setter Property="CaretBrush" Value="{DynamicResource Ink}"/>
+      <Setter Property="SelectionBrush" Value="{DynamicResource Brand}"/>
+      <Setter Property="FontSize" Value="13"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="TextBox">
+            <ScrollViewer x:Name="PART_ContentHost" Focusable="False" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden" VerticalAlignment="Center"/>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+  </Window.Resources>
 
   <Grid x:Name="Root">
     <Grid.ColumnDefinitions>
@@ -18,98 +38,148 @@
     </Grid.ColumnDefinitions>
 
     <!-- ===================== Sidebar ===================== -->
-    <Border Grid.Column="0" Background="{StaticResource SidebarBrush}">
-      <DockPanel x:Name="SidebarPanel" Margin="16,14,16,14">
-        <StackPanel x:Name="BrandPanel" DockPanel.Dock="Top" Orientation="Horizontal" Margin="4,0,0,22">
-          <Border x:Name="BrandIcon" Width="46" Height="46" CornerRadius="12" Background="#14FFFFFF" Margin="0,0,12,0">
-            <Image Source="Assets/j365-cloud.png" Width="36" RenderOptions.BitmapScalingMode="HighQuality"/>
-          </Border>
-          <StackPanel x:Name="BrandText" VerticalAlignment="Center">
-            <TextBlock Text="IntunePSApp" Foreground="White" FontFamily="{StaticResource DisplayFont}" FontSize="19" FontWeight="SemiBold"/>
-            <TextBlock Text="{l:T Brand_By}" Foreground="#8FA6C6" FontSize="12"/>
-          </StackPanel>
-        </StackPanel>
-
-        <StackPanel x:Name="SidebarFooter" DockPanel.Dock="Bottom">
-          <!-- Application database -->
-          <Border x:Name="DatabaseCard" CornerRadius="12" Background="#10FFFFFF" BorderBrush="#1FFFFFFF" BorderThickness="1" Padding="14,11" Margin="0,0,0,10">
-            <StackPanel>
-              <StackPanel Orientation="Horizontal">
-                <TextBlock Text="&#xE8F1;" Style="{StaticResource Icon}" Foreground="#7FD3F7" FontSize="15" Margin="0,0,8,0"/>
-                <TextBlock Text="{l:T Main_Database}" Foreground="White" FontWeight="SemiBold"/>
-              </StackPanel>
-              <TextBlock x:Name="CatalogCount" Text="—" Foreground="White" FontFamily="{StaticResource DisplayFont}" FontSize="21" FontWeight="SemiBold" Margin="0,5,0,0"/>
-              <TextBlock x:Name="CatalogDate" Foreground="#8FA6C6" FontSize="12" TextWrapping="Wrap"/>
-              <Button x:Name="BtnCatalogUpdate" Content="{l:T Main_CheckUpdates}" Style="{StaticResource HeroOutlineButton}" FontSize="12.5" Padding="10,6" Margin="0,9,0,0"
-                      Click="CatalogUpdate_Click" WindowChrome.IsHitTestVisibleInChrome="True"/>
+    <Border Grid.Column="0" Background="{DynamicResource SidebarBrush}">
+      <Grid ClipToBounds="True">
+        <Ellipse Width="460" Height="460" Margin="-230,-250,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Fill="{DynamicResource SidebarGlow}" IsHitTestVisible="False"/>
+        <DockPanel x:Name="SidebarPanel" Margin="16,16,16,14">
+          <StackPanel x:Name="BrandPanel" DockPanel.Dock="Top" Orientation="Horizontal" Margin="4,0,0,26">
+            <Border x:Name="BrandIcon" Width="44" Height="44" CornerRadius="13" Background="#14FFFFFF" BorderBrush="#1FFFFFFF" BorderThickness="1" Margin="0,0,12,0">
+              <Image Source="Assets/j365-cloud.png" Width="32" RenderOptions.BitmapScalingMode="HighQuality"/>
+            </Border>
+            <StackPanel x:Name="BrandText" VerticalAlignment="Center">
+              <TextBlock Text="IntunePSApp" Foreground="{DynamicResource SidebarTextStrong}" FontFamily="{StaticResource DisplayFont}" FontSize="18.5" FontWeight="SemiBold"/>
+              <TextBlock Text="{l:T Brand_By}" Foreground="{DynamicResource SidebarMuted}" FontSize="12"/>
             </StackPanel>
-          </Border>
+          </StackPanel>
 
-          <!-- Credits -->
-          <Border CornerRadius="12" Background="#0AFFFFFF" Padding="12,9,12,8" Margin="0,0,0,8">
-            <StackPanel>
-              <TextBlock Text="{l:T Credits_CreatedBy}" Foreground="#8FA6C6" FontSize="11.5" Margin="2,0,0,0"/>
-              <Button Style="{StaticResource SidebarLink}" Foreground="White" Padding="2,2" HorizontalAlignment="Left" Click="Author_Click" ToolTip="{l:T Credits_LinkedInTip}">
+          <StackPanel x:Name="SidebarFooter" DockPanel.Dock="Bottom">
+            <!-- Microsoft Intune connection -->
+            <Button x:Name="BtnSidebarIntune" Style="{StaticResource SidebarCardButton}" Click="SidebarIntune_Click" Margin="0,0,0,8" ToolTip="{l:T Main_IntuneTip}">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto"/>
+                  <ColumnDefinition Width="*"/>
+                  <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Border Width="32" Height="32" CornerRadius="10" Background="#1A38D2F5">
+                  <TextBlock Text="&#xE753;" Style="{StaticResource Icon}" FontSize="15" Foreground="{DynamicResource SidebarIcon}" HorizontalAlignment="Center"/>
+                </Border>
+                <StackPanel Grid.Column="1" Margin="10,0,6,0" VerticalAlignment="Center">
+                  <TextBlock Text="Microsoft Intune" FontWeight="SemiBold" FontSize="12.5" Foreground="{DynamicResource SidebarTextStrong}"/>
+                  <TextBlock x:Name="SidebarIntuneText" FontSize="11.5" Foreground="{DynamicResource SidebarText}" TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+                <Ellipse x:Name="SidebarIntuneDot" Grid.Column="2" Width="8" Height="8" Fill="{DynamicResource SidebarMuted}" VerticalAlignment="Center"/>
+              </Grid>
+            </Button>
+
+            <!-- Application database -->
+            <Border x:Name="DatabaseCard" CornerRadius="12" Background="{DynamicResource SidebarCard}" BorderBrush="{DynamicResource SidebarCardBorder}" BorderThickness="1" Padding="12,10" Margin="0,0,0,14">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto"/>
+                  <ColumnDefinition Width="*"/>
+                  <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Border Width="32" Height="32" CornerRadius="10" Background="#1A38D2F5" VerticalAlignment="Top">
+                  <TextBlock Text="&#xE8F1;" Style="{StaticResource Icon}" FontSize="15" Foreground="{DynamicResource SidebarIcon}" HorizontalAlignment="Center"/>
+                </Border>
+                <StackPanel Grid.Column="1" Margin="10,0,6,0" VerticalAlignment="Center">
+                  <TextBlock x:Name="CatalogCount" Text="—" Foreground="{DynamicResource SidebarTextStrong}" FontWeight="SemiBold" FontSize="13"/>
+                  <TextBlock x:Name="CatalogDate" Foreground="{DynamicResource SidebarText}" FontSize="11.5" TextWrapping="Wrap"/>
+                </StackPanel>
+                <Button x:Name="BtnCatalogUpdate" Grid.Column="2" Style="{StaticResource SidebarIconButton}" Content="&#xE72C;" VerticalAlignment="Center"
+                        Click="CatalogUpdate_Click" ToolTip="{l:T Main_CheckUpdates}"/>
+              </Grid>
+            </Border>
+
+            <!-- Credits -->
+            <StackPanel Margin="4,0,0,12">
+              <TextBlock Text="{l:T Credits_CreatedBy}" Foreground="{DynamicResource SidebarMuted}" FontSize="11"/>
+              <Button Style="{StaticResource SidebarLink}" Foreground="{DynamicResource SidebarTextStrong}" Padding="0,2" HorizontalAlignment="Left" Click="Author_Click" ToolTip="{l:T Credits_LinkedInTip}">
                 <StackPanel Orientation="Horizontal">
-                  <TextBlock x:Name="AuthorText" FontWeight="SemiBold" FontSize="13"/>
-                  <TextBlock Text="&#xE8A7;" Style="{StaticResource Icon}" FontSize="11" Margin="7,2,0,0" Foreground="#7FD3F7"/>
+                  <TextBlock x:Name="AuthorText" FontWeight="SemiBold" FontSize="12.5"/>
+                  <TextBlock Text="&#xE8A7;" Style="{StaticResource Icon}" FontSize="10" Margin="6,2,0,0" Foreground="{DynamicResource SidebarIcon}"/>
                 </StackPanel>
               </Button>
-              <Button Style="{StaticResource SidebarLink}" Padding="2,2" HorizontalAlignment="Left" Click="Psadt_Click" ToolTip="psappdeploytoolkit.com">
-                <TextBlock Text="{l:T Credits_BasedOn}" FontSize="11.5" TextWrapping="Wrap"/>
+              <Button Style="{StaticResource SidebarLink}" Padding="0,1" HorizontalAlignment="Left" Click="Psadt_Click" ToolTip="psappdeploytoolkit.com">
+                <TextBlock Text="{l:T Credits_BasedOn}" FontSize="11" TextWrapping="Wrap"/>
               </Button>
             </StackPanel>
-          </Border>
+            <Border Height="1" Background="{DynamicResource SidebarLine}" Margin="0,0,0,12"/>
 
-          <DockPanel LastChildFill="False">
-            <Border DockPanel.Dock="Right" CornerRadius="8" Background="#12FFFFFF" Padding="2" ToolTip="{l:T Main_LanguageTip}">
-              <StackPanel Orientation="Horizontal">
-                <RadioButton x:Name="LangEn" Style="{StaticResource LangToggle}" GroupName="langSide" Content="EN" Tag="en" Checked="Lang_Checked"/>
-                <RadioButton x:Name="LangPt" Style="{StaticResource LangToggle}" GroupName="langSide" Content="PT" Tag="pt-BR" Checked="Lang_Checked"/>
-              </StackPanel>
-            </Border>
-            <Button DockPanel.Dock="Left" Style="{StaticResource SidebarLink}" Click="Blog_Click" ToolTip="jornada365.cloud">
-              <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE774;" Style="{StaticResource Icon}" FontSize="12" Margin="0,1,5,0"/><TextBlock Text="Blog"/></StackPanel>
-            </Button>
-            <Button DockPanel.Dock="Left" Style="{StaticResource SidebarLink}" Click="Repo_Click" ToolTip="{l:T Main_RepoTip}">
-              <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE943;" Style="{StaticResource Icon}" FontSize="12" Margin="0,1,5,0"/><TextBlock Text="GitHub"/></StackPanel>
-            </Button>
-          </DockPanel>
-          <TextBlock x:Name="VersionText" Foreground="#6F86A8" FontSize="11.5" Margin="6,6,0,0"/>
-        </StackPanel>
+            <!-- Links, theme and language -->
+            <DockPanel LastChildFill="False">
+              <Border DockPanel.Dock="Right" CornerRadius="9" Background="{DynamicResource SidebarCard}" BorderBrush="{DynamicResource SidebarCardBorder}" BorderThickness="1" Padding="2" ToolTip="{l:T Main_LanguageTip}">
+                <StackPanel Orientation="Horizontal">
+                  <RadioButton x:Name="LangEn" Style="{StaticResource LangToggle}" GroupName="langSide" Content="EN" Tag="en" Checked="Lang_Checked"/>
+                  <RadioButton x:Name="LangPt" Style="{StaticResource LangToggle}" GroupName="langSide" Content="PT" Tag="pt-BR" Checked="Lang_Checked"/>
+                </StackPanel>
+              </Border>
+              <Button x:Name="BtnTheme" DockPanel.Dock="Right" Style="{StaticResource SidebarIconButton}" Margin="0,0,6,0" Click="Theme_Click"/>
+              <Button DockPanel.Dock="Left" Style="{StaticResource SidebarIconButton}" Content="&#xE774;" Margin="0,0,6,0" Click="Blog_Click" ToolTip="{l:T Main_BlogTip}"/>
+              <Button DockPanel.Dock="Left" Style="{StaticResource SidebarIconButton}" Content="&#xE943;" Click="Repo_Click" ToolTip="{l:T Main_RepoTip}"/>
+            </DockPanel>
+            <TextBlock x:Name="VersionText" Foreground="{DynamicResource SidebarMuted}" FontSize="11" Margin="4,10,0,0"/>
+          </StackPanel>
 
-        <StackPanel x:Name="NavPanel">
-          <TextBlock x:Name="MenuLabel" Text="{l:T Main_Menu}" Style="{StaticResource Overline}" Foreground="#6F86A8" Margin="6,0,0,10"/>
-          <RadioButton x:Name="NavHome" Style="{StaticResource NavItem}" GroupName="nav" Tag="home" Checked="Nav_Checked" WindowChrome.IsHitTestVisibleInChrome="True">
-            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE80F;" Style="{StaticResource Icon}" Margin="0,0,14,0"/><TextBlock Text="{l:T Nav_Home}"/></StackPanel>
-          </RadioButton>
-          <RadioButton x:Name="NavCatalog" Style="{StaticResource NavItem}" GroupName="nav" Tag="catalog" Checked="Nav_Checked">
-            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE719;" Style="{StaticResource Icon}" Margin="0,0,14,0"/><TextBlock Text="{l:T Nav_Catalog}"/></StackPanel>
-          </RadioButton>
-          <RadioButton x:Name="NavEditor" Style="{StaticResource NavItem}" GroupName="nav" Tag="editor" Checked="Nav_Checked">
-            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE7B8;" Style="{StaticResource Icon}" Margin="0,0,14,0"/><TextBlock Text="{l:T Nav_Editor}"/></StackPanel>
-          </RadioButton>
-          <RadioButton x:Name="NavPackages" Style="{StaticResource NavItem}" GroupName="nav" Tag="packages" Checked="Nav_Checked">
-            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8B7;" Style="{StaticResource Icon}" Margin="0,0,14,0"/><TextBlock Text="{l:T Nav_Packages}"/></StackPanel>
-          </RadioButton>
-          <RadioButton x:Name="NavSettings" Style="{StaticResource NavItem}" GroupName="nav" Tag="settings" Checked="Nav_Checked">
-            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE713;" Style="{StaticResource Icon}" Margin="0,0,14,0"/><TextBlock Text="{l:T Nav_Settings}"/></StackPanel>
-          </RadioButton>
-        </StackPanel>
-      </DockPanel>
+          <StackPanel x:Name="NavPanel">
+            <TextBlock x:Name="MenuLabel" Text="{l:T Main_Menu}" Style="{StaticResource Overline}" Foreground="{DynamicResource SidebarMuted}" Margin="8,0,0,10"/>
+            <RadioButton x:Name="NavHome" Style="{StaticResource NavItem}" GroupName="nav" Tag="home" Checked="Nav_Checked" WindowChrome.IsHitTestVisibleInChrome="True">
+              <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE80F;" Style="{StaticResource Icon}" Margin="0,0,14,0"/><TextBlock Text="{l:T Nav_Home}"/></StackPanel>
+            </RadioButton>
+            <RadioButton x:Name="NavCatalog" Style="{StaticResource NavItem}" GroupName="nav" Tag="catalog" Checked="Nav_Checked">
+              <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE719;" Style="{StaticResource Icon}" Margin="0,0,14,0"/><TextBlock Text="{l:T Nav_Catalog}"/></StackPanel>
+            </RadioButton>
+            <RadioButton x:Name="NavEditor" Style="{StaticResource NavItem}" GroupName="nav" Tag="editor" Checked="Nav_Checked">
+              <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE7B8;" Style="{StaticResource Icon}" Margin="0,0,14,0"/><TextBlock Text="{l:T Nav_Editor}"/></StackPanel>
+            </RadioButton>
+            <RadioButton x:Name="NavPackages" Style="{StaticResource NavItem}" GroupName="nav" Tag="packages" Checked="Nav_Checked">
+              <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8B7;" Style="{StaticResource Icon}" Margin="0,0,14,0"/><TextBlock Text="{l:T Nav_Packages}"/></StackPanel>
+            </RadioButton>
+            <RadioButton x:Name="NavSettings" Style="{StaticResource NavItem}" GroupName="nav" Tag="settings" Checked="Nav_Checked">
+              <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE713;" Style="{StaticResource Icon}" Margin="0,0,14,0"/><TextBlock Text="{l:T Nav_Settings}"/></StackPanel>
+            </RadioButton>
+          </StackPanel>
+        </DockPanel>
+      </Grid>
     </Border>
 
     <!-- ===================== Content ===================== -->
-    <Grid Grid.Column="1">
+    <Grid x:Name="ContentRoot" Grid.Column="1" Background="{DynamicResource PageBg}">
       <Grid.RowDefinitions>
-        <RowDefinition Height="46"/>
+        <RowDefinition Height="52"/>
         <RowDefinition Height="*"/>
         <RowDefinition Height="30"/>
       </Grid.RowDefinitions>
 
       <Grid Grid.Row="0">
-        <TextBlock x:Name="CaptionText" Text="J365 IntunePSApp" Foreground="{StaticResource Muted}" FontSize="12.5" VerticalAlignment="Center" Margin="28,0,0,0"/>
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*"/>
+          <ColumnDefinition Width="Auto"/>
+          <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+        <TextBlock x:Name="CaptionText" Text="J365 IntunePSApp" Foreground="{DynamicResource Muted}" FontSize="12.5" VerticalAlignment="Center" Margin="32,0,12,0" TextTrimming="CharacterEllipsis"/>
+
+        <!-- Global search: Enter opens the catalog with the text; Ctrl+K comes here from anywhere. -->
+        <Border x:Name="SearchBox" Grid.Column="1" Width="300" Height="34" CornerRadius="10" Background="{DynamicResource CardBg}" BorderBrush="{DynamicResource Line}" BorderThickness="1"
+                VerticalAlignment="Center" Margin="0,0,16,0" WindowChrome.IsHitTestVisibleInChrome="True" Cursor="IBeam">
+          <Grid Margin="11,0,8,0">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto"/>
+              <ColumnDefinition Width="*"/>
+              <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="&#xE721;" Style="{StaticResource Icon}" FontSize="13" Foreground="{DynamicResource Faint}"/>
+            <TextBlock x:Name="GlobalSearchHint" Grid.Column="1" Text="{l:T Main_SearchHint}" Foreground="{DynamicResource Faint}" FontSize="13" Margin="10,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" TextTrimming="CharacterEllipsis"/>
+            <TextBox x:Name="GlobalSearch" Grid.Column="1" Style="{StaticResource BareTextBox}" Margin="8,0,0,0" TextChanged="GlobalSearch_TextChanged" KeyDown="GlobalSearch_KeyDown"
+                     GotKeyboardFocus="GlobalSearch_Focus" LostKeyboardFocus="GlobalSearch_Focus"/>
+            <Border Grid.Column="2" CornerRadius="6" Background="{DynamicResource Subtle2}" Padding="6,1" VerticalAlignment="Center" IsHitTestVisible="False">
+              <TextBlock Text="Ctrl K" FontSize="10.5" Foreground="{DynamicResource Muted}" FontWeight="SemiBold"/>
+            </Border>
+          </Grid>
+        </Border>
+
+        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Top">
           <Button x:Name="BtnMin" Style="{StaticResource CaptionButton}" Content="&#xE921;" Click="Min_Click" ToolTip="{l:T Main_Minimize}"/>
           <Button x:Name="BtnMax" Style="{StaticResource CaptionButton}" Content="&#xE922;" Click="Max_Click" ToolTip="{l:T Main_Maximize}"/>
           <Button x:Name="BtnClose" Style="{StaticResource CloseCaptionButton}" Content="&#xE8BB;" Click="Close_Click" ToolTip="{l:T Common_Close}"/>
@@ -118,56 +188,61 @@
 
       <ContentControl x:Name="PageHost" Grid.Row="1" Focusable="False"/>
 
-      <Border Grid.Row="2" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Background="#FBFCFE">
-        <DockPanel Margin="20,0">
-          <TextBlock x:Name="StatusRight" DockPanel.Dock="Right" Foreground="{StaticResource Muted}" FontSize="12" VerticalAlignment="Center"/>
+      <Border Grid.Row="2" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Background="{DynamicResource StatusBarBg}">
+        <DockPanel Margin="22,0">
+          <TextBlock x:Name="StatusRight" DockPanel.Dock="Right" Foreground="{DynamicResource Muted}" FontSize="12" VerticalAlignment="Center"/>
           <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-            <Ellipse x:Name="StatusDot" Width="7" Height="7" Fill="{StaticResource Success}" Margin="0,0,8,0"/>
-            <TextBlock x:Name="StatusLeft" Foreground="{StaticResource Muted}" FontSize="12"/>
+            <Ellipse x:Name="StatusDot" Width="7" Height="7" Fill="{DynamicResource Success}" Margin="0,0,8,0"/>
+            <TextBlock x:Name="StatusLeft" Foreground="{DynamicResource Muted}" FontSize="12"/>
           </StackPanel>
         </DockPanel>
       </Border>
     </Grid>
 
     <!-- ===================== Notifications ===================== -->
-    <StackPanel x:Name="ToastHost" Grid.ColumnSpan="2" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,50,24,0" Width="380"/>
+    <StackPanel x:Name="ToastHost" Grid.ColumnSpan="2" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,58,24,0" Width="390"/>
 
     <!-- ===================== Busy ===================== -->
-    <Grid x:Name="BusyOverlay" Grid.ColumnSpan="2" Background="#660B1A33" Visibility="Collapsed">
-      <Border Style="{StaticResource Card}" Effect="{StaticResource PopShadow}" Width="460" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="26,22">
+    <Grid x:Name="BusyOverlay" Grid.ColumnSpan="2" Background="{DynamicResource Overlay}" Visibility="Collapsed">
+      <Border Style="{StaticResource Card}" Effect="{DynamicResource PopShadow}" Width="470" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="28,24">
         <StackPanel>
-          <TextBlock x:Name="BusyTitle" Style="{StaticResource H2}"/>
-          <TextBlock x:Name="BusyText" Style="{StaticResource MutedText}" Margin="0,6,0,14" TextWrapping="Wrap"/>
+          <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+            <Border Style="{StaticResource IconTile}" Width="34" Height="34" CornerRadius="10" Margin="0,0,12,0">
+              <TextBlock Text="&#xE895;" Style="{StaticResource Icon}" FontSize="15" Foreground="{DynamicResource BrandText}" HorizontalAlignment="Center"/>
+            </Border>
+            <TextBlock x:Name="BusyTitle" Style="{StaticResource H2}" VerticalAlignment="Center"/>
+          </StackPanel>
+          <TextBlock x:Name="BusyText" Style="{StaticResource MutedText}" Margin="0,8,0,16" TextWrapping="Wrap"/>
           <ProgressBar x:Name="BusyProgress" Height="6" IsIndeterminate="True"/>
-          <Button x:Name="BusyCancel" Content="{l:T Common_Cancel}" Style="{StaticResource SecondaryButton}" HorizontalAlignment="Right" Margin="0,16,0,0" Click="BusyCancel_Click"/>
+          <Button x:Name="BusyCancel" Content="{l:T Common_Cancel}" Style="{StaticResource SecondaryButton}" HorizontalAlignment="Right" Margin="0,18,0,0" Click="BusyCancel_Click"/>
         </StackPanel>
       </Border>
     </Grid>
 
     <!-- ===================== First run: automatic setup ===================== -->
-    <Grid x:Name="SetupOverlay" Grid.ColumnSpan="2" Background="#CC0B1A33" Visibility="Collapsed">
-      <Border Width="660" HorizontalAlignment="Center" VerticalAlignment="Center" CornerRadius="16" Background="{StaticResource CardBg}" Effect="{StaticResource PopShadow}">
+    <Grid x:Name="SetupOverlay" Grid.ColumnSpan="2" Background="{DynamicResource OverlayStrong}" Visibility="Collapsed">
+      <Border Width="680" HorizontalAlignment="Center" VerticalAlignment="Center" CornerRadius="18" Background="{DynamicResource CardBg}" BorderBrush="{DynamicResource Line}" BorderThickness="1" Effect="{DynamicResource PopShadow}">
         <StackPanel>
-          <Border CornerRadius="16,16,0,0" Background="{StaticResource HeroBrush}" Padding="28,24">
+          <Border CornerRadius="17,17,0,0" Background="{DynamicResource HeroBrush}" Padding="30,26" ClipToBounds="True">
             <DockPanel>
-              <Border DockPanel.Dock="Right" VerticalAlignment="Top" CornerRadius="8" Background="#18FFFFFF" Padding="2">
+              <Border DockPanel.Dock="Right" VerticalAlignment="Top" CornerRadius="9" Background="{DynamicResource HeroChip}" BorderBrush="{DynamicResource HeroChipLine}" BorderThickness="1" Padding="2">
                 <StackPanel Orientation="Horizontal">
                   <RadioButton x:Name="SetupLangEn" Style="{StaticResource LangToggle}" GroupName="langSetup" Content="English" Tag="en" Checked="Lang_Checked"/>
                   <RadioButton x:Name="SetupLangPt" Style="{StaticResource LangToggle}" GroupName="langSetup" Content="Português" Tag="pt-BR" Checked="Lang_Checked"/>
                 </StackPanel>
               </Border>
               <StackPanel Orientation="Horizontal">
-                <Border Width="52" Height="52" CornerRadius="14" Background="#14FFFFFF" Margin="0,0,16,0" VerticalAlignment="Top">
+                <Border Width="54" Height="54" CornerRadius="15" Background="#14FFFFFF" BorderBrush="#24FFFFFF" BorderThickness="1" Margin="0,0,16,0" VerticalAlignment="Top">
                   <Image Source="Assets/j365-cloud.png" Width="40" RenderOptions.BitmapScalingMode="HighQuality"/>
                 </Border>
-                <StackPanel VerticalAlignment="Center" MaxWidth="360">
-                  <TextBlock Text="{l:T Setup_Title}" Foreground="White" FontFamily="{StaticResource DisplayFont}" FontSize="21" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                  <TextBlock Text="{l:T Setup_Subtitle}" Foreground="#C7D8EE" FontSize="13" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                <StackPanel VerticalAlignment="Center" MaxWidth="370">
+                  <TextBlock Text="{l:T Setup_Title}" Foreground="{DynamicResource HeroText}" FontFamily="{StaticResource DisplayFont}" FontSize="21" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                  <TextBlock Text="{l:T Setup_Subtitle}" Foreground="{DynamicResource HeroMuted}" FontSize="13" TextWrapping="Wrap" Margin="0,3,0,0"/>
                 </StackPanel>
               </StackPanel>
             </DockPanel>
           </Border>
-          <StackPanel Margin="28,22,28,24">
+          <StackPanel Margin="30,24,30,26">
             <ItemsControl x:Name="SetupList" Focusable="False">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
@@ -177,12 +252,12 @@
                       <ColumnDefinition Width="*"/>
                       <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <Border Width="36" Height="36" CornerRadius="18" Background="{StaticResource Subtle}" BorderBrush="{StaticResource Line}" BorderThickness="1" VerticalAlignment="Top" Margin="0,1,14,0">
+                    <Border Width="38" Height="38" CornerRadius="12" Background="{DynamicResource Subtle}" BorderBrush="{DynamicResource Line}" BorderThickness="1" VerticalAlignment="Top" Margin="0,1,14,0">
                       <TextBlock Text="{Binding Glyph}" Style="{StaticResource Icon}" Foreground="{Binding Color}" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
                     <StackPanel Grid.Column="1">
-                      <TextBlock Text="{Binding Title}" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
-                      <TextBlock Text="{Binding Description}" Foreground="{StaticResource Muted}" TextWrapping="Wrap" FontSize="12.5"/>
+                      <TextBlock Text="{Binding Title}" FontWeight="SemiBold" Foreground="{DynamicResource Ink}"/>
+                      <TextBlock Text="{Binding Description}" Foreground="{DynamicResource Muted}" TextWrapping="Wrap" FontSize="12.5"/>
                       <TextBlock Text="{Binding Detail}" Foreground="{Binding Color}" FontSize="12.5" TextWrapping="Wrap" Margin="0,3,0,0"/>
                       <ProgressBar Height="4" Margin="0,7,0,0" Minimum="0" Maximum="100" Value="{Binding Progress, Mode=OneWay}" IsIndeterminate="{Binding IsIndeterminate, Mode=OneWay}"
                                    Visibility="{Binding IsWorking, Converter={StaticResource BoolToVis}}"/>
@@ -192,7 +267,7 @@
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
-            <TextBlock x:Name="SetupNote" Foreground="{StaticResource Muted}" TextWrapping="Wrap" FontSize="12.5"/>
+            <TextBlock x:Name="SetupNote" Foreground="{DynamicResource Muted}" TextWrapping="Wrap" FontSize="12.5"/>
             <DockPanel Margin="0,18,0,0" LastChildFill="False">
               <Button x:Name="SetupInstall" DockPanel.Dock="Left" Style="{StaticResource GhostButton}" Padding="6,6" Click="SetupInstall_Click" ToolTip="{l:T Setup_InstallTip}" Visibility="Collapsed">
                 <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE896;" Style="{StaticResource Icon}" FontSize="13" Margin="0,1,7,0"/><TextBlock Text="{l:T Setup_InstallForUser}"/></StackPanel>

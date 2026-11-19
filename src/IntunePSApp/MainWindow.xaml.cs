@@ -9,7 +9,9 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Input;
 using System.Windows.Media.Imaging;
+using Shape = System.Windows.Shapes.Shape;
 using System.Windows.Threading;
 using J365.IntunePSApp.Core;
 using J365.IntunePSApp.Localization;
@@ -55,12 +57,90 @@ namespace J365.IntunePSApp
             Loaded += OnLoaded;
             CatalogService.Instance.Changed += () => Dispatcher.Invoke(() => UpdateCatalogStatus());
             UpdateService.Changed += () => Dispatcher.Invoke(() => { if (PageHost.Content == Home) Home.Refresh(); });
-            IntuneConnection.Changed += () => Dispatcher.BeginInvoke(new Action(() => { if (PageHost.Content == Home) Home.Refresh(); }));
+            IntuneConnection.Changed += () => Dispatcher.BeginInvoke(new Action(() =>
+            {
+                UpdateSidebarIntune();
+                if (PageHost.Content == Home) Home.Refresh();
+            }));
+            ThemeManager.Changed += UpdateThemeButton;
             Loc.Instance.LanguageChanged += OnLanguageChanged;
+            SearchBox.MouseLeftButtonDown += (s, e) => { GlobalSearch.Focus(); e.Handled = true; };
             SyncLanguageToggles();
             ApplyStaticTexts();
+            UpdateSidebarIntune();
+            UpdateThemeButton();
             NavHome.IsChecked = true;
         }
+
+        protected override void OnSourceInitialized(EventArgs e)
+        {
+            base.OnSourceInitialized(e);
+            ThemeManager.ApplyWindowFrame(this);
+        }
+
+        // ------------------------------------------------------------------ sidebar: Intune, theme; global search
+
+        /// <summary>Connection card of the sidebar: account when signed in, otherwise what is missing.</summary>
+        private void UpdateSidebarIntune()
+        {
+            bool signedIn = IntuneConnection.IsSignedIn, configured = IntuneConnection.IsConfigured;
+            SidebarIntuneText.Text = signedIn ? IntuneConnection.Account : configured ? T("Main_IntuneReady") : T("Main_IntuneNotConnected");
+            SidebarIntuneDot.SetResourceReference(Shape.FillProperty, signedIn ? "Success" : configured ? "Warning" : "SidebarMuted");
+        }
+
+        private void SidebarIntune_Click(object sender, RoutedEventArgs e)
+        {
+            Navigate("settings");
+            Settings.ShowIntune();
+        }
+
+        private void UpdateThemeButton()
+        {
+            // The button shows the theme it switches to: a sun in the dark theme, a moon in the light one.
+            BtnTheme.Content = ThemeManager.IsDark ? "\uE706" : "\uE708";
+            BtnTheme.ToolTip = ThemeManager.IsDark ? T("Main_ThemeToLight") : T("Main_ThemeToDark");
+        }
+
+        private void Theme_Click(object sender, RoutedEventArgs e) => ThemeManager.Toggle();
+
+        private void GlobalSearch_TextChanged(object sender, TextChangedEventArgs e)
+            => GlobalSearchHint.Visibility = string.IsNullOrEmpty(GlobalSearch.Text) ? Visibility.Visible : Visibility.Collapsed;
+
+        private void GlobalSearch_Focus(object sender, KeyboardFocusChangedEventArgs e)
+            => SearchBox.SetResourceReference(Border.BorderBrushProperty, GlobalSearch.IsKeyboardFocused ? "Brand" : "Line");
+
+        private void GlobalSearch_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter)
+            {
+                string query = GlobalSearch.Text.Trim();
+                GlobalSearch.Clear();
+                Navigate("catalog");
+                Catalog.FocusSearch(query);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape)
+            {
+                GlobalSearch.Clear();
+                Keyboard.ClearFocus();
+                e.Handled = true;
+            }
+        }
+
+        protected override void OnPreviewKeyDown(KeyEventArgs e)
+        {
+            // Ctrl+K: search the catalog from any page.
+            if (e.Key == Key.K && Keyboard.Modifiers == ModifierKeys.Control && SearchBox.Visibility == Visibility.Visible && !IsModalOverlayOpen)
+            {
+                GlobalSearch.Focus();
+                GlobalSearch.SelectAll();
+                e.Handled = true;
+                return;
+            }
+            base.OnPreviewKeyDown(e);
+        }
+
+        private bool IsModalOverlayOpen => BusyOverlay.Visibility == Visibility.Visible || SetupOverlay.Visibility == Visibility.Visible;
 
         private async void OnLoaded(object sender, RoutedEventArgs e)
         {
@@ -179,6 +259,8 @@ namespace J365.IntunePSApp
             UpdateCaption();
             UpdateToolsStatus();
             UpdateCatalogStatus(refreshPage: false);
+            UpdateSidebarIntune();
+            UpdateThemeButton();
             foreach (var item in _setupItems) item.RefreshTexts();
             if (!_setupRunning) SetupService.Inspect(_setupItems);
             UpdateSetupTexts();
@@ -192,7 +274,7 @@ namespace J365.IntunePSApp
         {
             _statusBusy = busy && text != null;
             StatusLeft.Text = text ?? T("Common_Ready");
-            StatusDot.Fill = _statusBusy ? (Brush)FindResource("Cyan") : (Brush)FindResource("Success");
+            StatusDot.SetResourceReference(Shape.FillProperty, _statusBusy ? "Cyan" : "Success");
         }
 
         public void UpdateToolsStatus()
@@ -224,35 +306,51 @@ namespace J365.IntunePSApp
 
         public void Toast(string text, string kind = "info")
         {
-            var (bg, fg, glyph) = kind switch
+            var (soft, strong, glyph) = kind switch
             {
-                "ok" => ("#E8F7EE", "#166534", ""),
-                "warn" => ("#FEF4E2", "#92400E", ""),
-                "error" => ("#FDECEC", "#991B1B", ""),
-                _ => ("#E8F1FB", "#0B3E73", "")
+                "ok" => ("SuccessSoft", "Success", "\uE73E"),
+                "warn" => ("WarningSoft", "Warning", "\uE7BA"),
+                "error" => ("DangerSoft", "Danger", "\uE783"),
+                _ => ("BrandSoft", "BrandText", "\uE946")
             };
             var border = new Border
             {
-                Background = Ui.Hex(bg),
-                CornerRadius = new CornerRadius(10),
-                Padding = new Thickness(16, 12, 16, 12),
+                CornerRadius = new CornerRadius(12),
+                BorderThickness = new Thickness(1),
+                Padding = new Thickness(12, 11, 16, 11),
                 Margin = new Thickness(0, 8, 0, 0),
-                Effect = (System.Windows.Media.Effects.Effect)FindResource("PopShadow")
+                Cursor = Cursors.Hand,
+                ToolTip = T("Main_ToastDismiss")
             };
-            var sp = new StackPanel { Orientation = Orientation.Horizontal };
-            sp.Children.Add(new TextBlock { Text = glyph, FontFamily = Ui.Font("IconFont"), Foreground = Ui.Hex(fg), FontSize = 16, Margin = new Thickness(0, 1, 12, 0), VerticalAlignment = VerticalAlignment.Top });
-            sp.Children.Add(new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, Width = 300, Foreground = Ui.Hex(fg) });
-            border.Child = sp;
+            border.SetResourceReference(Border.BackgroundProperty, "CardBg");
+            border.SetResourceReference(Border.BorderBrushProperty, "Line");
+            border.SetResourceReference(EffectProperty, "PopShadow");
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition());
+            var tile = new Border { Width = 30, Height = 30, CornerRadius = new CornerRadius(9), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 0, 12, 0) };
+            tile.SetResourceReference(Border.BackgroundProperty, soft);
+            var icon = new TextBlock { Text = glyph, FontFamily = Ui.Font("IconFont"), FontSize = 14, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            icon.SetResourceReference(TextBlock.ForegroundProperty, strong);
+            tile.Child = icon;
+            var message = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, FontSize = 13 };
+            message.SetResourceReference(TextBlock.ForegroundProperty, "Ink");
+            Grid.SetColumn(message, 1);
+            grid.Children.Add(tile);
+            grid.Children.Add(message);
+            border.Child = grid;
             ToastHost.Children.Add(border);
             border.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200)));
             var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(kind == "error" ? 9 : kind == "warn" ? 7 : 5) };
-            timer.Tick += (s, e) =>
+            void Dismiss()
             {
                 timer.Stop();
                 var fade = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(300));
                 fade.Completed += (s2, e2) => ToastHost.Children.Remove(border);
                 border.BeginAnimation(OpacityProperty, fade);
-            };
+            }
+            timer.Tick += (s, e) => Dismiss();
+            border.MouseLeftButtonUp += (s, e) => Dismiss();
             timer.Start();
         }
 
@@ -514,6 +612,9 @@ namespace J365.IntunePSApp
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
         {
             if (Editor != null && Editor.IsBuilding && !Ui.Confirm(T("Main_ConfirmExitBuilding"), danger: true)) { e.Cancel = true; return; }
+            // Changes to the open package that were neither saved nor generated are not lost without a question.
+            if (!App.HasArg("--snapshot") && Editor != null && !Editor.IsBuilding && Editor.HasUnsavedChanges
+                && !Ui.Confirm(T("Main_ConfirmExitUnsaved"), T("Main_ExitAnyway"), T("Common_Cancel"), danger: true)) { e.Cancel = true; return; }
             SavePlacement();
             base.OnClosing(e);
         }
@@ -583,7 +684,7 @@ namespace J365.IntunePSApp
                 SidebarColumn.Width = new GridLength(compact ? 64 : 256);
                 SidebarPanel.Margin = compact ? new Thickness(10, 14, 10, 14) : new Thickness(16, 14, 16, 14);
                 BrandPanel.Margin = compact ? new Thickness(0, 0, 0, 18) : new Thickness(4, 0, 0, 22);
-                BrandIcon.Width = BrandIcon.Height = compact ? 44 : 46;
+                BrandIcon.Width = BrandIcon.Height = 44;
                 BrandIcon.Margin = compact ? new Thickness(0) : new Thickness(0, 0, 12, 0);
                 BrandText.Visibility = MenuLabel.Visibility = SidebarFooter.Visibility = hidden;
                 foreach (var item in NavPanel.Children.OfType<RadioButton>())
@@ -597,6 +698,8 @@ namespace J365.IntunePSApp
                 }
             }
             DatabaseCard.Visibility = ActualHeight < ShortSidebarBelow ? Visibility.Collapsed : Visibility.Visible;
+            // The global search needs room next to the page title and the window buttons.
+            SearchBox.Visibility = ActualWidth - SidebarColumn.Width.Value < 760 ? Visibility.Collapsed : Visibility.Visible;
         }
 
         public static BitmapImage LoadBitmap(string path)

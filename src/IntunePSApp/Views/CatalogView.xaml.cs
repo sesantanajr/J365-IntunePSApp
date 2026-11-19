@@ -161,7 +161,10 @@ namespace J365.IntunePSApp.Views
 
         private void Site_Click(object sender, RoutedEventArgs e)
         {
-            if (!string.IsNullOrEmpty(_current?.Homepage)) MainWindow.OpenUrl(_current.Homepage);
+            // Only web pages: the database comes from a public source, and a "homepage" with another scheme (file:,
+            // a protocol handler) would start a program.
+            if (Uri.TryCreate(_current?.Homepage, UriKind.Absolute, out var page) && (page.Scheme == Uri.UriSchemeHttps || page.Scheme == Uri.UriSchemeHttp))
+                MainWindow.OpenUrl(page.AbsoluteUri);
         }
 
         private async void Download_Click(object sender, RoutedEventArgs e) => await MainWindow.Current.UpdateCatalogAsync(userRequested: true, force: true);

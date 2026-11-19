@@ -154,8 +154,10 @@ namespace J365.IntunePSApp.Tests
 
             const string create = @"$markKey = $markRoot.CreateSubKey('SOFTWARE\J365\IntunePSApp\Apps\Contoso App')";
             Assert.Contains("RegistryHive]::LocalMachine, [Microsoft.Win32.RegistryView]::Registry64", install);
-            // After the installer and after the post-install actions: a failed step leaves no mark.
-            Assert.True(install.IndexOf(create) > install.IndexOf("Start-Sleep -Seconds 1"));
+            // After the installer and after the post-install actions: a failed step leaves no mark. The only earlier
+            // mark is the one written when a newer version is already installed and kept (nothing is installed then).
+            Assert.True(install.LastIndexOf(create) > install.IndexOf("Start-Sleep -Seconds 1"));
+            Assert.True(install.IndexOf(create) < install.IndexOf("Test-J365NewerVersion -Installed") + 2000 && install.IndexOf(create) > install.IndexOf("Test-J365NewerVersion -Installed"));
             Assert.True(install.IndexOf("Start-Sleep -Seconds 1") > install.IndexOf("Start-ADTMsiProcess -Action 'Install'"));
             Assert.Contains("$markKey.SetValue('Version', '1.2.3')", install);
             Assert.Contains(create, repair);
@@ -263,10 +265,11 @@ namespace J365.IntunePSApp.Tests
                 Assert.True(none.NoMark, none.Output);
                 Assert.StartsWith(ScriptGenerator.NoMarkPrefix, none.Output);
 
+                // The mark of an older package counts: the application may have updated itself since then, and
+                // reporting it as missing would make Intune reinstall (downgrade) it.
                 using (var k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(key)) k.SetValue("Version", "0.9");
                 var older = PackageBuilder.TestDetection(s);
-                Assert.False(older.Detected);
-                Assert.True(older.NoMark);
+                Assert.True(older.Detected, older.Output);
 
                 using (var k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(key)) k.SetValue("Version", "1.0.0.0");
                 var marked = PackageBuilder.TestDetection(s);

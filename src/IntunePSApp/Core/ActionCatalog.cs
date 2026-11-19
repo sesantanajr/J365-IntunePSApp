@@ -188,8 +188,16 @@ namespace J365.IntunePSApp.Core
                 if (machineKey || a.Type is "StopService" or "DisableScheduledTask" or "CopyToUserProfiles" or "InstallDependency" or "ImportRegFile")
                     list.Add(T("Val_Warn_ActionNeedsAdmin", Get(a.Type)?.Label ?? a.Type));
             }
+            if (a.Type == "SetEnvironment" && IsListVariable(a.P("Name").Trim(), a.P("Value")))
+                list.Add(T("Val_Info_EnvAppend", a.P("Name").Trim()));
             return list;
         }
+
+        /// <summary>A list variable (PATH and similar, or a value that refers to the variable itself): entries are appended.</summary>
+        public static bool IsListVariable(string name, string value)
+            => name.Equals("Path", StringComparison.OrdinalIgnoreCase) || name.Equals("PSModulePath", StringComparison.OrdinalIgnoreCase)
+               || name.Equals("PATHEXT", StringComparison.OrdinalIgnoreCase)
+               || (name.Length > 0 && (value ?? "").IndexOf("%" + name + "%", StringComparison.OrdinalIgnoreCase) >= 0);
 
         /// <summary>Converts values saved by version 1.x (Portuguese display texts) into language-neutral codes.</summary>
         public static void Normalize(PackageAction a)
@@ -256,9 +264,10 @@ namespace J365.IntunePSApp.Core
                         string pat = L(a.P("NamePattern"));
                         string ua = a.P("ExeArguments").Trim();
                         body.Add($"Uninstall-ADTApplication -Name {pat} -NameMatch 'Wildcard' -ApplicationType 'MSI'");
+                        // -WaitForChildProcesses: NSIS and 7-Zip uninstallers run from a copy in %TEMP% and return at once.
                         body.Add(ua.Length > 0
-                            ? $"Uninstall-ADTApplication -Name {pat} -NameMatch 'Wildcard' -ApplicationType 'EXE' -ArgumentList {L(ua)}"
-                            : $"Uninstall-ADTApplication -Name {pat} -NameMatch 'Wildcard' -ApplicationType 'EXE' -FilterScript {{ ![System.String]::IsNullOrWhiteSpace($_.QuietUninstallString) }}");
+                            ? $"Uninstall-ADTApplication -Name {pat} -NameMatch 'Wildcard' -ApplicationType 'EXE' -ArgumentList {L(ua)} -WaitForChildProcesses"
+                            : $"Uninstall-ADTApplication -Name {pat} -NameMatch 'Wildcard' -ApplicationType 'EXE' -FilterScript {{ ![System.String]::IsNullOrWhiteSpace($_.QuietUninstallString) }} -WaitForChildProcesses");
                         break;
                     }
                 case "RemoveDesktopShortcut":
@@ -332,8 +341,26 @@ namespace J365.IntunePSApp.Core
                     body.Add($"Get-ScheduledTask -TaskName {L(a.P("Name"))} -ErrorAction SilentlyContinue | Disable-ScheduledTask | Out-Null");
                     break;
                 case "SetEnvironment":
-                    body.Add($"[Environment]::SetEnvironmentVariable({L(a.P("Name"))}, {L(a.P("Value"))}, '{(userContext ? "User" : "Machine")}')");
-                    break;
+                    {
+                        string name = a.P("Name").Trim(), value = a.P("Value");
+                        if (IsListVariable(name, value))
+                        {
+                            // "Path = %PATH%;C:\App" with SetEnvironmentVariable would store the literal text and drop
+                            // System32 from the PATH of the device: the entries are added to the current list instead.
+                            var entries = value.Split(';').Select(x => x.Trim())
+                                .Where(x => x.Length > 0 && !x.Equals("%" + name + "%", StringComparison.OrdinalIgnoreCase)).ToList();
+                            string root = userContext ? "[Microsoft.Win32.Registry]::CurrentUser" : "[Microsoft.Win32.Registry]::LocalMachine";
+                            string sub = userContext ? "Environment" : @"SYSTEM\CurrentControlSet\Control\Session Manager\Environment";
+                            body.Add($"$envKey = {root}.OpenSubKey({L(sub)}, $true)");
+                            body.Add($"$envItems = New-Object System.Collections.Generic.List[string]");
+                            body.Add($"foreach ($envItem in ([string]$envKey.GetValue({L(name)}, '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)).Split(';')) {{ if ($envItem) {{ $envItems.Add($envItem) }} }}");
+                            foreach (var e in entries) body.Add($"if (-not ($envItems -contains {L(e)})) {{ $envItems.Add({L(e)}) }}");
+                            body.Add($"$envKey.SetValue({L(name)}, ($envItems -join ';'), [Microsoft.Win32.RegistryValueKind]::ExpandString)");
+                            body.Add("$envKey.Close()");
+                        }
+                        else body.Add($"[Environment]::SetEnvironmentVariable({L(name)}, {L(value)}, '{(userContext ? "User" : "Machine")}')");
+                        break;
+                    }
                 case "RunProgram":
                     {
                         string fp = a.P("Source") == "Package" ? Support(a.P("FilePath")) : Exp(a.P("FilePath"));

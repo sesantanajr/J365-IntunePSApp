@@ -117,6 +117,7 @@ namespace J365.IntunePSApp.Views
                 _extraFiles.Clear(); foreach (var f in s.ExtraFiles) _extraFiles.Add(f);
                 ChkRemovePrev.IsChecked = s.RemovePreviousVersions;
                 ChkRemovePrevQuick.IsChecked = s.RemovePreviousVersions;
+                ChkKeepNewer.IsChecked = s.KeepNewerVersion;
                 TxtPattern.Text = s.UninstallPattern;
                 TxtUninstallArgs.Text = s.UninstallExeArgs;
                 RbDetName.IsChecked = s.DetectionMethod == "Registry";
@@ -147,6 +148,39 @@ namespace J365.IntunePSApp.Views
             UpdateDependencies();
             UpdateUpdateBanner();
             UpdateExistingFlow();
+            MarkClean();
+        }
+
+        // ------------------------------------------------------------------ unsaved changes
+
+        private string _cleanSnapshot;
+
+        /// <summary>The package as it is on screen, in a form that can be compared.</summary>
+        private string Snapshot()
+        {
+            try { return System.Text.Json.JsonSerializer.Serialize(Collect(), Json.Options); }
+            catch { return null; }
+        }
+
+        /// <summary>Remembers the package as saved, generated or loaded: what changes after this is "unsaved".</summary>
+        private void MarkClean() => _cleanSnapshot = Snapshot();
+
+        /// <summary>True when the open package has changes that were neither saved nor generated.</summary>
+        public bool HasUnsavedChanges
+        {
+            get
+            {
+                if (_cleanSnapshot == null) return false;
+                string now = Snapshot();
+                return now != null && now != _cleanSnapshot;
+            }
+        }
+
+        /// <summary>Asks before the open package is replaced while it has unsaved changes. True when it may be replaced.</summary>
+        public bool ConfirmDiscard()
+        {
+            if (!HasUnsavedChanges) return true;
+            return Ui.Confirm(T("Ed_ConfirmDiscard", $"{TxtName.Text} {TxtVersion.Text}".Trim()), T("Ed_Discard"), T("Common_Cancel"), danger: true);
         }
 
         // ------------------------------------------------------------------ application icon
@@ -245,6 +279,7 @@ namespace J365.IntunePSApp.Views
             s.Actions = _actions.ToList();
             s.ExtraFiles = _extraFiles.ToList();
             s.RemovePreviousVersions = ChkRemovePrev.IsChecked == true;
+            s.KeepNewerVersion = ChkKeepNewer.IsChecked != false;
             s.UninstallPattern = TxtPattern.Text.Trim();
             s.UninstallExeArgs = TxtUninstallArgs.Text.Trim();
             s.DetectionMethod = RbDetCode.IsChecked == true ? "ProductCode" : RbDetFile.IsChecked == true ? "File" : "Registry";
@@ -376,34 +411,38 @@ namespace J365.IntunePSApp.Views
             AnalysisFile.Text = $"{info.FileName}  ·  {info.SizeMB.ToString("N1", Loc.Instance.Culture)} MB";
             DropText.Text = info.FileName;
             AnalysisChips.Children.Clear();
-            void Chip(string text, string bg = "#E8F1FB", string fg = "#0A5CA8")
+            // Colors are theme keys, so the chips follow a change of theme.
+            void Chip(string text, string bg = "BrandSoft", string fg = "BrandText")
             {
                 if (string.IsNullOrEmpty(text)) return;
-                var b = new Border { Style = (Style)FindResource("Chip"), Background = Ui.Hex(bg) };
-                b.Child = new TextBlock { Text = text, FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Ui.Hex(fg) };
+                var b = new Border { Style = (Style)FindResource("Chip") };
+                b.SetResourceReference(Border.BackgroundProperty, bg);
+                var label = new TextBlock { Text = text, FontSize = 12, FontWeight = FontWeights.SemiBold };
+                label.SetResourceReference(TextBlock.ForegroundProperty, fg);
+                b.Child = label;
                 AnalysisChips.Children.Add(b);
             }
             Chip(info.Type);
             Chip(InstallerAnalyzer.TechnologyLabel(info.Technology));
             Chip(string.IsNullOrEmpty(info.AppArch) ? T("Ed_ChipAnyArch") : info.AppArch);
-            if (info.IsCatalogExact) Chip(T("Ed_ChipDatabase", info.CatalogId), "#E8F7EE", "#166534");
-            else if (info.CatalogMatch == "name") Chip(T("Ed_ChipSimilar", info.CatalogId), "#FEF4E2", "#92400E");
+            if (info.IsCatalogExact) Chip(T("Ed_ChipDatabase", info.CatalogId), "SuccessSoft", "SuccessText");
+            else if (info.CatalogMatch == "name") Chip(T("Ed_ChipSimilar", info.CatalogId), "WarningSoft", "WarningText");
             bool signed = !string.IsNullOrEmpty(info.Signer);
-            Chip(signed ? T("Ed_ChipSigned", info.Signer) : T("Ed_ChipUnsigned"), signed ? "#EEF2F7" : "#FEF4E2", signed ? "#334155" : "#92400E");
-            if (!string.IsNullOrEmpty(info.InstallArgs)) Chip(T("Ed_ChipSilent", info.InstallArgs), "#EEF2F7", "#334155");
+            Chip(signed ? T("Ed_ChipSigned", info.Signer) : T("Ed_ChipUnsigned"), signed ? "Subtle2" : "WarningSoft", signed ? "Ink2" : "WarningText");
+            if (!string.IsNullOrEmpty(info.InstallArgs)) Chip(T("Ed_ChipSilent", info.InstallArgs), "Subtle2", "Ink2");
             AnalysisNotes.ItemsSource = info.Notes.ToList();
         }
 
         private void Root_DragOver(object sender, DragEventArgs e)
         {
             e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Copy : DragDropEffects.None;
-            DropRect.Stroke = e.Effects == DragDropEffects.Copy ? (Brush)FindResource("Brand") : Ui.Hex("#94A3B8");
+            DropRect.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty, e.Effects == DragDropEffects.Copy ? "Brand" : "Faint");
             e.Handled = true;
         }
 
         private async void Root_Drop(object sender, DragEventArgs e)
         {
-            DropRect.Stroke = Ui.Hex("#94A3B8");
+            DropRect.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty, "Faint");
             if (IsBuilding) return;
             if (e.Data.GetData(DataFormats.FileDrop) is string[] files && files.Length > 0)
             {
@@ -544,7 +583,7 @@ namespace J365.IntunePSApp.Views
             if (string.IsNullOrEmpty(file)) DropText.Text = T("Ed_DropHere");
             HeaderIcon.Source = MainWindow.LoadBitmap(_installerIcon);
             HeaderInitials.Visibility = HeaderIcon.Source == null ? Visibility.Visible : Visibility.Collapsed;
-            HeaderAvatar.Background = HeaderIcon.Source == null ? (Brush)FindResource("Navy") : (Brush)FindResource("Subtle");
+            HeaderAvatar.SetResourceReference(Border.BackgroundProperty, HeaderIcon.Source == null ? "Avatar" : "Subtle");
             FooterInfo.Text = string.IsNullOrEmpty(file) ? T("Ed_FooterStart") : T("Ed_FooterOutput", string.IsNullOrWhiteSpace(_s.OutputRoot) ? ConfigStore.Current.OutputFolder : _s.OutputRoot);
             SetBuildButton(IsBuilding);
         }
@@ -926,8 +965,8 @@ namespace J365.IntunePSApp.Views
             try { r = await Task.Run(() => PackageBuilder.TestDetection(s)); }
             catch (Exception ex) { Ui.Error(ex.Message); return; }
             DetResult.Visibility = Visibility.Visible;
-            DetResult.Background = r.Detected ? (Brush)FindResource("SuccessSoft") : (Brush)FindResource("WarningSoft");
-            DetResultText.Foreground = r.Detected ? (Brush)FindResource("Success") : (Brush)FindResource("Warning");
+            DetResult.SetResourceReference(Border.BackgroundProperty, r.Detected ? "SuccessSoft" : "WarningSoft");
+            DetResultText.SetResourceReference(TextBlock.ForegroundProperty, r.Detected ? "SuccessText" : "WarningText");
             DetResultText.Text = r.Detected ? T("Ed_Detected", Regex.Replace(r.Output, @"^Detected:\s*", ""))
                 : r.NoMark ? T("Ed_DetectedNoMark", ScriptGenerator.MarkDisplayPath(s))
                 : T("Ed_NotDetected");
@@ -956,9 +995,10 @@ namespace J365.IntunePSApp.Views
                 Tuple.Create(T("Sum_F_InstallCmd"), cmds.Install),
             };
             var v = PackageBuilder.Validate(s);
-            var items = v.Errors.Select(x => Tuple.Create("#FDECEC", "✖  " + x, "#991B1B"))
-                .Concat(v.Warnings.Select(x => Tuple.Create("#FEF4E2", "⚠  " + x, "#92400E"))).ToList();
-            if (items.Count == 0) items.Add(Tuple.Create("#E8F7EE", "✓  " + T("Rev_Ready"), "#166534"));
+            // Item1 is the kind (error, warn, ok): the template picks the theme colors for it.
+            var items = v.Errors.Select(x => Tuple.Create("error", "✖  " + x, ""))
+                .Concat(v.Warnings.Select(x => Tuple.Create("warn", "⚠  " + x, ""))).ToList();
+            if (items.Count == 0) items.Add(Tuple.Create("ok", "✓  " + T("Rev_Ready"), ""));
             ValidationList.ItemsSource = items;
         }
 
@@ -1002,6 +1042,7 @@ namespace J365.IntunePSApp.Views
                 var r = await Task.Run(() => PackageBuilder.BuildAsync(s, native, ct));
                 _last = r;
                 _s = s;
+                MarkClean();
                 ShowResult(r);
                 LogTitle.Text = T("Ed_Done");
                 main.Toast(T("Ed_BuildOk", $"{s.AppName} {s.AppVersion}".Trim()), "ok");
@@ -1232,8 +1273,8 @@ namespace J365.IntunePSApp.Views
             BtnSandboxLogs.Visibility = last != null ? Visibility.Visible : Visibility.Collapsed;
             string soft = last == null ? "BrandSoft" : last.Passed ? "SuccessSoft" : "DangerSoft";
             string strong = last == null ? "Brand" : last.Passed ? "Success" : "Danger";
-            SandboxStatus.Background = (Brush)FindResource(soft);
-            SandboxStatusIcon.Foreground = (Brush)FindResource(strong);
+            SandboxStatus.SetResourceReference(Border.BackgroundProperty, soft);
+            SandboxStatusIcon.SetResourceReference(TextBlock.ForegroundProperty, strong);
             SandboxStatusText.Text = last != null ? SandboxSummary(last) : _sandboxClosed ? T("Ed_SandboxClosed") : T("Ed_SandboxWaiting");
         }
 
@@ -1312,8 +1353,17 @@ namespace J365.IntunePSApp.Views
             try
             {
                 using var p = IntunePublisher.LaunchInApp(script, o, session.RefreshToken, line => Dispatcher.BeginInvoke(new Action(() => ShowPublishLine(line))));
-                using (ct.Register(() => { try { if (!p.HasExited) p.Kill(true); } catch { } }))
+                // Cancel asks the script to stop at its next safe point (it then removes an app it created, and an
+                // existing app is never left half updated). Only a script that does not stop within 90 s is killed.
+                string cancelFile = IntunePublisher.CancelFile(script);
+                using (ct.Register(() =>
+                {
+                    try { File.WriteAllText(cancelFile, "cancel"); } catch { }
+                    _ = Task.Delay(TimeSpan.FromSeconds(90)).ContinueWith(_ => { try { if (!p.HasExited) p.Kill(true); } catch { } });
+                    Dispatcher.BeginInvoke(new Action(() => ShowPublishLine("> " + T("Publish_Cancelling"))));
+                }))
                     await p.WaitForExitAsync();
+                try { if (File.Exists(cancelFile)) File.Delete(cancelFile); } catch { }
             }
             catch (Exception ex)
             {
@@ -1359,6 +1409,7 @@ namespace J365.IntunePSApp.Views
             if (step.StartsWith("Signing in", StringComparison.Ordinal)) return T("Publish_StepSignIn");
             if (step.StartsWith("Looking for an app", StringComparison.Ordinal)) return T("Publish_StepLooking");
             if (step.StartsWith("Updating the settings", StringComparison.Ordinal)) return T("Publish_StepUpdating");
+            if (step.StartsWith("Preparing the new version", StringComparison.Ordinal)) return T("Publish_StepPreparing");
             if (step.StartsWith("Creating the app", StringComparison.Ordinal)) return T("Publish_StepCreating");
             if (step.StartsWith("Uploading", StringComparison.Ordinal)) return T("Publish_StepUploading", Regex.Match(step, @"[\d.,]+ MB").Value);
             if (step.StartsWith("Waiting for Intune", StringComparison.Ordinal)) return T("Publish_StepCommitting");
@@ -1404,8 +1455,8 @@ namespace J365.IntunePSApp.Views
             var r = _publishResult;
             bool ok = r != null && r.IsPublished;
             bool failed = r != null && !ok && r.Status != "cancelled";
-            PublishStatus.Background = (Brush)FindResource(ok ? "SuccessSoft" : failed ? "DangerSoft" : "BrandSoft");
-            PublishStatusIcon.Foreground = (Brush)FindResource(ok ? "Success" : failed ? "Danger" : "Brand");
+            PublishStatus.SetResourceReference(Border.BackgroundProperty, ok ? "SuccessSoft" : failed ? "DangerSoft" : "BrandSoft");
+            PublishStatusIcon.SetResourceReference(TextBlock.ForegroundProperty, ok ? "Success" : failed ? "Danger" : "Brand");
             PublishStatusText.Text = r == null ? T("Ed_PublishRunning") : PublishSummary(r);
             BtnPublishOpen.Visibility = ok && !string.IsNullOrWhiteSpace(r.PortalUrl) ? Visibility.Visible : Visibility.Collapsed;
         }
@@ -1421,9 +1472,11 @@ namespace J365.IntunePSApp.Views
 
         public void LoadProject(string path) => LoadProject(path, quiet: false);
 
-        private bool LoadProject(string path, bool quiet)
+        private bool LoadProject(string path, bool quiet, bool confirmed = false)
         {
             if (IsBuilding) { MainWindow.Current.Toast(T("Ed_BusyBuilding"), "warn"); return false; }
+            // Replacing a package with unsaved changes asks first (New, Open project, a .json dropped, Reopen in Packages).
+            if (!quiet && !confirmed && !ConfirmDiscard()) return false;
             var main = MainWindow.Current;
             try
             {
@@ -1457,7 +1510,8 @@ namespace J365.IntunePSApp.Views
         private void OpenProject_Click(object sender, RoutedEventArgs e)
         {
             var dlg = new OpenFileDialog { Filter = T("Filter_Project") + "|*.json", InitialDirectory = Directory.Exists(ConfigStore.Current.OutputFolder) ? ConfigStore.Current.OutputFolder : null };
-            if (dlg.ShowDialog(Window.GetWindow(this)) == true) LoadProject(dlg.FileName);
+            if (!ConfirmDiscard()) return;
+            if (dlg.ShowDialog(Window.GetWindow(this)) == true) LoadProject(dlg.FileName, quiet: false, confirmed: true);
         }
 
         private void SaveProject_Click(object sender, RoutedEventArgs e)
@@ -1465,13 +1519,14 @@ namespace J365.IntunePSApp.Views
             var s = Collect();
             var dlg = new SaveFileDialog { Filter = T("Filter_Project") + "|*.json", FileName = "project_" + Names.Safe($"{s.AppName}_{s.AppVersion}") + ".json" };
             if (dlg.ShowDialog(Window.GetWindow(this)) != true) return;
-            try { Json.Save(dlg.FileName, s); MainWindow.Current.Toast(T("Ed_ProjectSaved"), "ok"); }
+            try { Json.Save(dlg.FileName, s); MarkClean(); MainWindow.Current.Toast(T("Ed_ProjectSaved"), "ok"); }
             catch (Exception ex) { Ui.Error(ex.Message); }
         }
 
         private void New_Click(object sender, RoutedEventArgs e)
         {
             if (IsBuilding) return;
+            if (!ConfirmDiscard()) return;
             _last = null;
             _info = null;
             _installerIcon = null;

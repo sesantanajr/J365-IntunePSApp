@@ -10,6 +10,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using static J365.IntunePSApp.Localization.Loc;
@@ -105,8 +106,9 @@ namespace J365.IntunePSApp.Core
             var context = await contextTask;
             var q = context.Request.QueryString;
             bool ok = string.IsNullOrEmpty(q["error"]) && q["state"] == state && !string.IsNullOrEmpty(q["code"]);
-            await AnswerBrowserAsync(context, ok);
-            if (!string.IsNullOrEmpty(q["error"])) throw Explain(q["error"], q["error_description"]);
+            var failure = ok ? null : !string.IsNullOrEmpty(q["error"]) ? Explain(q["error"], q["error_description"], q["error_subcode"]) : new AuthException(T("Auth_ErrUnexpected"));
+            await AnswerBrowserAsync(context, failure);
+            if (!string.IsNullOrEmpty(q["error"])) throw failure;
             if (q["state"] != state || string.IsNullOrEmpty(q["code"])) throw new AuthException(T("Auth_ErrUnexpected"));
             return await TokenAsync(tenant, new Dictionary<string, string>
             {
@@ -154,16 +156,21 @@ namespace J365.IntunePSApp.Core
         }
 
         /// <summary>The usual Entra ID errors, in plain words (the AADSTS code stays at the end for the administrator).</summary>
-        public static AuthException Explain(string error, string description)
+        public static AuthException Explain(string error, string description, string subcode = null)
         {
             string first = (description ?? "").Split('\n')[0].Trim();
+            // "access_denied" + "cancel" with no description: the consent page was closed with Cancel, or the account
+            // could not grant the permission ("Need admin approval" > "Return to the application"), or Entra ID refused
+            // to add the permission without showing anything. The application explains the three cases.
+            if (error == "access_denied" && string.Equals(subcode, "cancel", StringComparison.OrdinalIgnoreCase) && !first.Contains("AADSTS53003"))
+                return new AuthException(T("Auth_ErrCancelled") + (first.Length > 0 ? $" [{Shorten(first)}]" : ""), "cancel");
             var known = new (string Code, string Key)[]
             {
                 ("AADSTS65001", "Auth_Err65001"), ("AADSTS90094", "Auth_Err90094"), ("AADSTS90008", "Auth_Err90094"),
                 ("AADSTS50011", "Auth_Err50011"), ("AADSTS700016", "Auth_Err700016"), ("AADSTS7000218", "Auth_Err7000218"),
                 ("AADSTS50020", "Auth_Err50020"), ("AADSTS50034", "Auth_Err50020"), ("AADSTS53003", "Auth_Err53003"),
                 ("AADSTS50105", "Auth_Err50105"), ("AADSTS65004", "Auth_Err65004"), ("AADSTS90002", "Auth_Err90002"),
-                ("AADSTS50126", "Auth_Err50126"), ("AADSTS70008", "Auth_Err70008"), ("AADSTS700082", "Auth_Err70008")
+                ("AADSTS50126", "Auth_Err50126"), ("AADSTS70008", "Auth_Err70008"), ("AADSTS700082", "Auth_Err70008"), ("AADSTS7000112", "Auth_Err7000112")
             };
             foreach (var (code, key) in known)
                 if (first.Contains(code, StringComparison.OrdinalIgnoreCase) || (error ?? "").Contains(code, StringComparison.OrdinalIgnoreCase))
@@ -174,17 +181,24 @@ namespace J365.IntunePSApp.Core
 
         private static string Shorten(string s) => s.Length > 240 ? s.Substring(0, 240) + "…" : s;
 
-        private static async Task AnswerBrowserAsync(HttpListenerContext context, bool ok)
+        /// <summary>The page the browser shows after the sign-in: done, or what to do next (the application explains the details).</summary>
+        private static async Task AnswerBrowserAsync(HttpListenerContext context, AuthException failure)
         {
             try
             {
-                string title = ok ? T("Auth_PageOkTitle") : T("Auth_PageFailTitle");
-                string text = ok ? T("Auth_PageOk", AppInfo.Name) : T("Auth_PageFail", AppInfo.Name);
-                string html = "<!doctype html><html><head><meta charset=\"utf-8\"><title>" + WebUtility.HtmlEncode(AppInfo.Name) + "</title></head>"
-                    + "<body style=\"font-family:Segoe UI,Arial,sans-serif;background:#0B1A33;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0\">"
-                    + "<div style=\"background:#fff;color:#0F172A;border-radius:14px;padding:36px 44px;max-width:520px;box-shadow:0 10px 40px rgba(0,0,0,.35)\">"
-                    + "<div style=\"font-size:13px;letter-spacing:.08em;color:#0A5CA8;font-weight:600\">" + WebUtility.HtmlEncode(AppInfo.Name.ToUpperInvariant()) + "</div>"
-                    + "<h2 style=\"margin:8px 0 10px\">" + WebUtility.HtmlEncode(title) + "</h2><p style=\"color:#475569;line-height:1.5\">" + WebUtility.HtmlEncode(text) + "</p></div></body></html>";
+                bool ok = failure == null;
+                bool cancelled = failure?.Code == "cancel";
+                string title = ok ? T("Auth_PageOkTitle") : cancelled ? T("Auth_PageCancelTitle") : T("Auth_PageFailTitle");
+                string text = ok ? T("Auth_PageOk", AppInfo.Name) : cancelled ? T("Auth_PageCancel", AppInfo.Name) : T("Auth_PageFail", AppInfo.Name);
+                string accent = ok ? "#0F8A5F" : "#B4580A";
+                string mark = ok ? "&#10003;" : "!";
+                string html = "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width\"><title>" + WebUtility.HtmlEncode(AppInfo.Name) + "</title></head>"
+                    + "<body style=\"font-family:'Segoe UI Variable Text','Segoe UI',Arial,sans-serif;background:radial-gradient(circle at 15% 0%,#173062 0%,#0A1122 55%);color:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0\">"
+                    + "<div style=\"background:#fff;color:#0B1324;border-radius:18px;padding:36px 42px;max-width:540px;margin:24px;box-shadow:0 24px 60px rgba(0,0,0,.35)\">"
+                    + "<div style=\"display:flex;align-items:center;gap:12px\"><div style=\"width:38px;height:38px;border-radius:12px;background:" + accent + "1A;color:" + accent + ";display:flex;align-items:center;justify-content:center;font-weight:700;font-size:20px\">" + mark + "</div>"
+                    + "<div style=\"font-size:12px;letter-spacing:.1em;color:#2457E6;font-weight:600\">" + WebUtility.HtmlEncode(AppInfo.Name.ToUpperInvariant()) + "</div></div>"
+                    + "<h2 style=\"margin:18px 0 10px;font-size:22px\">" + WebUtility.HtmlEncode(title) + "</h2><p style=\"color:#5F6C84;line-height:1.55;margin:0\">" + WebUtility.HtmlEncode(text) + "</p>"
+                    + "<p style=\"color:#8E9AB0;font-size:13px;margin:18px 0 0\">" + WebUtility.HtmlEncode(T("Auth_PageClose")) + "</p></div></body></html>";
                 var bytes = Encoding.UTF8.GetBytes(html);
                 context.Response.ContentType = "text/html; charset=utf-8";
                 context.Response.ContentLength64 = bytes.Length;
@@ -205,6 +219,17 @@ namespace J365.IntunePSApp.Core
 
         private static string RandomUrlToken(int bytes) => Base64Url(RandomNumberGenerator.GetBytes(bytes));
         private static string Base64Url(byte[] data) => Convert.ToBase64String(data).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    }
+
+    /// <summary>The steps of the automatic setup, in order (the connection window shows each one).</summary>
+    public enum SetupStep { AdminSignIn, Permission, Registration, ServicePrincipal, Consent, Activation, UserSignIn, Test }
+
+    /// <summary>A step of the automatic setup that starts, with an optional detail line.</summary>
+    public sealed class SetupProgress
+    {
+        public SetupProgress(SetupStep step, string detail = "") { Step = step; Detail = detail ?? ""; }
+        public SetupStep Step { get; }
+        public string Detail { get; }
     }
 
     /// <summary>What the automatic setup did in the tenant.</summary>
@@ -228,6 +253,13 @@ namespace J365.IntunePSApp.Core
         public const string RegistrationName = "J365 IntunePSApp";
         public const string RegistrationTag = "J365IntunePSApp";
         public const string IntunePermission = "DeviceManagementApps.ReadWrite.All";
+
+        /// <summary>First word of the connection code that an administrator shares with the other technicians.</summary>
+        public const string CodePrefix = "J365-CONNECT";
+
+        /// <summary>Privileged Identity Management > My roles: where an eligible administrator role is activated.</summary>
+        public const string PimUrl = "https://portal.azure.com/#view/Microsoft_Azure_PIMCommon/ActivationMenuBlade/~/aadmigratedroles";
+        public const string CloudShellUrl = "https://shell.azure.com";
         public static string IntuneScopes => $"{EntraAuth.GraphUrl}/{IntunePermission} offline_access openid profile";
         private static string AdminScopes => $"{EntraAuth.GraphUrl}/Application.ReadWrite.All {EntraAuth.GraphUrl}/DelegatedPermissionGrant.ReadWrite.All offline_access openid profile";
 
@@ -269,6 +301,44 @@ namespace J365.IntunePSApp.Core
 
         public static string Account => Load()?.Account ?? "";
         public static string SessionTenant => Load()?.TenantId ?? "";
+
+        /// <summary>
+        /// "J365-CONNECT tenant=... client=...": the two values another technician needs to use the same registration
+        /// (each one then signs in with his own account). Empty when nothing is configured.
+        /// </summary>
+        public static string ConnectionCode
+        {
+            get
+            {
+                if (!IsConfigured) return "";
+                string tenant = SessionTenant.Length > 0 && IsSignedIn ? SessionTenant : TenantId;
+                return $"{CodePrefix} tenant={tenant} client={ClientId}";
+            }
+        }
+
+        /// <summary>Reads a connection code (also the last line printed by the Cloud Shell command).</summary>
+        public static bool TryParseConnectionCode(string text, out string tenant, out string client)
+        {
+            tenant = client = null;
+            if (string.IsNullOrWhiteSpace(text)) return false;
+            var t = Regex.Match(text, @"tenant\s*=\s*([A-Za-z0-9][A-Za-z0-9.\-]*)", RegexOptions.IgnoreCase);
+            var c = Regex.Match(text, @"client\s*=\s*([0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})", RegexOptions.IgnoreCase);
+            if (!t.Success || !c.Success) return false;
+            tenant = t.Groups[1].Value.TrimEnd('.');
+            client = c.Groups[1].Value;
+            return IntunePublisher.IsTenant(tenant) && IntunePublisher.IsGuid(client);
+        }
+
+        /// <summary>Saves an app registration typed by hand or pasted as a connection code.</summary>
+        public static void SaveRegistration(string tenant, string client)
+        {
+            var cfg = ConfigStore.Current;
+            bool changed = !string.Equals(cfg.IntuneClientId?.Trim(), client?.Trim(), StringComparison.OrdinalIgnoreCase);
+            cfg.IntuneTenantId = tenant?.Trim() ?? "";
+            cfg.IntuneClientId = client?.Trim() ?? "";
+            ConfigStore.Save();
+            if (changed) SignOut(); else Changed?.Invoke();
+        }
 
         private static Saved Load()
         {
@@ -364,23 +434,33 @@ namespace J365.IntunePSApp.Core
         /// public client with the loopback redirect, the delegated permission DeviceManagementApps.ReadWrite.All and the
         /// admin consent for the organisation. Saves the tenant and client id in Settings.
         /// </summary>
-        public static async Task<RegistrationResult> CreateRegistrationAsync(IProgress<string> progress, CancellationToken ct)
+        public static async Task<RegistrationResult> CreateRegistrationAsync(IProgress<SetupProgress> progress, CancellationToken ct, string adminHint = null)
         {
-            progress?.Report(T("Connect_StepAdminSignIn"));
-            var admin = await EntraAuth.SignInAsync("organizations", EntraAuth.GraphCliClientId, AdminScopes, null, ct);
+            progress?.Report(new SetupProgress(SetupStep.AdminSignIn));
+            var admin = await EntraAuth.SignInAsync("organizations", EntraAuth.GraphCliClientId, AdminScopes, adminHint, ct);
             string tenant = admin.TenantId;
             if (string.IsNullOrEmpty(tenant)) throw new AuthException(T("Auth_ErrNoTenant"));
             var g = new Graph(admin.AccessToken);
             var result = new RegistrationResult { TenantId = tenant, Admin = admin.Account };
+            progress?.Report(new SetupProgress(SetupStep.Permission, admin.Account));
+            try { return await CreateRegistrationCoreAsync(g, result, progress, ct); }
+            catch (GraphException ex) when (ex.Status is 401 or 403)
+            {
+                // Signed in, but the account has no directory role that may create applications.
+                throw new AuthException(T("Connect_ErrInsufficient", admin.Account) + $" [{ex.Message}]", "insufficient_privileges");
+            }
+        }
 
-            progress?.Report(T("Connect_StepPermission"));
+        private static async Task<RegistrationResult> CreateRegistrationCoreAsync(Graph g, RegistrationResult result, IProgress<SetupProgress> progress, CancellationToken ct)
+        {
+            string tenant = result.TenantId;
             var graphSp = await g.GetAsync($"/v1.0/servicePrincipals(appId='{EntraAuth.GraphAppId}')?$select=id,oauth2PermissionScopes", ct);
             string graphSpId = graphSp?["id"]?.GetValue<string>() ?? throw new InvalidDataException(T("Connect_ErrGraphSp"));
             string scopeId = graphSp["oauth2PermissionScopes"]?.AsArray()
                 .FirstOrDefault(s => s?["value"]?.GetValue<string>() == IntunePermission)?["id"]?.GetValue<string>()
                 ?? throw new InvalidDataException(T("Connect_ErrScope", IntunePermission));
 
-            progress?.Report(T("Connect_StepApp"));
+            progress?.Report(new SetupProgress(SetupStep.Registration));
             string filter = Uri.EscapeDataString($"displayName eq '{RegistrationName}'");
             var found = (await g.GetAsync($"/v1.0/applications?$filter={filter}&$select=id,appId,displayName,tags", ct))?["value"]?.AsArray();
             var existing = found?.FirstOrDefault(a => a?["tags"]?.AsArray().Any(x => x?.GetValue<string>() == RegistrationTag) == true) ?? found?.FirstOrDefault();
@@ -415,7 +495,7 @@ namespace J365.IntunePSApp.Core
             }
             result.ClientId = appId;
 
-            progress?.Report(T("Connect_StepServicePrincipal"));
+            progress?.Report(new SetupProgress(SetupStep.ServicePrincipal, appId));
             string spId = null;
             for (int attempt = 1; spId == null; attempt++)
             {
@@ -430,7 +510,7 @@ namespace J365.IntunePSApp.Core
                 }
             }
 
-            progress?.Report(T("Connect_StepConsent"));
+            progress?.Report(new SetupProgress(SetupStep.Consent));
             try
             {
                 var grants = (await g.GetAsync($"/v1.0/oauth2PermissionGrants?$filter={Uri.EscapeDataString($"clientId eq '{spId}' and consentType eq 'AllPrincipals'")}", ct))?["value"]?.AsArray();

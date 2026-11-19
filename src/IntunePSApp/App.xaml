@@ -7,6 +7,7 @@
     <ResourceDictionary>
       <ResourceDictionary.MergedDictionaries>
         <ResourceDictionary Source="pack://application:,,,/PresentationFramework.Fluent;component/Themes/Fluent.Light.xaml"/>
+        <ResourceDictionary Source="Themes/Light.xaml"/>
         <ResourceDictionary Source="Styles.xaml"/>
       </ResourceDictionary.MergedDictionaries>
       <!-- Icon of a generated package (Intune\AppIcon.png), loaded without keeping the file open. -->

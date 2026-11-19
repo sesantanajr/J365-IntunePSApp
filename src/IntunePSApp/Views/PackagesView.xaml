@@ -27,15 +27,15 @@
       <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
       <Grid>
         <TextBox x:Name="Filter" Padding="38,8,12,8" VerticalContentAlignment="Center" TextChanged="Filter_TextChanged"/>
-        <TextBlock Text="&#xE721;" Style="{StaticResource Icon}" Foreground="{StaticResource Muted}" Margin="13,0,0,0" HorizontalAlignment="Left" IsHitTestVisible="False"/>
-        <TextBlock x:Name="FilterHint" Text="{l:T Packages_FilterHint}" Foreground="#94A3B8" Margin="40,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
+        <TextBlock Text="&#xE721;" Style="{StaticResource Icon}" Foreground="{DynamicResource Muted}" Margin="13,0,0,0" HorizontalAlignment="Left" IsHitTestVisible="False"/>
+        <TextBlock x:Name="FilterHint" Text="{l:T Packages_FilterHint}" Foreground="{DynamicResource Faint}" Margin="40,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
       </Grid>
       <CheckBox x:Name="OnlyOutdated" Grid.Column="1" Style="{StaticResource Switch}" Content="{l:T Packages_OnlyOutdated}" Margin="18,0,0,0" VerticalAlignment="Center" Checked="OnlyOutdated_Changed" Unchecked="OnlyOutdated_Changed"/>
     </Grid>
 
     <Border x:Name="Empty" Grid.Row="2" Style="{StaticResource Card}" VerticalAlignment="Top" Padding="32,28" Visibility="Collapsed">
       <StackPanel HorizontalAlignment="Center">
-        <TextBlock Text="&#xE7B8;" Style="{StaticResource Icon}" FontSize="40" Foreground="{StaticResource Brand}" HorizontalAlignment="Center"/>
+        <TextBlock Text="&#xE7B8;" Style="{StaticResource Icon}" FontSize="40" Foreground="{DynamicResource Brand}" HorizontalAlignment="Center"/>
         <TextBlock Text="{l:T Packages_EmptyTitle}" Style="{StaticResource H2}" HorizontalAlignment="Center" Margin="0,12,0,4"/>
         <TextBlock Text="{l:T Packages_EmptyText}" Style="{StaticResource MutedText}" TextAlignment="Center" MaxWidth="560"/>
         <Button Style="{StaticResource PrimaryButton}" HorizontalAlignment="Center" Margin="0,18,0,0" Content="{l:T Home_SearchCatalog}" Click="Catalog_Click"/>
@@ -51,9 +51,9 @@
               <Border Width="44" Height="44" CornerRadius="11">
                 <Border.Style>
                   <Style TargetType="Border">
-                    <Setter Property="Background" Value="{StaticResource Navy}"/>
+                    <Setter Property="Background" Value="{DynamicResource Navy}"/>
                     <Style.Triggers>
-                      <DataTrigger Binding="{Binding HasIcon}" Value="True"><Setter Property="Background" Value="{StaticResource Subtle}"/></DataTrigger>
+                      <DataTrigger Binding="{Binding HasIcon}" Value="True"><Setter Property="Background" Value="{DynamicResource Subtle}"/></DataTrigger>
                     </Style.Triggers>
                   </Style>
                 </Border.Style>
@@ -65,9 +65,9 @@
               <StackPanel Grid.Column="1" Margin="14,0" VerticalAlignment="Center">
                 <StackPanel Orientation="Horizontal">
                   <TextBlock Text="{Binding Title}" Style="{StaticResource H3}" FontSize="15" TextTrimming="CharacterEllipsis"/>
-                  <Border Style="{StaticResource Chip}" Background="{StaticResource WarningSoft}" Margin="10,0,0,0" VerticalAlignment="Center"
+                  <Border Style="{StaticResource Chip}" Background="{DynamicResource WarningSoft}" Margin="10,0,0,0" VerticalAlignment="Center"
                           Visibility="{Binding HasUpdate, Converter={StaticResource BoolToVis}}" ToolTip="{l:T Packages_UpdateTip}">
-                    <TextBlock Foreground="{StaticResource Warning}" FontSize="11.5" FontWeight="SemiBold">
+                    <TextBlock Foreground="{DynamicResource Warning}" FontSize="11.5" FontWeight="SemiBold">
                       <Run Text="{l:T Packages_NewVersion}"/><Run Text=" "/><Run Text="{Binding LatestVersion, Mode=OneWay}"/>
                     </TextBlock>
                   </Border>

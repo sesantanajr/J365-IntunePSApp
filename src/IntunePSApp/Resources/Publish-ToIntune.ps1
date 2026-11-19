@@ -97,12 +97,17 @@ param
     [string]$AppId,
     [switch]$Force,
     [switch]$Pause,
+    # Used by J365 IntunePSApp: when this file appears, the script stops at the next safe point and cleans up.
+    [string]$CancelFile,
     [string]$GraphUrl = 'https://graph.microsoft.com',
     [string]$LoginUrl = 'https://login.microsoftonline.com'
 )
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
+# Proxies that ask for the Windows sign-in (NTLM or Kerberos) get it, as browsers do.
+try { [System.Net.WebRequest]::DefaultWebProxy.Credentials = [System.Net.CredentialCache]::DefaultNetworkCredentials } catch { }
+$CancelledMessage = 'Cancelled by the user.'
 $Scope = ($GraphUrl.TrimEnd('/') + '/DeviceManagementApps.ReadWrite.All offline_access')
 $BlockSize = 6MB
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -129,6 +134,12 @@ function Save-Result([string]$Status, [string]$ErrorText)
         [System.IO.File]::WriteAllText($resultPath, $json, (New-Object System.Text.UTF8Encoding($false)))
     }
     catch { Write-Note ('The result file could not be written: ' + $_.Exception.Message) }
+}
+
+# Stops at a safe point when J365 IntunePSApp asked to cancel: the catch block then removes an app created by this run.
+function Assert-NotCancelled
+{
+    if ($CancelFile -and (Test-Path -LiteralPath $CancelFile)) { throw $CancelledMessage }
 }
 
 function Stop-Script([int]$Code)
@@ -375,6 +386,7 @@ function Wait-FileState([string]$FilePath, [string]$Stage, [int]$Minutes)
     $deadline = (Get-Date).AddMinutes($Minutes)
     while ((Get-Date) -lt $deadline)
     {
+        Assert-NotCancelled
         $file = Invoke-Graph -Method 'GET' -Path $FilePath
         $state = [string]$file.uploadState
         if ($state -eq ($Stage + 'Success')) { return $file }
@@ -643,10 +655,12 @@ try
     if ([string]$app.informationUrl -match '^https?://') { $body['informationUrl'] = [string]$app.informationUrl }
     if ($icon) { $body['largeIcon'] = [ordered]@{ type = 'image/png'; value = [Convert]::ToBase64String([System.IO.File]::ReadAllBytes($icon)) } }
 
+    Assert-NotCancelled
     if ($targetId)
     {
-        Write-Step 'Updating the settings of the existing app...'
-        $null = Invoke-Graph -Method 'PATCH' -Path ('/deviceAppManagement/mobileApps/' + $targetId) -Body $body
+        # The existing app is not touched yet: the new content is uploaded and committed first, then one change switches
+        # settings, detection and content together. A failure or a cancel before that leaves the app as it was.
+        Write-Step 'Preparing the new version of the existing app...'
         $script:Result.action = 'updated'
     }
     else
@@ -710,6 +724,7 @@ try
                     $sasUri = [string]$contentFile.azureStorageUri
                     $sasIssued = Get-Date
                 }
+                Assert-NotCancelled
                 $blockId = [Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes('block-' + $blockIds.Count.ToString('000000')))
                 Send-Block -SasUri $sasUri -BlockId $blockId -Data $data
                 $blockIds.Add($blockId)
@@ -740,9 +755,20 @@ try
             fileDigestAlgorithm  = [string]$encryption.FileDigestAlgorithm
         }
     }
+    Assert-NotCancelled
     $null = Invoke-Graph -Method 'POST' -Path ($filePath + '/commit') -Body $commitBody
     $null = Wait-FileState -FilePath $filePath -Stage 'commitFile' -Minutes 60
-    $null = Invoke-Graph -Method 'PATCH' -Path ('/deviceAppManagement/mobileApps/' + $targetId) -Body ([ordered]@{ '@odata.type' = '#microsoft.graph.win32LobApp'; committedContentVersion = $versionId })
+    if ($script:Result.action -eq 'updated')
+    {
+        # One change: settings, detection, version and the new content become active together.
+        Write-Step 'Updating the settings of the existing app...'
+        $body['committedContentVersion'] = $versionId
+        $null = Invoke-Graph -Method 'PATCH' -Path ('/deviceAppManagement/mobileApps/' + $targetId) -Body $body
+    }
+    else
+    {
+        $null = Invoke-Graph -Method 'PATCH' -Path ('/deviceAppManagement/mobileApps/' + $targetId) -Body ([ordered]@{ '@odata.type' = '#microsoft.graph.win32LobApp'; committedContentVersion = $versionId })
+    }
     Write-Ok ('Content version ' + $versionId + ' is active')
     # From here on the app is complete: a later failure must not remove it.
     $script:CreatedAppId = $null
@@ -801,8 +827,10 @@ try
 catch
 {
     $message = $_.Exception.Message
+    $cancelled = ($message -eq $CancelledMessage)
     Write-Host ''
-    Write-Host ('  ERROR  ' + $message) -ForegroundColor Red
+    if ($cancelled) { Write-Note $CancelledMessage }
+    else { Write-Host ('  ERROR  ' + $message) -ForegroundColor Red }
     # An app created by this run and left without content would be a broken entry in the tenant: remove it.
     if ($script:CreatedAppId)
     {
@@ -816,7 +844,13 @@ catch
         }
         catch { Write-Note ('The incomplete app ' + $script:CreatedAppId + ' could not be removed: delete it in the Intune admin center.') }
     }
+    if ($script:Result.action -eq 'updated') { Write-Note 'The existing app was not changed.' }
     Write-Host ''
+    if ($cancelled)
+    {
+        Save-Result 'cancelled' ''
+        Stop-Script 2
+    }
     Save-Result 'failed' $message
     Stop-Script 1
 }

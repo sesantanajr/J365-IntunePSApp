@@ -27,6 +27,63 @@ namespace J365.IntunePSApp.Views
             BuildSwatches();
             CompanyGrid.SizeChanged += (s, e) => UpdateCompanyLayout();
             IntuneConnection.Changed += () => Dispatcher.BeginInvoke(new Action(UpdateIntuneStatus));
+            ThemeManager.Changed += SyncThemeCards;
+            SecGeneral.IsChecked = true;
+        }
+
+        // ------------------------------------------------------------------ sections and theme
+
+        private string _section = "general";
+
+        private void Section_Checked(object sender, RoutedEventArgs e)
+        {
+            if (sender is RadioButton rb && rb.Tag is string key) ShowSectionPanel(key);
+        }
+
+        private void ShowSectionPanel(string key)
+        {
+            if (PanelGeneral == null) return;
+            _section = key;
+            PanelGeneral.Visibility = key == "general" ? Visibility.Visible : Visibility.Collapsed;
+            PanelAppearance.Visibility = key == "appearance" ? Visibility.Visible : Visibility.Collapsed;
+            PanelCompany.Visibility = key == "company" ? Visibility.Visible : Visibility.Collapsed;
+            PanelDefaults.Visibility = key == "defaults" ? Visibility.Visible : Visibility.Collapsed;
+            PanelIntune.Visibility = key == "intune" ? Visibility.Visible : Visibility.Collapsed;
+            PanelTools.Visibility = key == "tools" ? Visibility.Visible : Visibility.Collapsed;
+            PanelAbout.Visibility = key == "about" ? Visibility.Visible : Visibility.Collapsed;
+            PageScroll.ScrollToTop();
+            if (key == "company") UpdateBrandPreview();
+        }
+
+        /// <summary>Opens a section: general, appearance, company, defaults, intune, tools or about.</summary>
+        public void ShowSection(string key)
+        {
+            var target = key switch
+            {
+                "appearance" => SecAppearance, "company" => SecCompany, "defaults" => SecDefaults, "intune" => SecIntune,
+                "tools" => SecTools, "about" => SecAbout, _ => SecGeneral
+            };
+            if (target.IsChecked == true) ShowSectionPanel(key); else target.IsChecked = true;
+        }
+
+        private bool _syncingTheme;
+
+        private void SyncThemeCards()
+        {
+            if (ThemeSystem == null) return;
+            _syncingTheme = true;
+            string setting = ThemeManager.Setting;
+            ThemeSystem.IsChecked = setting == ThemeManager.SystemTheme;
+            ThemeLight.IsChecked = setting == ThemeManager.LightTheme;
+            ThemeDark.IsChecked = setting == ThemeManager.DarkTheme;
+            _syncingTheme = false;
+        }
+
+        private void Theme_Checked(object sender, RoutedEventArgs e)
+        {
+            // Applied at once (no need to save): the cards are the live switch.
+            if (_syncingTheme || !(sender is RadioButton rb) || !(rb.Tag is string theme)) return;
+            if (theme != ThemeManager.Setting) ThemeManager.Set(theme);
         }
 
         // ------------------------------------------------------------------ Microsoft Intune connection
@@ -45,18 +102,25 @@ namespace J365.IntunePSApp.Views
         {
             if (IntuneStatusTitle == null || TxtTenant == null || TxtClient == null) return;
             bool signedIn = IntuneConnection.IsSignedIn, configured = IntuneConnection.IsConfigured;
-            IntuneStatusBox.Background = (Brush)FindResource(signedIn ? "SuccessSoft" : "BrandSoft");
-            IntuneStatusIcon.Foreground = (Brush)FindResource(signedIn ? "Success" : "Brand");
-            IntuneStatusIcon.Text = signedIn ? "" : "";
+            IntuneStatusBox.SetResourceReference(Border.BackgroundProperty, signedIn ? "SuccessSoft" : configured ? "WarningSoft" : "BrandSoft");
+            IntuneStatusIcon.SetResourceReference(TextBlock.ForegroundProperty, signedIn ? "Success" : configured ? "Warning" : "BrandText");
+            IntuneStatusIcon.Text = signedIn ? "\uE73E" : configured ? "\uE72E" : "\uE753";
             IntuneStatusTitle.Text = signedIn ? T("Publish_ConnectedAs", IntuneConnection.Account)
                 : configured ? T("Publish_NotSignedIn") : T("Publish_NotConnected");
             IntuneStatusText.Text = signedIn ? T("Settings_IntuneConnectedText", IntuneConnection.RegistrationName, IntuneConnection.ClientId, IntuneConnection.SessionTenant.Length > 0 ? IntuneConnection.SessionTenant : IntuneConnection.TenantId)
                 : configured ? T("Settings_IntuneConfiguredText", IntuneConnection.ClientId, IntuneConnection.TenantId)
                 : T("Publish_NotConnectedHint", IntuneConnection.RegistrationName);
+            IntuneDetails.Visibility = configured ? Visibility.Visible : Visibility.Collapsed;
+            IntuneTenantValue.Text = signedIn && IntuneConnection.SessionTenant.Length > 0 ? IntuneConnection.SessionTenant : IntuneConnection.TenantId;
+            IntuneClientValue.Text = IntuneConnection.ClientId;
+            BtnIntuneSetupText.Text = configured ? T("Settings_IntuneRedo") : T("Settings_IntuneConnect");
+            BtnIntuneSetup.Style = Ui.Style(configured ? "SecondaryButton" : "PrimaryButton");
             bool typed = IntunePublisher.IsTenant(TxtTenant.Text) && IntunePublisher.IsGuid(TxtClient.Text);
             BtnIntuneSignIn.Visibility = configured || typed ? Visibility.Visible : Visibility.Collapsed;
             BtnIntuneSignIn.Content = signedIn ? T("Publish_SwitchAccount") : T("Publish_SignIn");
+            BtnIntuneSignIn.Style = Ui.Style(configured && !signedIn ? "PrimaryButton" : "SecondaryButton");
             BtnIntuneTest.Visibility = signedIn ? Visibility.Visible : Visibility.Collapsed;
+            BtnIntuneCopyCode.Visibility = configured ? Visibility.Visible : Visibility.Collapsed;
             BtnIntuneSignOut.Visibility = signedIn ? Visibility.Visible : Visibility.Collapsed;
             if (syncFields && !_loading)
             {
@@ -75,15 +139,32 @@ namespace J365.IntunePSApp.Views
             bool busy = !string.IsNullOrEmpty(text);
             IntuneBusyText.Text = text ?? "";
             IntuneBusyText.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
-            BtnIntuneSetup.IsEnabled = BtnIntuneSignIn.IsEnabled = BtnIntuneTest.IsEnabled = BtnIntuneSignOut.IsEnabled = !busy;
+            BtnIntuneSetup.IsEnabled = BtnIntuneSignIn.IsEnabled = BtnIntuneTest.IsEnabled = BtnIntuneSignOut.IsEnabled = BtnIntuneCopyCode.IsEnabled = !busy;
         }
 
-        private async void IntuneSetup_Click(object sender, RoutedEventArgs e)
+        private void IntuneSetup_Click(object sender, RoutedEventArgs e)
         {
-            _intuneCts = new CancellationTokenSource();
-            SetIntuneBusy(T("Connect_StepAdminSignIn"));
-            try { await IntuneConnectUi.SetupAsync(s => Dispatcher.Invoke(() => SetIntuneBusy(string.IsNullOrEmpty(s) ? T("Common_Working") : s)), _intuneCts.Token); }
-            finally { SetIntuneBusy(null); UpdateIntuneStatus(); }
+            // The connection window: automatic setup, connection code or Azure Cloud Shell, with every step shown.
+            if (ConnectWindow.Run(Window.GetWindow(this))) MainWindow.Current?.Toast(T("Auth_SignedIn", IntuneConnection.Account), "ok");
+            UpdateIntuneStatus();
+        }
+
+        private void IntuneCopyCode_Click(object sender, RoutedEventArgs e)
+        {
+            Ui.CopyText(IntuneConnection.ConnectionCode);
+            MainWindow.Current?.Toast(T("Settings_IntuneCodeCopied"), "ok");
+        }
+
+        private void IntunePasteCode_Click(object sender, RoutedEventArgs e)
+        {
+            string text = "";
+            try { text = Clipboard.GetText(); } catch { }
+            if (!IntuneConnection.TryParseConnectionCode(text, out var tenant, out var client)) { Ui.Warn(T("Connect_CodeInvalid")); return; }
+            TxtTenant.Text = tenant;
+            TxtClient.Text = client;
+            IntuneConnection.SaveRegistration(tenant, client);
+            MainWindow.Current?.Toast(T("Settings_IntuneCodePasted"), "ok");
+            UpdateIntuneStatus();
         }
 
         private async void IntuneSignIn_Click(object sender, RoutedEventArgs e)
@@ -91,7 +172,7 @@ namespace J365.IntunePSApp.Views
             // Typed by hand: saved first, so the sign-in uses them.
             string tenant = TxtTenant.Text.Trim(), client = TxtClient.Text.Trim();
             if (tenant.Length > 0 && client.Length > 0 && (!IntunePublisher.IsTenant(tenant) || !IntunePublisher.IsGuid(client))) { Ui.Warn(T(IntunePublisher.IsTenant(tenant) ? "Publish_InvalidClient" : "Publish_InvalidTenant")); return; }
-            if (tenant.Length > 0 && client.Length > 0) { ConfigStore.Current.IntuneTenantId = tenant; ConfigStore.Current.IntuneClientId = client; ConfigStore.Save(); }
+            if (tenant.Length > 0 && client.Length > 0) IntuneConnection.SaveRegistration(tenant, client);
             _intuneCts = new CancellationTokenSource();
             SetIntuneBusy(T("Publish_SigningIn"));
             try { await IntuneConnectUi.SignInAsync(null, _intuneCts.Token); }
@@ -231,6 +312,7 @@ namespace J365.IntunePSApp.Views
             UpdateInfo();
             UpdateIntuneStatus();
             UpdateBrandPreview();
+            SyncThemeCards();
         }
 
         public void OnLanguageChanged()
@@ -244,11 +326,8 @@ namespace J365.IntunePSApp.Views
             UpdateBrandPreview();
         }
 
-        /// <summary>Scrolls to the Microsoft Intune card (from the indicator on Home).</summary>
-        public void ShowIntune()
-        {
-            Dispatcher.BeginInvoke(new Action(() => IntuneCard.BringIntoView()), System.Windows.Threading.DispatcherPriority.Loaded);
-        }
+        /// <summary>Opens the Microsoft Intune section (from Home and the sidebar).</summary>
+        public void ShowIntune() => ShowSection("intune");
 
         /// <summary>Updates the information blocks (database, versions, installation) without touching the form.</summary>
         public void RefreshInfo() => UpdateInfo();

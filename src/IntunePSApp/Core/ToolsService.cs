@@ -35,6 +35,31 @@ namespace J365.IntunePSApp.Core
         }
 
         public static string PsadtVersion => LocalPsadt() is string p ? Path.GetFileName(p) : null;
+
+        /// <summary>Publishers of the official PSAppDeployToolkit releases (the 4.x files are signed by Patch My PC).</summary>
+        private static readonly string[] PsadtPublishers = { "Patch My PC", "PSAppDeployToolkit" };
+
+        /// <summary>
+        /// Checks the module and the launcher of a toolkit copy: a valid signature of the toolkit publisher. Returns the
+        /// signer; throws when a file is missing, unsigned, changed after signing or signed by someone else. Called when
+        /// a template is installed and before every build, so a copy changed on disk never reaches a package.
+        /// </summary>
+        public static string VerifyPsadt(string root)
+        {
+            string psm1 = Path.Combine(root, "PSAppDeployToolkit", "PSAppDeployToolkit.psm1");
+            if (!File.Exists(psm1)) throw new InvalidDataException(T("Err_PsadtModuleMissing"));
+            string signer = null;
+            foreach (var file in new[] { psm1, Path.Combine(root, "Invoke-AppDeployToolkit.exe") })
+            {
+                if (!File.Exists(file)) continue;
+                if (!Signature.IsValid(file)) throw new InvalidDataException(T("Err_PsadtSignature", Path.GetFileName(file)));
+                string name = Signature.Signer(file).Name ?? "";
+                if (!PsadtPublishers.Any(p => name.Contains(p, StringComparison.OrdinalIgnoreCase)))
+                    throw new InvalidDataException(T("Err_PsadtPublisher", Path.GetFileName(file), name));
+                signer ??= name;
+            }
+            return signer;
+        }
         public static bool HasIntuneWinAppUtil => File.Exists(IntuneWinAppUtilPath);
 
         public static async Task<string> EnsurePsadtAsync(CancellationToken ct, IProgress<(long, long?)> progress = null)
@@ -110,9 +135,8 @@ namespace J365.IntunePSApp.Core
                 var m = Regex.Match(File.ReadAllText(psd1), @"ModuleVersion\s*=\s*'([^']+)'");
                 string version = m.Success ? m.Groups[1].Value : "4.0.0";
                 if (!version.StartsWith("4.")) throw new InvalidDataException(T("Err_PsadtUnsupported", version));
-                string psm1 = Path.Combine(root, "PSAppDeployToolkit", "PSAppDeployToolkit.psm1");
-                if (!Signature.IsValid(psm1)) Log.Warn(T("Log_PsadtSignatureInvalid"));
-                else Log.Info(T("Log_PsadtSignatureOk", Signature.Signer(psm1).Name));
+                // The toolkit runs as SYSTEM on every device: only the official release, signed by its publisher, goes in.
+                Log.Info(T("Log_PsadtSignatureOk", VerifyPsadt(root)));
                 ValidateTemplate(root, version);
                 foreach (var f in Directory.GetFiles(root, "*", SearchOption.AllDirectories)) Unblock(f);
                 Directory.CreateDirectory(PsadtBase);

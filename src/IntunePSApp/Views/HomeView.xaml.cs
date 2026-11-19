@@ -146,7 +146,8 @@ namespace J365.IntunePSApp.Views
         {
             bool signedIn = IntuneConnection.IsSignedIn;
             StatIntune.Text = signedIn ? T("Home_StatIntuneOn") : IntuneConnection.IsConfigured ? T("Home_StatIntuneReady") : T("Home_StatIntuneOff");
-            StatIntune.Foreground = (System.Windows.Media.Brush)FindResource(signedIn ? "Success" : "Ink");
+            StatIntune.SetResourceReference(TextBlock.ForegroundProperty, signedIn ? "Success" : "Ink");
+            IntuneDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, signedIn ? "Success" : IntuneConnection.IsConfigured ? "Warning" : "Faint");
             StatIntuneSub.Text = signedIn ? IntuneConnection.Account : IntuneConnection.IsConfigured ? T("Home_StatIntuneSignIn") : T("Home_StatIntuneSetup");
         }
 
@@ -167,6 +168,13 @@ namespace J365.IntunePSApp.Views
         }
 
         private void Catalog_Click(object sender, RoutedEventArgs e) => MainWindow.Current.Navigate("catalog");
+        private void StatApps_Click(object sender, System.Windows.Input.MouseButtonEventArgs e) => MainWindow.Current.Navigate("catalog");
+        private void StatPackages_Click(object sender, System.Windows.Input.MouseButtonEventArgs e) => MainWindow.Current.Navigate("packages");
+        private void StatPsadt_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            MainWindow.Current.Navigate("settings");
+            MainWindow.Current.Settings.ShowSection("tools");
+        }
         private void Package_Click(object sender, RoutedEventArgs e) { MainWindow.Current.Navigate("editor"); MainWindow.Current.Editor.BrowseInstaller(); }
         private void Packages_Click(object sender, RoutedEventArgs e) => MainWindow.Current.Navigate("packages");
 

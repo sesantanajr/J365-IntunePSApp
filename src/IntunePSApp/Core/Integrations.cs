@@ -343,10 +343,15 @@ namespace J365.IntunePSApp.Core
         /// command line), answers no question (<c>-Force</c>, so <paramref name="o"/> must say what to do with an app of
         /// the same name) and reports every line it prints. The caller waits for the process and reads the result file.
         /// </summary>
+        /// <summary>The file whose creation asks a running in-app publication to stop (the script then cleans up).</summary>
+        public static string CancelFile(string publishScript) => Path.Combine(Path.GetDirectoryName(publishScript) ?? "", "publish-cancel.flag");
+
         public static Process LaunchInApp(string publishScript, PublishOptions o, string refreshToken, Action<string> output)
         {
             if (Check(o) != null || o.IfExists is not ("Update" or "CreateNew" or "Fail")) throw new ArgumentException("Invalid publishing options.");
-            var psi = ToolsService.PowerShellStartInfo(Arguments(publishScript, o) + " -Force");
+            string cancel = CancelFile(publishScript);
+            try { if (File.Exists(cancel)) File.Delete(cancel); } catch { }
+            var psi = ToolsService.PowerShellStartInfo(Arguments(publishScript, o) + " -Force -CancelFile \"" + cancel + "\"");
             psi.WorkingDirectory = Path.GetDirectoryName(publishScript);
             psi.StandardOutputEncoding = Encoding.UTF8;
             psi.StandardErrorEncoding = Encoding.UTF8;

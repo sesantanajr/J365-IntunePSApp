@@ -37,7 +37,8 @@ Everything a package needs is in `PackageSettings`, saved as `project.json` next
 | `SummaryWriter.cs` | The Intune instructions (HTML and text). |
 | `ToolsService.cs` | Downloads and validates PSAppDeployToolkit and IntuneWinAppUtil; `PowerShellValidator` parses generated scripts with Windows PowerShell 5.1. |
 | `SetupService.cs` | First-run dependency setup and the update checks. |
-| `IntuneConnection.cs` | Entra ID sign-in (authorization code + PKCE on a loopback port), the session kept with DPAPI, the automatic app registration (application, enterprise application, admin consent) and the Graph calls of publishing (test, earlier versions of an app). |
+| `IntuneConnection.cs` | Entra ID sign-in (authorization code + PKCE on a loopback port), the session kept with DPAPI, the automatic app registration (application, enterprise application, admin consent) with its steps, the connection code and the Graph calls of publishing (test, earlier versions of an app). |
+| `ConnectScripts.cs` | The Azure CLI commands (Bash and PowerShell) that create the same registration from Azure Cloud Shell. |
 | `AppUpdater.cs` | Updates the application while it is open: reads the latest GitHub release, downloads the zip, checks it against `SHA256SUMS.txt`, puts the new executable in place of the running one and restarts. |
 | `InstallService.cs` | Optional per-user installation (also over an installed copy that is open), shortcuts, uninstall. |
 | `Integrations.cs` | Windows Sandbox: state of the Windows feature (ready, open, turned off, not in this edition), enabling it with DISM, the `.wsb` configuration and the result of the test. Launcher of the publishing script. |
@@ -63,7 +64,9 @@ HKLM\SOFTWARE\J365\IntunePSApp\Apps\<application>     (HKCU for packages install
     Version, Name, Vendor, PackageVersion, InstalledUtc, Generator
 ```
 
-The detection script first applies the rule (name/version, product code or file) and then requires the mark with a version equal to or higher than the minimum. A copy without the mark is reported as not installed (the script writes `Not detected: ...` and exits 1), so Intune runs the package, which removes that copy and installs its own version. The mark is written at the end of *Post-Install* (a failed step leaves none) and of *Repair*, and removed after the uninstallation. It can be turned off per package (*Require the mark of this package*).
+The detection script first applies the rule (name/version, product code or file) and then requires the mark. Since 2.4 a mark of any version counts: the version is checked on the installed application, which may have updated itself since an older package wrote the mark (requiring the version of the mark made Intune downgrade such applications). A copy without the mark is reported as not installed (the script writes `Not detected: ...` and exits 1), so Intune runs the package, which removes that copy and installs its own version. The mark is written at the end of *Post-Install* (a failed step leaves none) and of *Repair*, and removed after the uninstallation. It can be turned off per package (*Require the mark of this package*).
+
+Two guards around it (2.4): at the start of *Pre-Install*, a version newer than the package already installed is kept (the package writes its mark and returns, *Keep a newer version that is already installed*); after the uninstallation, anything still registered with the name makes the deployment fail and keeps the mark, so Intune never shows "uninstalled" for a program that is still there.
 
 ## Display modes
 
@@ -82,6 +85,14 @@ PSAppDeployToolkit 4.1 resolves `-DeployMode Auto` at the start of the session: 
 3. runs the detection script again and writes `result.json` and the logs to `C:\J365Results`.
 
 The editor polls `Sandbox\Results\result.json` and shows each step (install, uninstall) on the result card. `SandboxService.State` decides what *Test in Sandbox* does before that: start, ask to close the open sandbox, offer to enable the Windows feature (`dism /Online /Enable-Feature /FeatureName:Containers-DisposableClientVM /All`, elevated), or explain that the edition has no sandbox.
+
+## Themes and look
+
+`App.xaml` merges, in this order, the WPF Fluent control styles (`Fluent.Light.xaml` or `Fluent.Dark.xaml`), the colors of the theme (`Themes/Light.xaml` or `Themes/Dark.xaml`, the same keys in both) and `Styles.xaml`. Every color is referenced with `DynamicResource`, and colors set in code use `SetResourceReference`, so `Views/ThemeManager.cs` swaps the first two dictionaries and every open page follows at once. The theme dictionaries also give the Fluent controls the brand accent (`SystemAccentColor*`, `AccentFillColor*`) instead of the Windows accent color. *System* follows `AppsUseLightTheme` and listens to Windows changes. Dialog windows (`DialogWindow`) draw their title bar in the theme (`DialogWindowStyle`); `ThemeManager.ApplyWindowFrame` asks Windows 11 for rounded corners and a dark frame. `--theme light|dark` forces a theme for the screenshots.
+
+## The connection window
+
+`Views/ConnectWindow.xaml` drives the three ways to connect (automatic setup, connection code or IDs, Azure Cloud Shell). `IntuneConnection.CreateRegistrationAsync` reports each `SetupStep`; the window adds the activation wait, the user sign-in and a read of one Intune app, and maps the failure (`AuthException.Code`, for example `cancel` for `access_denied` + `error_subcode=cancel`, or `insufficient_privileges` for HTTP 403 of Graph) to its likely causes and actions. `Core/ConnectScripts.cs` holds the Azure CLI commands of the Cloud Shell way; both they and *Copy connection code* produce `J365-CONNECT tenant=... client=...`, read by `IntuneConnection.TryParseConnectionCode`. `--snapshot` also draws the pages of this window with sample content.
 
 ## Responsive layout
 

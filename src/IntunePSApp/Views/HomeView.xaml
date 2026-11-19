@@ -2,46 +2,78 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:l="clr-namespace:J365.IntunePSApp.Localization">
+  <UserControl.Resources>
+    <!-- Indicator card: lifts its border under the mouse when it opens a page -->
+    <Style x:Key="StatCard" TargetType="Border" BasedOn="{StaticResource Card}">
+      <Setter Property="Margin" Value="8,0,8,16"/>
+      <Setter Property="Padding" Value="20,18"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Style.Triggers>
+        <Trigger Property="IsMouseOver" Value="True">
+          <Setter Property="BorderBrush" Value="{DynamicResource BrandSoft2}"/>
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+    <Style x:Key="StatValue" TargetType="TextBlock">
+      <Setter Property="FontFamily" Value="{StaticResource DisplayFont}"/>
+      <Setter Property="FontSize" Value="29"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
+      <Setter Property="Margin" Value="0,12,0,0"/>
+      <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+    </Style>
+    <Style x:Key="TrustItem" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource HeroMuted}"/>
+      <Setter Property="FontSize" Value="12.5"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+  </UserControl.Resources>
+
   <ScrollViewer VerticalScrollBarVisibility="Auto">
-    <StackPanel Margin="28,6,28,28" MaxWidth="1240">
+    <StackPanel Margin="32,6,32,32" MaxWidth="1260">
 
       <!-- Hero -->
-      <Border CornerRadius="16" Background="{StaticResource HeroBrush}" Padding="36,32" Effect="{StaticResource CardShadow}">
+      <Border CornerRadius="20" Background="{DynamicResource HeroBrush}" Effect="{DynamicResource CardShadow}" ClipToBounds="True">
         <Grid>
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="Auto"/>
-          </Grid.ColumnDefinitions>
-          <StackPanel VerticalAlignment="Center" MaxWidth="640" HorizontalAlignment="Left">
-            <Border Background="#1FFFFFFF" CornerRadius="10" Padding="10,3" HorizontalAlignment="Left">
-              <TextBlock Text="{l:T Home_Badge}" Foreground="#CFE6FA" FontSize="12"/>
-            </Border>
-            <TextBlock Text="{l:T Home_Title}" Foreground="White" FontFamily="{StaticResource DisplayFont}" FontSize="30" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,14,0,0"/>
-            <TextBlock Text="{l:T Home_Subtitle}" Foreground="#C9DBF0" FontSize="14.5" TextWrapping="Wrap" Margin="0,10,0,0"/>
-            <WrapPanel Margin="0,16,0,0">
-              <Button Style="{StaticResource HeroButton}" Margin="0,8,12,0" Click="Catalog_Click">
-                <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE721;" Style="{StaticResource Icon}" Margin="0,0,10,0"/><TextBlock Text="{l:T Home_SearchCatalog}"/></StackPanel>
+          <!-- Decoration: a soft glow and two thin rings behind the logo -->
+          <Ellipse Width="560" Height="560" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-220,-160,0" Fill="{DynamicResource HeroGlow}" IsHitTestVisible="False"/>
+          <Ellipse Width="420" Height="420" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-170,-90,0" Stroke="#14FFFFFF" StrokeThickness="1" IsHitTestVisible="False"/>
+          <Ellipse Width="300" Height="300" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-110,-30,0" Stroke="#10FFFFFF" StrokeThickness="1" IsHitTestVisible="False"/>
+          <Grid Margin="38,34,38,32">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*"/>
+              <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel VerticalAlignment="Center" MaxWidth="650" HorizontalAlignment="Left">
+              <Border Background="{DynamicResource HeroChip}" BorderBrush="{DynamicResource HeroChipLine}" BorderThickness="1" CornerRadius="12" Padding="10,4" HorizontalAlignment="Left">
+                <StackPanel Orientation="Horizontal">
+                  <Ellipse Width="7" Height="7" Fill="#38D2F5" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                  <TextBlock Text="{l:T Home_Badge}" Foreground="{DynamicResource HeroMuted}" FontSize="12"/>
+                </StackPanel>
+              </Border>
+              <TextBlock Text="{l:T Home_Title}" Foreground="{DynamicResource HeroText}" FontFamily="{StaticResource DisplayFont}" FontSize="31" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,16,0,0" LineHeight="38"/>
+              <TextBlock Text="{l:T Home_Subtitle}" Foreground="{DynamicResource HeroMuted}" FontSize="14.5" TextWrapping="Wrap" Margin="0,10,0,0" LineHeight="22"/>
+              <WrapPanel Margin="0,18,0,0">
+                <Button Style="{StaticResource HeroButton}" Margin="0,8,12,0" Click="Catalog_Click">
+                  <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE721;" Style="{StaticResource Icon}" Margin="0,0,10,0"/><TextBlock Text="{l:T Home_SearchCatalog}"/></StackPanel>
+                </Button>
+                <Button Style="{StaticResource HeroOutlineButton}" Margin="0,8,0,0" Click="Package_Click">
+                  <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8E5;" Style="{StaticResource Icon}" Margin="0,0,10,0"/><TextBlock Text="{l:T Home_PackageInstaller}"/></StackPanel>
+                </Button>
+              </WrapPanel>
+              <WrapPanel Margin="0,20,0,0">
+                <StackPanel Orientation="Horizontal" Margin="0,0,18,4"><TextBlock Text="&#xE73E;" Style="{StaticResource Icon}" FontSize="12" Foreground="#38D2F5" Margin="0,0,7,0"/><TextBlock Text="{l:T Home_Trust1}" Style="{StaticResource TrustItem}"/></StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,18,4"><TextBlock Text="&#xE73E;" Style="{StaticResource Icon}" FontSize="12" Foreground="#38D2F5" Margin="0,0,7,0"/><TextBlock Text="{l:T Home_Trust2}" Style="{StaticResource TrustItem}"/></StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,4"><TextBlock Text="&#xE73E;" Style="{StaticResource Icon}" FontSize="12" Foreground="#38D2F5" Margin="0,0,7,0"/><TextBlock Text="{l:T Home_Trust3}" Style="{StaticResource TrustItem}"/></StackPanel>
+              </WrapPanel>
+            </StackPanel>
+            <!-- Jornada 365 logo in its version for dark backgrounds (transparent, white lettering). Opens the blog. -->
+            <Grid x:Name="HeroArt" Grid.Column="1" Width="330" Margin="24,0,0,0" VerticalAlignment="Center">
+              <Button Style="{StaticResource LogoLink}" HorizontalAlignment="Center" VerticalAlignment="Center" Click="Blog_Click" ToolTip="{l:T Credits_BlogTip}"
+                      AutomationProperties.Name="{l:T Credits_BlogTip}">
+                <Image Source="/Assets/j365-logo-dark.png" Width="310" RenderOptions.BitmapScalingMode="HighQuality"/>
               </Button>
-              <Button Style="{StaticResource HeroOutlineButton}" Margin="0,8,0,0" Click="Package_Click">
-                <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8E5;" Style="{StaticResource Icon}" Margin="0,0,10,0"/><TextBlock Text="{l:T Home_PackageInstaller}"/></StackPanel>
-              </Button>
-            </WrapPanel>
-          </StackPanel>
-          <!-- Jornada 365 logo in its version for dark backgrounds (transparent, white lettering), on a soft glow. Opens the blog. -->
-          <Grid x:Name="HeroArt" Grid.Column="1" Width="350" Margin="24,0,0,0" VerticalAlignment="Center">
-            <Ellipse Width="330" Height="230">
-              <Ellipse.Fill>
-                <RadialGradientBrush>
-                  <GradientStop Color="#2A4FC3F7" Offset="0"/>
-                  <GradientStop Color="#0C4FC3F7" Offset="0.6"/>
-                  <GradientStop Color="#004FC3F7" Offset="1"/>
-                </RadialGradientBrush>
-              </Ellipse.Fill>
-            </Ellipse>
-            <Button Style="{StaticResource LogoLink}" HorizontalAlignment="Center" VerticalAlignment="Center" Click="Blog_Click" ToolTip="{l:T Credits_BlogTip}"
-                    AutomationProperties.Name="{l:T Credits_BlogTip}">
-              <Image Source="/Assets/j365-logo-dark.png" Width="320" RenderOptions.BitmapScalingMode="HighQuality"/>
-            </Button>
+            </Grid>
           </Grid>
         </Grid>
       </Border>
@@ -50,14 +82,16 @@
       <ItemsControl x:Name="Notices" Focusable="False">
         <ItemsControl.ItemTemplate>
           <DataTemplate>
-            <Border Style="{StaticResource Notice}">
+            <Border Style="{StaticResource Notice}" Margin="0,14,0,0" Padding="14,12">
               <DockPanel>
-                <Button DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Content="{Binding ButtonText}" Padding="14,7" VerticalAlignment="Center" Margin="8,0,0,0" Click="Notice_Click"/>
+                <Button DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Content="{Binding ButtonText}" Padding="16,7" MinHeight="34" VerticalAlignment="Center" Margin="8,0,0,0" Click="Notice_Click"/>
                 <Button DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Content="{Binding LinkText}" Visibility="{Binding LinkVisibility}" Padding="12,7" VerticalAlignment="Center" Margin="16,0,0,0" Click="NoticeLink_Click"/>
-                <TextBlock DockPanel.Dock="Left" Text="{Binding Glyph}" Style="{StaticResource Icon}" Foreground="{StaticResource Brand}" FontSize="18" Margin="2,0,14,0" VerticalAlignment="Center"/>
+                <Border DockPanel.Dock="Left" Style="{StaticResource IconTile}" Width="36" Height="36" Background="{DynamicResource CardBg}" Margin="0,0,14,0" VerticalAlignment="Center">
+                  <TextBlock Text="{Binding Glyph}" Style="{StaticResource Icon}" Foreground="{DynamicResource BrandText}" FontSize="16" HorizontalAlignment="Center"/>
+                </Border>
                 <StackPanel VerticalAlignment="Center">
-                  <TextBlock Text="{Binding Title}" FontWeight="SemiBold" Foreground="{StaticResource Ink}" TextWrapping="Wrap"/>
-                  <TextBlock Text="{Binding Text}" Foreground="{StaticResource Ink2}" FontSize="12.5" TextWrapping="Wrap"/>
+                  <TextBlock Text="{Binding Title}" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" TextWrapping="Wrap"/>
+                  <TextBlock Text="{Binding Text}" Foreground="{DynamicResource Ink2}" FontSize="12.5" TextWrapping="Wrap" Margin="0,1,0,0"/>
                 </StackPanel>
               </DockPanel>
             </Border>
@@ -65,35 +99,48 @@
         </ItemsControl.ItemTemplate>
       </ItemsControl>
 
-      <!-- Indicators -->
-      <UniformGrid x:Name="Stats" Columns="4" Margin="-8,18,-8,0">
-        <Border Style="{StaticResource Card}" Margin="8,0,8,16">
+      <!-- Indicators (each one opens its page) -->
+      <UniformGrid x:Name="Stats" Columns="4" Margin="-8,20,-8,0">
+        <Border Style="{StaticResource StatCard}" MouseLeftButtonUp="StatApps_Click" ToolTip="{l:T Home_StatAppsTip}">
           <StackPanel>
-            <StackPanel Orientation="Horizontal"><Border Width="32" Height="32" CornerRadius="16" Background="{StaticResource BrandSoft}" Margin="0,0,10,0"><TextBlock Text="&#xE8F1;" Style="{StaticResource Icon}" Foreground="{StaticResource Brand}" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><TextBlock Text="{l:T Home_StatApps}" Style="{StaticResource MutedText}" VerticalAlignment="Center"/></StackPanel>
-            <TextBlock x:Name="StatApps" Text="—" FontFamily="{StaticResource DisplayFont}" FontSize="28" FontWeight="SemiBold" Foreground="{StaticResource Ink}" Margin="0,8,0,0"/>
+            <StackPanel Orientation="Horizontal">
+              <Border Style="{StaticResource IconTile}"><TextBlock Text="&#xE8F1;" Style="{StaticResource Icon}" Foreground="{DynamicResource BrandText}" FontSize="16" HorizontalAlignment="Center"/></Border>
+              <TextBlock Text="{l:T Home_StatApps}" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="12,0,0,0"/>
+            </StackPanel>
+            <TextBlock x:Name="StatApps" Text="—" Style="{StaticResource StatValue}"/>
             <TextBlock x:Name="StatAppsSub" Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
           </StackPanel>
         </Border>
-        <Border Style="{StaticResource Card}" Margin="8,0,8,16">
+        <Border Style="{StaticResource StatCard}" MouseLeftButtonUp="StatPackages_Click" ToolTip="{l:T Home_StatPackagesTip}">
           <StackPanel>
-            <StackPanel Orientation="Horizontal"><Border Width="32" Height="32" CornerRadius="16" Background="{StaticResource BrandSoft}" Margin="0,0,10,0"><TextBlock Text="&#xE7B8;" Style="{StaticResource Icon}" Foreground="{StaticResource Brand}" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><TextBlock Text="{l:T Home_StatPackages}" Style="{StaticResource MutedText}" VerticalAlignment="Center"/></StackPanel>
-            <TextBlock x:Name="StatPackages" Text="0" FontFamily="{StaticResource DisplayFont}" FontSize="28" FontWeight="SemiBold" Foreground="{StaticResource Ink}" Margin="0,8,0,0"/>
+            <StackPanel Orientation="Horizontal">
+              <Border Style="{StaticResource IconTile}" Background="{DynamicResource SuccessSoft}"><TextBlock Text="&#xE7B8;" Style="{StaticResource Icon}" Foreground="{DynamicResource Success}" FontSize="16" HorizontalAlignment="Center"/></Border>
+              <TextBlock Text="{l:T Home_StatPackages}" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="12,0,0,0"/>
+            </StackPanel>
+            <TextBlock x:Name="StatPackages" Text="0" Style="{StaticResource StatValue}"/>
             <TextBlock x:Name="StatPackagesSub" Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
           </StackPanel>
         </Border>
-        <Border Style="{StaticResource Card}" Margin="8,0,8,16">
+        <Border Style="{StaticResource StatCard}" MouseLeftButtonUp="StatPsadt_Click" ToolTip="{l:T Home_StatPsadtTip}">
           <StackPanel>
-            <StackPanel Orientation="Horizontal"><Border Width="32" Height="32" CornerRadius="16" Background="{StaticResource BrandSoft}" Margin="0,0,10,0"><TextBlock Text="&#xE90F;" Style="{StaticResource Icon}" Foreground="{StaticResource Brand}" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><TextBlock Text="PSAppDeployToolkit" Style="{StaticResource MutedText}" VerticalAlignment="Center"/></StackPanel>
-            <TextBlock x:Name="StatPsadt" Text="—" FontFamily="{StaticResource DisplayFont}" FontSize="28" FontWeight="SemiBold" Foreground="{StaticResource Ink}" Margin="0,8,0,0"/>
+            <StackPanel Orientation="Horizontal">
+              <Border Style="{StaticResource IconTile}" Background="{DynamicResource InfoSoft}"><TextBlock Text="&#xE90F;" Style="{StaticResource Icon}" Foreground="{DynamicResource Info}" FontSize="16" HorizontalAlignment="Center"/></Border>
+              <TextBlock Text="PSAppDeployToolkit" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="12,0,0,0"/>
+            </StackPanel>
+            <TextBlock x:Name="StatPsadt" Text="—" Style="{StaticResource StatValue}"/>
             <TextBlock x:Name="StatPsadtSub" Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
           </StackPanel>
         </Border>
         <!-- Microsoft Intune: the connection to the tenant (opens Settings > Microsoft Intune) -->
-        <Border x:Name="IntuneCard" Style="{StaticResource Card}" Margin="8,0,8,16" Cursor="Hand" MouseLeftButtonUp="Intune_Click" ToolTip="{l:T Home_StatIntuneTip}">
+        <Border x:Name="IntuneCard" Style="{StaticResource StatCard}" MouseLeftButtonUp="Intune_Click" ToolTip="{l:T Home_StatIntuneTip}">
           <StackPanel>
-            <StackPanel Orientation="Horizontal"><Border Width="32" Height="32" CornerRadius="16" Background="{StaticResource BrandSoft}" Margin="0,0,10,0"><TextBlock Text="&#xE753;" Style="{StaticResource Icon}" Foreground="{StaticResource Brand}" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><TextBlock Text="Microsoft Intune" Style="{StaticResource MutedText}" VerticalAlignment="Center"/></StackPanel>
-            <TextBlock x:Name="StatIntune" Text="—" FontFamily="{StaticResource DisplayFont}" FontSize="28" FontWeight="SemiBold" Foreground="{StaticResource Ink}" Margin="0,8,0,0" TextTrimming="CharacterEllipsis"/>
-            <TextBlock x:Name="StatIntuneSub" Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
+            <DockPanel>
+              <Ellipse x:Name="IntuneDot" DockPanel.Dock="Right" Width="9" Height="9" Fill="{DynamicResource Faint}" VerticalAlignment="Center"/>
+              <Border Style="{StaticResource IconTile}" Background="{DynamicResource WarningSoft}"><TextBlock Text="&#xE753;" Style="{StaticResource Icon}" Foreground="{DynamicResource Warning}" FontSize="16" HorizontalAlignment="Center"/></Border>
+              <TextBlock Text="Microsoft Intune" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="12,0,0,0"/>
+            </DockPanel>
+            <TextBlock x:Name="StatIntune" Text="—" Style="{StaticResource StatValue}"/>
+            <TextBlock x:Name="StatIntuneSub" Style="{StaticResource MutedText}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"/>
           </StackPanel>
         </Border>
       </UniformGrid>
@@ -120,12 +167,12 @@
                 <DataTemplate>
                   <Grid Margin="0,8">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <Border Width="38" Height="38" CornerRadius="19" Background="{StaticResource BrandSoft}" VerticalAlignment="Top">
-                      <TextBlock Text="{Binding Item1}" Style="{StaticResource Icon}" Foreground="{StaticResource Brand}" HorizontalAlignment="Center"/>
+                    <Border Style="{StaticResource IconTile}" VerticalAlignment="Top">
+                      <TextBlock Text="{Binding Item1}" Style="{StaticResource Icon}" Foreground="{DynamicResource BrandText}" HorizontalAlignment="Center"/>
                     </Border>
                     <StackPanel Grid.Column="1" Margin="14,0,0,0">
                       <TextBlock Text="{Binding Item2}" Style="{StaticResource H3}"/>
-                      <TextBlock Text="{Binding Item3}" Style="{StaticResource MutedText}" Margin="0,2,0,0"/>
+                      <TextBlock Text="{Binding Item3}" Style="{StaticResource MutedText}" Margin="0,3,0,0" LineHeight="18"/>
                     </StackPanel>
                   </Grid>
                 </DataTemplate>
@@ -137,38 +184,40 @@
         <!-- Recent packages -->
         <Border x:Name="RecentCard" Grid.Column="2" Style="{StaticResource Card}">
           <DockPanel>
-            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
-              <Button DockPanel.Dock="Right" Content="{l:T Home_ViewAll}" Style="{StaticResource GhostButton}" Click="Packages_Click"/>
+            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+              <Button DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Click="Packages_Click">
+                <StackPanel Orientation="Horizontal"><TextBlock Text="{l:T Home_ViewAll}"/><TextBlock Text="&#xE76C;" Style="{StaticResource Icon}" FontSize="10" Margin="6,1,0,0"/></StackPanel>
+              </Button>
               <TextBlock Text="{l:T Home_Recent}" Style="{StaticResource H2}" VerticalAlignment="Center"/>
             </DockPanel>
             <TextBlock x:Name="RecentEmpty" DockPanel.Dock="Top" Style="{StaticResource MutedText}" Text="{l:T Home_RecentEmpty}" Margin="0,6,0,0"/>
             <ItemsControl x:Name="Recent" Focusable="False">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                  <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="0,10">
+                  <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Padding="0,11">
                     <Grid>
                       <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                      <Border Width="36" Height="36" CornerRadius="9">
-                <Border.Style>
-                  <Style TargetType="Border">
-                    <Setter Property="Background" Value="{StaticResource Navy}"/>
-                    <Style.Triggers>
-                      <DataTrigger Binding="{Binding HasIcon}" Value="True"><Setter Property="Background" Value="{StaticResource Subtle}"/></DataTrigger>
-                    </Style.Triggers>
-                  </Style>
-                </Border.Style>
-                <Grid>
-                  <TextBlock Text="{Binding Initials}" Foreground="White" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding NoIcon, Converter={StaticResource BoolToVis}}"/>
-                  <Image Source="{Binding Icon, Converter={StaticResource PackageIcon}}" Margin="4" RenderOptions.BitmapScalingMode="HighQuality"/>
-                </Grid>
-              </Border>
+                      <Border Width="38" Height="38" CornerRadius="11" BorderBrush="{DynamicResource Line}" BorderThickness="1">
+                        <Border.Style>
+                          <Style TargetType="Border">
+                            <Setter Property="Background" Value="{DynamicResource Avatar}"/>
+                            <Style.Triggers>
+                              <DataTrigger Binding="{Binding HasIcon}" Value="True"><Setter Property="Background" Value="{DynamicResource Subtle}"/></DataTrigger>
+                            </Style.Triggers>
+                          </Style>
+                        </Border.Style>
+                        <Grid>
+                          <TextBlock Text="{Binding Initials}" Foreground="White" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding NoIcon, Converter={StaticResource BoolToVis}}"/>
+                          <Image Source="{Binding Icon, Converter={StaticResource PackageIcon}}" Margin="5" RenderOptions.BitmapScalingMode="HighQuality"/>
+                        </Grid>
+                      </Border>
                       <StackPanel Grid.Column="1" Margin="12,0" VerticalAlignment="Center">
                         <TextBlock Text="{Binding Title}" Style="{StaticResource H3}" TextTrimming="CharacterEllipsis"/>
                         <TextBlock Text="{Binding DateLabel}" Style="{StaticResource MutedText}"/>
                       </StackPanel>
-                      <Border Grid.Column="2" Style="{StaticResource Chip}" Background="{StaticResource WarningSoft}" Margin="0,0,8,0" VerticalAlignment="Center"
+                      <Border Grid.Column="2" Style="{StaticResource Chip}" Background="{DynamicResource WarningSoft}" Margin="0,0,8,0" VerticalAlignment="Center"
                               Visibility="{Binding HasUpdate, Converter={StaticResource BoolToVis}}">
-                        <TextBlock Text="{Binding UpdateLabel}" Foreground="{StaticResource Warning}" FontSize="11.5" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding UpdateLabel}" Foreground="{DynamicResource WarningText}" FontSize="11.5" FontWeight="SemiBold"/>
                       </Border>
                       <Button Grid.Column="3" Style="{StaticResource IconButton}" ToolTip="{l:T Common_OpenFolder}" Tag="{Binding Folder}" Click="OpenFolder_Click">
                         <TextBlock Text="&#xE838;" Style="{StaticResource Icon}"/>

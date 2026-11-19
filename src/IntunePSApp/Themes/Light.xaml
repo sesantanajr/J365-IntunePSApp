@@ -1,0 +1,148 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!--
+    Light theme. Every view refers to these keys with DynamicResource, so ThemeManager swaps this dictionary for
+    Themes/Dark.xaml (same keys) while the application runs. Keep both files in step: a key missing in one theme shows
+    the control without its color.
+  -->
+
+  <!-- ===================== Brand ===================== -->
+  <Color x:Key="NavyColor">#0E1A33</Color>
+  <Color x:Key="Navy2Color">#14284F</Color>
+  <Color x:Key="BrandColor">#2457E6</Color>
+  <Color x:Key="CyanColor">#12B4EA</Color>
+  <SolidColorBrush x:Key="Navy" Color="#0E1A33"/>
+  <SolidColorBrush x:Key="Brand" Color="#2457E6"/>
+  <SolidColorBrush x:Key="BrandHover" Color="#1D4AD0"/>
+  <SolidColorBrush x:Key="BrandPressed" Color="#183DB0"/>
+  <SolidColorBrush x:Key="BrandSoft" Color="#EEF3FF"/>
+  <SolidColorBrush x:Key="BrandSoft2" Color="#D5E0FD"/>
+  <SolidColorBrush x:Key="BrandText" Color="#1F4FD6"/>
+  <SolidColorBrush x:Key="Cyan" Color="#12B4EA"/>
+  <SolidColorBrush x:Key="OnBrand" Color="#FFFFFF"/>
+
+  <!-- ===================== Neutrals ===================== -->
+  <SolidColorBrush x:Key="PageBg" Color="#F4F6FB"/>
+  <SolidColorBrush x:Key="CardBg" Color="#FFFFFF"/>
+  <SolidColorBrush x:Key="Subtle" Color="#F7F9FC"/>
+  <SolidColorBrush x:Key="Subtle2" Color="#EEF2F8"/>
+  <SolidColorBrush x:Key="Ink" Color="#0B1324"/>
+  <SolidColorBrush x:Key="Ink2" Color="#2C3A52"/>
+  <SolidColorBrush x:Key="Muted" Color="#5F6C84"/>
+  <SolidColorBrush x:Key="Faint" Color="#8E9AB0"/>
+  <SolidColorBrush x:Key="Line" Color="#E4E8F1"/>
+  <SolidColorBrush x:Key="Line2" Color="#D2D9E5"/>
+  <SolidColorBrush x:Key="SurfaceHover" Color="#F1F4FA"/>
+  <SolidColorBrush x:Key="SurfacePressed" Color="#E7ECF5"/>
+  <SolidColorBrush x:Key="SelectedBg" Color="#F2F6FF"/>
+  <SolidColorBrush x:Key="InputBg" Color="#FFFFFF"/>
+  <SolidColorBrush x:Key="TrackOff" Color="#CBD3E0"/>
+  <SolidColorBrush x:Key="CaptionHover" Color="#120B1324"/>
+  <SolidColorBrush x:Key="StatusBarBg" Color="#FAFBFD"/>
+  <SolidColorBrush x:Key="Overlay" Color="#730B1324"/>
+  <SolidColorBrush x:Key="OverlayStrong" Color="#D90A1020"/>
+  <SolidColorBrush x:Key="StepActive" Color="#101B33"/>
+  <SolidColorBrush x:Key="Avatar" Color="#14284F"/>
+
+  <!-- ===================== Status ===================== -->
+  <SolidColorBrush x:Key="Success" Color="#0F8A5F"/>
+  <SolidColorBrush x:Key="SuccessSoft" Color="#E8F7F0"/>
+  <SolidColorBrush x:Key="SuccessLine" Color="#BCE6D3"/>
+  <SolidColorBrush x:Key="SuccessText" Color="#05603F"/>
+  <SolidColorBrush x:Key="Warning" Color="#B4580A"/>
+  <SolidColorBrush x:Key="WarningSoft" Color="#FFF5E6"/>
+  <SolidColorBrush x:Key="WarningLine" Color="#F5D6A6"/>
+  <SolidColorBrush x:Key="WarningText" Color="#8A4500"/>
+  <SolidColorBrush x:Key="Danger" Color="#D92D3F"/>
+  <SolidColorBrush x:Key="DangerSoft" Color="#FDEEF0"/>
+  <SolidColorBrush x:Key="DangerLine" Color="#F5C5CC"/>
+  <SolidColorBrush x:Key="DangerText" Color="#A51D2F"/>
+  <SolidColorBrush x:Key="Info" Color="#0B7FD0"/>
+  <SolidColorBrush x:Key="InfoSoft" Color="#EAF5FD"/>
+  <SolidColorBrush x:Key="InfoLine" Color="#BEDFF6"/>
+  <SolidColorBrush x:Key="InfoText" Color="#085A93"/>
+
+  <!-- ===================== Sidebar (dark in both themes) ===================== -->
+  <LinearGradientBrush x:Key="SidebarBrush" StartPoint="0,0" EndPoint="0.35,1">
+    <GradientStop Color="#0A1122" Offset="0"/>
+    <GradientStop Color="#0C1731" Offset="1"/>
+  </LinearGradientBrush>
+  <RadialGradientBrush x:Key="SidebarGlow">
+    <GradientStop Color="#552E7CF6" Offset="0"/>
+    <GradientStop Color="#112E7CF6" Offset="0.55"/>
+    <GradientStop Color="#002E7CF6" Offset="1"/>
+  </RadialGradientBrush>
+  <LinearGradientBrush x:Key="SidebarAccent" StartPoint="0,0" EndPoint="0,1">
+    <GradientStop Color="#38D2F5" Offset="0"/>
+    <GradientStop Color="#3B76F6" Offset="1"/>
+  </LinearGradientBrush>
+  <SolidColorBrush x:Key="SidebarText" Color="#A9B4C8"/>
+  <SolidColorBrush x:Key="SidebarTextStrong" Color="#FFFFFF"/>
+  <SolidColorBrush x:Key="SidebarMuted" Color="#6E7B94"/>
+  <SolidColorBrush x:Key="SidebarHover" Color="#10FFFFFF"/>
+  <SolidColorBrush x:Key="SidebarActive" Color="#1CFFFFFF"/>
+  <SolidColorBrush x:Key="SidebarLine" Color="#16FFFFFF"/>
+  <SolidColorBrush x:Key="SidebarCard" Color="#0BFFFFFF"/>
+  <SolidColorBrush x:Key="SidebarCardBorder" Color="#17FFFFFF"/>
+  <SolidColorBrush x:Key="SidebarLinkText" Color="#9DBBEB"/>
+  <SolidColorBrush x:Key="SidebarIcon" Color="#7DD3FC"/>
+
+  <!-- ===================== Hero and primary actions ===================== -->
+  <LinearGradientBrush x:Key="HeroBrush" StartPoint="0,0" EndPoint="1,1">
+    <GradientStop Color="#0B1530" Offset="0"/>
+    <GradientStop Color="#13285E" Offset="0.55"/>
+    <GradientStop Color="#2457E6" Offset="1"/>
+  </LinearGradientBrush>
+  <RadialGradientBrush x:Key="HeroGlow">
+    <GradientStop Color="#4D38D2F5" Offset="0"/>
+    <GradientStop Color="#1238D2F5" Offset="0.6"/>
+    <GradientStop Color="#0038D2F5" Offset="1"/>
+  </RadialGradientBrush>
+  <SolidColorBrush x:Key="HeroText" Color="#FFFFFF"/>
+  <SolidColorBrush x:Key="HeroMuted" Color="#C4D3EF"/>
+  <SolidColorBrush x:Key="HeroChip" Color="#1AFFFFFF"/>
+  <SolidColorBrush x:Key="HeroChipLine" Color="#2EFFFFFF"/>
+  <LinearGradientBrush x:Key="PrimaryBrush" StartPoint="0,0" EndPoint="0,1">
+    <GradientStop Color="#2E63F2" Offset="0"/>
+    <GradientStop Color="#2152DD" Offset="1"/>
+  </LinearGradientBrush>
+  <LinearGradientBrush x:Key="PrimaryHoverBrush" StartPoint="0,0" EndPoint="0,1">
+    <GradientStop Color="#2759E8" Offset="0"/>
+    <GradientStop Color="#1B46C6" Offset="1"/>
+  </LinearGradientBrush>
+  <LinearGradientBrush x:Key="AccentGradient" StartPoint="0,0" EndPoint="1,1">
+    <GradientStop Color="#2457E6" Offset="0"/>
+    <GradientStop Color="#12B4EA" Offset="1"/>
+  </LinearGradientBrush>
+
+  <!-- ===================== Depth ===================== -->
+  <DropShadowEffect x:Key="CardShadow" BlurRadius="22" ShadowDepth="2" Direction="270" Opacity="0.06" Color="#0B1A3A"/>
+  <DropShadowEffect x:Key="PopShadow" BlurRadius="36" ShadowDepth="8" Direction="270" Opacity="0.17" Color="#0B1A3A"/>
+  <DropShadowEffect x:Key="ButtonShadow" BlurRadius="12" ShadowDepth="2" Direction="270" Opacity="0.22" Color="#2457E6"/>
+  <DropShadowEffect x:Key="SoftShadow" BlurRadius="10" ShadowDepth="1" Direction="270" Opacity="0.08" Color="#0B1A3A"/>
+
+  <!-- ===================== WPF Fluent theme: brand accent instead of the Windows accent ===================== -->
+  <Color x:Key="SystemAccentColor">#2F64F0</Color>
+  <Color x:Key="SystemAccentColorLight1">#4F7DF3</Color>
+  <Color x:Key="SystemAccentColorLight2">#7D9EF6</Color>
+  <Color x:Key="SystemAccentColorLight3">#AFC3FA</Color>
+  <Color x:Key="SystemAccentColorDark1">#2457E6</Color>
+  <Color x:Key="SystemAccentColorDark2">#1C45BC</Color>
+  <Color x:Key="SystemAccentColorDark3">#143390</Color>
+  <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#2457E6"/>
+  <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="#2457E6" Opacity="0.9"/>
+  <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="#2457E6" Opacity="0.8"/>
+  <SolidColorBrush x:Key="AccentFillColorSelectedTextBackgroundBrush" Color="#2F64F0"/>
+  <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="#1C45BC"/>
+  <SolidColorBrush x:Key="AccentTextFillColorSecondaryBrush" Color="#143390"/>
+  <SolidColorBrush x:Key="AccentTextFillColorTertiaryBrush" Color="#2457E6"/>
+  <LinearGradientBrush x:Key="TextControlElevationBorderFocusedBrush" MappingMode="Absolute" StartPoint="0,0" EndPoint="0,2">
+    <LinearGradientBrush.RelativeTransform>
+      <ScaleTransform ScaleY="-1" CenterY="0.5"/>
+    </LinearGradientBrush.RelativeTransform>
+    <GradientStop Offset="1.0" Color="#2457E6"/>
+    <GradientStop Offset="1.0" Color="#0F000000"/>
+  </LinearGradientBrush>
+  <CornerRadius x:Key="ControlCornerRadius">6</CornerRadius>
+  <CornerRadius x:Key="OverlayCornerRadius">10</CornerRadius>
+</ResourceDictionary>
