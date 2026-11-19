@@ -19,6 +19,8 @@ namespace J365.IntunePSApp.Core
         [DllImport("msi.dll", CharSet = CharSet.Unicode)] public static extern uint MsiGetSummaryInformation(IntPtr hDatabase, string szDatabasePath, uint uiUpdateCount, out IntPtr phSummaryInfo);
         [DllImport("msi.dll", CharSet = CharSet.Unicode)]
         public static extern uint MsiSummaryInfoGetProperty(IntPtr hSummaryInfo, uint uiProperty, out uint puiDataType, out int piValue, ref System.Runtime.InteropServices.ComTypes.FILETIME pftValue, StringBuilder szValueBuf, ref uint pcchValueBuf);
+        [DllImport("msi.dll")] public static extern uint MsiRecordDataSize(IntPtr hRecord, uint iField);
+        [DllImport("msi.dll")] public static extern uint MsiRecordReadStream(IntPtr hRecord, uint iField, byte[] szDataBuf, ref uint pcbDataBuf);
 
         // ---------------- wintrust.dll
         [DllImport("wintrust.dll", ExactSpelling = true, SetLastError = false, CharSet = CharSet.Unicode)]
@@ -68,6 +70,50 @@ namespace J365.IntunePSApp.Core
                 if (db != IntPtr.Zero) NativeMethods.MsiCloseHandle(db);
             }
             return (props, template);
+        }
+
+        /// <summary>
+        /// The product icon stored inside an MSI (table Icon): the one named by the ARPPRODUCTICON property, otherwise the
+        /// first one. The data is an .ico file or a small .exe/.dll that carries the icon; the name tells which (its extension).
+        /// Returns null when the package has no icon.
+        /// </summary>
+        public static (string Name, byte[] Data)? ReadIcon(string path)
+        {
+            const uint maxIconBytes = 8 * 1024 * 1024;
+            IntPtr db = IntPtr.Zero, view = IntPtr.Zero;
+            try
+            {
+                if (NativeMethods.MsiOpenDatabase(path, IntPtr.Zero, out db) != 0) return null;
+                string wanted = null;
+                try { if (Read(path).Properties.TryGetValue("ARPPRODUCTICON", out var v)) wanted = v; } catch { }
+                // A package without the Icon table makes this fail: no icon.
+                if (NativeMethods.MsiDatabaseOpenView(db, "SELECT `Name`, `Data` FROM `Icon`", out view) != 0) return null;
+                if (NativeMethods.MsiViewExecute(view, IntPtr.Zero) != 0) return null;
+                (string Name, byte[] Data)? first = null;
+                while (NativeMethods.MsiViewFetch(view, out IntPtr rec) == 0)
+                {
+                    try
+                    {
+                        string name = GetString(rec, 1);
+                        uint size = NativeMethods.MsiRecordDataSize(rec, 2);
+                        if (size == 0 || size > maxIconBytes) continue;
+                        var data = new byte[size];
+                        uint read = size;
+                        if (NativeMethods.MsiRecordReadStream(rec, 2, data, ref read) != 0 || read == 0) continue;
+                        if (read < size) Array.Resize(ref data, (int)read);
+                        if (string.Equals(name, wanted, StringComparison.OrdinalIgnoreCase)) return (name, data);
+                        first ??= (name, data);
+                    }
+                    finally { NativeMethods.MsiCloseHandle(rec); }
+                }
+                return first;
+            }
+            catch { return null; }
+            finally
+            {
+                if (view != IntPtr.Zero) NativeMethods.MsiCloseHandle(view);
+                if (db != IntPtr.Zero) NativeMethods.MsiCloseHandle(db);
+            }
         }
 
         private static string GetString(IntPtr rec, uint field)

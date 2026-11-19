@@ -27,10 +27,12 @@
               </Button>
             </WrapPanel>
           </StackPanel>
-          <Grid x:Name="HeroArt" Grid.Column="1" Width="250" Margin="24,0,8,0" VerticalAlignment="Center">
-            <Ellipse Width="230" Height="230" Fill="#14FFFFFF"/>
-            <Ellipse Width="170" Height="170" Fill="#14FFFFFF"/>
-            <Image Source="/Assets/j365-cloud.png" Width="190" RenderOptions.BitmapScalingMode="HighQuality"/>
+          <!-- Jornada 365 logo, on a white panel so its blue lettering reads on the dark banner. Opens the blog. -->
+          <Grid x:Name="HeroArt" Grid.Column="1" Width="330" Margin="24,0,4,0" VerticalAlignment="Center">
+            <Ellipse Width="250" Height="250" Fill="#10FFFFFF"/>
+            <Button Style="{StaticResource LogoBadge}" Padding="22,18" HorizontalAlignment="Center" VerticalAlignment="Center" Click="Blog_Click" ToolTip="{l:T Credits_BlogTip}">
+              <Image Source="/Assets/j365-logo.png" Width="270" RenderOptions.BitmapScalingMode="HighQuality"/>
+            </Button>
           </Grid>
         </Grid>
       </Border>
@@ -135,9 +137,20 @@
                   <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="0,10">
                     <Grid>
                       <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                      <Border Width="36" Height="36" CornerRadius="9" Background="{StaticResource Navy}">
-                        <TextBlock Text="{Binding Initials}" Foreground="White" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                      </Border>
+                      <Border Width="36" Height="36" CornerRadius="9">
+                <Border.Style>
+                  <Style TargetType="Border">
+                    <Setter Property="Background" Value="{StaticResource Navy}"/>
+                    <Style.Triggers>
+                      <DataTrigger Binding="{Binding HasIcon}" Value="True"><Setter Property="Background" Value="{StaticResource Subtle}"/></DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </Border.Style>
+                <Grid>
+                  <TextBlock Text="{Binding Initials}" Foreground="White" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding NoIcon, Converter={StaticResource BoolToVis}}"/>
+                  <Image Source="{Binding Icon, Converter={StaticResource PackageIcon}}" Margin="4" RenderOptions.BitmapScalingMode="HighQuality"/>
+                </Grid>
+              </Border>
                       <StackPanel Grid.Column="1" Margin="12,0" VerticalAlignment="Center">
                         <TextBlock Text="{Binding Title}" Style="{StaticResource H3}" TextTrimming="CharacterEllipsis"/>
                         <TextBlock Text="{Binding DateLabel}" Style="{StaticResource MutedText}"/>
@@ -157,22 +170,6 @@
           </DockPanel>
         </Border>
       </Grid>
-
-      <!-- Jornada 365: the blog behind the project -->
-      <Border Style="{StaticResource Card}" Margin="0,18,0,0">
-        <DockPanel>
-          <Button DockPanel.Dock="Left" Style="{StaticResource LogoBadge}" Padding="0" Margin="0,0,22,0" VerticalAlignment="Center" Click="Blog_Click" ToolTip="jornada365.cloud">
-            <Image Source="/Assets/j365-logo.png" Height="58" RenderOptions.BitmapScalingMode="HighQuality"/>
-          </Button>
-          <Button DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" VerticalAlignment="Center" Margin="16,0,0,0" Click="Blog_Click">
-            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE774;" Style="{StaticResource Icon}" FontSize="13" Margin="0,0,8,0"/><TextBlock Text="{l:T Home_BlogButton}"/></StackPanel>
-          </Button>
-          <StackPanel VerticalAlignment="Center">
-            <TextBlock Text="{l:T Home_BlogTitle}" Style="{StaticResource H3}" TextWrapping="Wrap"/>
-            <TextBlock Text="{l:T Home_BlogText}" Style="{StaticResource MutedText}" Margin="0,2,0,0"/>
-          </StackPanel>
-        </DockPanel>
-      </Border>
 
     </StackPanel>
   </ScrollViewer>

@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using J365.IntunePSApp.Core;
+using J365.IntunePSApp.Localization;
 using Xunit;
 
 namespace J365.IntunePSApp.Tests
@@ -234,6 +235,72 @@ namespace J365.IntunePSApp.Tests
             var s = Fakes.Settings();
             s.CatalogId = "No.Such.Package";
             Assert.Null(PackageBuilder.NewerCatalogVersion(s));
+        }
+    }
+
+    public class AppIconTests
+    {
+        private static (int Width, int Height, bool HasPixels) Describe(string png)
+        {
+            using var bmp = new System.Drawing.Bitmap(png);
+            return (bmp.Width, bmp.Height, bmp.GetPixel(bmp.Width / 2, bmp.Height / 4).A > 0);
+        }
+
+        [Fact]
+        public void A_package_always_gets_an_icon_even_when_the_installer_has_none()
+        {
+            using var tmp = new TempFolder();
+            string installer = tmp.File("setup.msi", "not a real installer"); // no icon can be read from it
+            string icon = Path.Combine(tmp.Path, "Intune", "AppIcon.png");
+
+            Assert.Equal(ImageTools.IconGenerated, ImageTools.SaveAppIcon("", installer, "Contoso App", "Contoso.App", icon));
+            var generated = Describe(icon);
+            Assert.Equal((256, 256, true), generated);
+
+            // A missing custom file falls back instead of failing the build (validation reports it earlier).
+            Assert.Equal(ImageTools.IconGenerated, ImageTools.SaveAppIcon(Path.Combine(tmp.Path, "missing.png"), installer, "Contoso App", "", icon));
+            // Names without letters still give a readable tile.
+            Assert.Equal(ImageTools.IconGenerated, ImageTools.SaveAppIcon(null, null, "", null, icon));
+        }
+
+        [Fact]
+        public void An_icon_chosen_by_the_user_wins_and_is_normalised_to_256_px()
+        {
+            using var tmp = new TempFolder();
+            string custom = Path.Combine(tmp.Path, "wide.png");
+            using (var bmp = new System.Drawing.Bitmap(400, 100))
+            {
+                using (var g = System.Drawing.Graphics.FromImage(bmp)) g.Clear(System.Drawing.Color.Red);
+                bmp.Save(custom, System.Drawing.Imaging.ImageFormat.Png);
+            }
+            string icon = Path.Combine(tmp.Path, "AppIcon.png");
+            Assert.Equal(ImageTools.IconCustom, ImageTools.SaveAppIcon(custom, tmp.File("setup.exe", "x"), "Contoso App", "", icon));
+            using var result = new System.Drawing.Bitmap(icon);
+            Assert.Equal(256, result.Width);
+            Assert.Equal(256, result.Height);
+            Assert.Equal(255, result.GetPixel(128, 128).R);   // the picture, centred
+            Assert.Equal(0, result.GetPixel(128, 10).A);      // transparent padding, not stretched
+        }
+
+        [Fact]
+        public void A_file_that_is_not_an_msi_has_no_msi_icon()
+        {
+            using var tmp = new TempFolder();
+            Assert.Null(MsiReader.ReadIcon(tmp.File("broken.msi", "garbage")));
+            Assert.Null(MsiReader.ReadIcon(Path.Combine(tmp.Path, "missing.msi")));
+            Assert.False(ImageTools.SaveInstallerIcon(tmp.File("other.msi", ""), Path.Combine(tmp.Path, "icon.png")));
+        }
+
+        [Fact]
+        public void A_missing_custom_icon_is_a_validation_error()
+        {
+            using var tmp = new TempFolder();
+            var s = Fakes.Settings();
+            s.InstallerPath = tmp.File("setup.exe", "x");
+            s.AppIconPath = Path.Combine(tmp.Path, "gone.ico");
+            Assert.Contains(Loc.T("Val_IconMissing", s.AppIconPath), PackageBuilder.Validate(s).Errors);
+            s.AppIconPath = tmp.File("icon.png", "x");
+            Assert.DoesNotContain(PackageBuilder.Validate(s).Errors, e => e.Contains("icon.png"));
         }
     }
 

@@ -11,7 +11,7 @@
     <RootNamespace>J365.IntunePSApp</RootNamespace>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>2.1.1</Version>
+    <Version>2.1.2</Version>
     <Authors>Sérgio Sant'Ana Junior</Authors>
     <Company>Jornada 365</Company>
     <Product>J365 IntunePSApp</Product>
@@ -38,6 +38,7 @@
 
   <ItemGroup>
     <Resource Include="Assets\*.png" />
+    <Resource Include="Assets\*.jpg" />
     <Resource Include="Assets\app.ico" />
     <!-- Interface texts: one flat JSON file per language (see docs/ARCHITECTURE.md > Localization).
          WithCulture=false keeps them in the main assembly: ".en." / ".pt-BR." would otherwise send them to satellite assemblies. -->

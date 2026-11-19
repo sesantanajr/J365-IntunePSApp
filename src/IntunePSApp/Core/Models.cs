@@ -61,6 +61,8 @@ namespace J365.IntunePSApp.Core
         public string Description { get; set; } = "";
         public string Homepage { get; set; } = "";
         public string MinimumOs { get; set; } = "W10_1607";
+        /// <summary>Icon shown in Intune and in the Company Portal. Empty: the icon of the installer, or a tile with the initials.</summary>
+        public string AppIconPath { get; set; } = "";
         // User experience
         public string DeployMode { get; set; } = "Auto";      // Auto | Silent | Interactive
         public List<string> ProcessesToClose { get; set; } = new List<string>();
@@ -204,6 +206,8 @@ namespace J365.IntunePSApp.Core
         public string UpgradeCode { get; set; }
         public string MsiProductName { get; set; }
         public string InstallArgs { get; set; } = "";
+        /// <summary>Extra exit codes that mean success, declared by the database for this installer ("3010, 1641").</summary>
+        public string SuccessCodes { get; set; } = "";
         public string UninstallExeArgs { get; set; } = "";
         public string UninstallPattern { get; set; } = "";
         public List<string> Processes { get; set; } = new List<string>();
@@ -284,6 +288,8 @@ namespace J365.IntunePSApp.Core
 
         [JsonIgnore] public string SearchText { get; set; }
         [JsonIgnore] public string NameLower { get; set; }
+        /// <summary>Words of the name, lower case (search ranks a whole word above a piece of a longer one).</summary>
+        [JsonIgnore] public HashSet<string> NameWords { get; set; }
         [JsonIgnore] public string LocalizedDescription => Loc.Instance.IsPortuguese && !string.IsNullOrEmpty(DescriptionPt) ? DescriptionPt : Description;
         [JsonIgnore] public string Initials => Names.Initials(Name);
         [JsonIgnore] public string Subtitle => string.IsNullOrEmpty(Publisher) ? Id : $"{Publisher}  ·  {Id}";
@@ -404,6 +410,10 @@ namespace J365.IntunePSApp.Core
         public string IntuneWin { get; set; }
         public string SummaryHtml { get; set; }
         public string LatestVersion { get; set; }
+        /// <summary>Intune\AppIcon.png of the package, when it has one.</summary>
+        public string Icon { get; set; }
+        public bool HasIcon => !string.IsNullOrEmpty(Icon);
+        public bool NoIcon => !HasIcon;
 
         public string Title => $"{AppName} {AppVersion}".Trim();
         public string DateLabel => Date.ToString("g", Loc.Instance.Culture);

@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using J365.IntunePSApp.Core;
+using J365.IntunePSApp.Localization;
 using Xunit;
 
 namespace J365.IntunePSApp.Tests
@@ -182,6 +183,85 @@ namespace J365.IntunePSApp.Tests
         }
 
         [Fact]
+        public void An_installer_the_target_cannot_run_is_never_picked()
+        {
+            var armFirst = new CatalogApp { Installers = { new CatalogInstaller { Arch = "arm64", Type = "exe" }, new CatalogInstaller { Arch = "x64", Type = "exe" } } };
+            Assert.Equal("x64", CatalogService.PickInstaller(armFirst, "x64").Arch);
+            Assert.Equal("arm64", CatalogService.PickInstaller(armFirst, "arm64").Arch);
+            Assert.Null(CatalogService.PickInstaller(armFirst, "x86"));  // neither ARM64 nor x64 runs on 32-bit Windows
+            var armOnly = new CatalogApp { Installers = { new CatalogInstaller { Arch = "arm64", Type = "msi" } } };
+            Assert.Null(CatalogService.PickInstaller(armOnly, "x64"));
+        }
+
+        [Fact]
+        public void Msi_properties_of_the_manifest_survive_while_the_quiet_and_log_switches_are_dropped()
+        {
+            // Without the licence property these MSI packages refuse a silent installation.
+            Assert.Equal("IACCEPTMSODBCSQLLICENSETERMS=YES", CatalogService.SilentArgsFor(new CatalogInstaller { Type = "wix", Silent = "/quiet /norestart IACCEPTMSODBCSQLLICENSETERMS=YES" }));
+            Assert.Equal("ACCEPTLICENSE=YES ALLUSERS=1", CatalogService.SilentArgsFor(new CatalogInstaller { Type = "msi", Silent = "/qn /l*v \"C:\\Temp\\a b.log\" ACCEPTLICENSE=YES", Custom = "ALLUSERS=1" }));
+            Assert.Equal("ALLUSERS=1", CatalogService.SilentArgsFor(new CatalogInstaller { Type = "msi", Silent = "/passive ALLUSERS=1", Custom = "ALLUSERS=1" }));   // not twice
+            Assert.Equal(new[] { "INSTALLDIR=\"C:\\Program Files\\X\"" }, CatalogService.MsiProperties("/qb! INSTALLDIR=\"C:\\Program Files\\X\" /norestart"));
+            // Inno: /ALLUSERS given by the manifest in "Custom" is not added a second time.
+            Assert.Single(System.Text.RegularExpressions.Regex.Matches(CatalogService.SilentArgsFor(new CatalogInstaller { Type = "inno", Scope = "machine", Custom = "/ALLUSERS" }), "/ALLUSERS"));
+        }
+
+        [Theory]
+        [InlineData("edge", "Microsoft Edge", "EdgeEver")]
+        [InlineData("teams", "Microsoft Teams", "TeamSpeak")]
+        [InlineData("power bi", "Power BI Desktop", "PowerBI Helper")]
+        public void Search_ranks_a_whole_word_above_a_piece_of_a_longer_word(string query, string expectedFirst, string lookAlike)
+        {
+            CatalogApp Make(string name) => new CatalogApp { Id = "X." + name.Replace(" ", ""), Name = name, NameLower = name.ToLowerInvariant(),
+                NameWords = new HashSet<string>(name.ToLowerInvariant().Split(' ')) };
+            var tokens = query.Split(' ');
+            Assert.True(CatalogService.Score(Make(expectedFirst), query, tokens) < CatalogService.Score(Make(lookAlike), query, tokens));
+            // The winget moniker counts as the name ("ssms").
+            var ssms = Make("SQL Server Management Studio"); ssms.Moniker = "ssms";
+            Assert.Equal(0, CatalogService.Score(ssms, "ssms", new[] { "ssms" }));
+        }
+
+        [Theory]
+        [InlineData("v2.7.6", "2.7.5", 1)]     // a prefix is not part of the number
+        [InlineData("b12532", "b9994", 1)]
+        [InlineData("v10", "v9", 1)]
+        [InlineData("1.0", "1.0-beta", 1)]
+        [InlineData("V1.2", "1.2.0", 0)]
+        public void Versions_with_a_prefix_compare_by_their_number(string a, string b, int expected)
+            => Assert.Equal(expected, System.Math.Sign(VersionUtil.Compare(a, b)));
+
+        [Fact]
+        public void A_product_code_shared_with_another_version_keeps_the_version_of_the_file()
+        {
+            var app = App();
+            app.Version = "3.0";
+            app.Installers[2].Arp = new List<ArpEntry> { new ArpEntry { DisplayVersion = "3.0.0" } };
+            var older = new InstallerInfo { Type = "MSI", AppVersion = "2.5" };
+            CatalogService.Apply(older, app, app.Installers[2], "productcode");
+            Assert.Equal("2.5", older.AppVersion);          // not relabelled as 3.0
+            Assert.Equal("2.5", older.DetectionVersion);    // Intune will find what is really installed
+            Assert.Equal("2.5", older.CatalogVersion);      // so "a newer version exists" is shown
+            var current = new InstallerInfo { Type = "MSI", AppVersion = "3.0" };
+            CatalogService.Apply(current, app, app.Installers[2], "productcode");
+            Assert.Equal("3.0", current.CatalogVersion);
+            Assert.Equal("3.0.0", current.DetectionVersion);
+        }
+
+        [Fact]
+        public void The_row_chosen_by_the_user_decides_the_architecture_and_a_lookup_only_fills_it_in()
+        {
+            var app = App();
+            var known = new InstallerInfo { Type = "EXE", AppArch = "x64", AppVersion = "2.0" };
+            CatalogService.Apply(known, app, new CatalogInstaller { Arch = "arm64", Type = "exe" }, "hash");
+            Assert.Equal("x64", known.AppArch);              // the file said x64: a row found by hash does not relabel it
+            var unknown = new InstallerInfo { Type = "EXE", AppVersion = "2.0" };
+            CatalogService.Apply(unknown, app, new CatalogInstaller { Arch = "x64", Type = "exe", SuccessCodes = new List<long> { 0, 3010 } }, "hash");
+            Assert.Equal("x64", unknown.AppArch);
+            Assert.Equal("3010", unknown.SuccessCodes);      // success codes of the manifest reach the package
+            CatalogService.Apply(known, app, new CatalogInstaller { Arch = "arm64", Type = "exe" }, "download");
+            Assert.Equal("arm64", known.AppArch);            // an explicit choice wins
+        }
+
+        [Fact]
         public void Apply_uses_the_full_version_text_of_the_database_when_it_is_the_same_version()
         {
             var app = App();
@@ -244,11 +324,71 @@ namespace J365.IntunePSApp.Tests
         [Fact]
         public void CommandLine_quotes_the_script_and_ids()
         {
-            string cmd = IntunePublisher.CommandLine(@"C:\Out\App 1.0\Intune\Publish-ToIntune.ps1", " contoso.com ", "6f9619ff-8b86-d011-b42d-00c04fc964ff", deviceCode: true);
+            var options = new PublishOptions { TenantId = " contoso.com ", ClientId = "6f9619ff-8b86-d011-b42d-00c04fc964ff", DeviceCode = true };
+            string cmd = IntunePublisher.CommandLine(@"C:\Out\App 1.0\Intune\Publish-ToIntune.ps1", options);
             Assert.Contains("-File \"C:\\Out\\App 1.0\\Intune\\Publish-ToIntune.ps1\"", cmd);
             Assert.Contains("-TenantId \"contoso.com\"", cmd);
             Assert.EndsWith("-DeviceCode", cmd);
-            Assert.Throws<System.ArgumentException>(() => IntunePublisher.Launch("x.ps1", "not a tenant", "nope", false));
+            Assert.DoesNotContain("-IfExists", cmd);     // "Ask" is the default of the script
+            Assert.DoesNotContain("-AssignIntent", cmd); // no assignment unless asked
+            Assert.DoesNotContain("-Pause", cmd);        // only when the application opens the window itself
+            Assert.Throws<System.ArgumentException>(() => IntunePublisher.Launch("x.ps1", new PublishOptions { TenantId = "not a tenant", ClientId = "nope" }));
+        }
+
+        [Fact]
+        public void Publishing_options_are_validated_before_anything_is_started()
+        {
+            var o = new PublishOptions { TenantId = "contoso.com", ClientId = "6f9619ff-8b86-d011-b42d-00c04fc964ff" };
+            Assert.Null(IntunePublisher.Check(o));
+
+            o.AssignIntent = "required"; o.AssignTo = "Group"; o.GroupId = "x\" -Evil";
+            Assert.Equal("Publish_InvalidGroup", IntunePublisher.Check(o));
+            o.GroupId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"; o.IfExists = "Update";
+            Assert.Null(IntunePublisher.Check(o));
+            string args = IntunePublisher.Arguments("p.ps1", o, pause: true);
+            Assert.Contains("-IfExists Update", args);
+            Assert.Contains("-AssignIntent required -AssignTo Group -GroupId aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", args);
+            Assert.EndsWith("-Pause", args);
+
+            // Intune has no "available" assignment for devices.
+            o.AssignIntent = "available"; o.AssignTo = "AllDevices";
+            Assert.Equal("Publish_InvalidAssignment", IntunePublisher.Check(o));
+            // Unknown values never reach the command line.
+            o.AssignIntent = "none"; o.IfExists = "Delete everything";
+            Assert.DoesNotContain("Delete", IntunePublisher.Arguments("p.ps1", o));
+            foreach (var key in new[] { "Publish_InvalidTenant", "Publish_InvalidClient", "Publish_InvalidGroup", "Publish_InvalidAssignment" }) Assert.True(Loc.Instance.Has(key), key);
+        }
+
+        [Fact]
+        public void The_result_of_a_publication_is_read_back_from_the_package()
+        {
+            using var tmp = new TempFolder();
+            Assert.Null(IntunePublisher.ReadResult(tmp.Path));
+            tmp.File(IntunePublisher.ResultFileName, @"{ ""schema"": 1, ""status"": ""published"", ""action"": ""created"", ""appId"": ""6f9619ff-8b86-d011-b42d-00c04fc964ff"",
+  ""displayName"": ""Contoso App 1.2.3"", ""tenantId"": ""contoso.com"", ""portalUrl"": ""https://intune.microsoft.com/#view/x"", ""assignment"": """", ""error"": """", ""utc"": ""2026-11-19T13:34:13Z"" }");
+            var result = IntunePublisher.ReadResult(tmp.Path);
+            Assert.True(result.IsPublished);
+            Assert.Equal("created", result.Action);
+            Assert.Equal("contoso.com", result.TenantId);
+            tmp.File(IntunePublisher.ResultFileName, @"{ ""status"": ""failed"", ""error"": ""Sign-in failed"" }");
+            Assert.False(IntunePublisher.ReadResult(tmp.Path).IsPublished);
+            tmp.File(IntunePublisher.ResultFileName, "{ broken");
+            Assert.Null(IntunePublisher.ReadResult(tmp.Path));
+        }
+
+        [Fact]
+        public void The_publishing_script_talks_to_Graph_directly_and_always_reports_its_outcome()
+        {
+            string script = PackageBuilder.CompanionScript(PackageLayout.PublishScript);
+            Assert.DoesNotContain("Install-Module", script);       // no community module, nothing installed on the admin's computer
+            Assert.DoesNotContain("IntuneWin32App", script);
+            Assert.DoesNotContain("Get-FileHash", script);         // missing when Windows PowerShell is started from PowerShell 7
+            Assert.Contains("code_challenge_method = 'S256'", script);
+            Assert.Contains("DeviceManagementApps.ReadWrite.All offline_access", script);
+            Assert.Contains(IntunePublisher.ResultFileName, script);
+            Assert.Contains("'DELETE'", script);                   // an app left without content is removed again
+            // Every minimum Windows release offered by the editor is known to the script.
+            foreach (var release in PackageBuilder.MinimumOsOptions) Assert.Contains("'" + release + "'", script);
         }
     }
 }

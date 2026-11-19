@@ -235,12 +235,41 @@ namespace J365.IntunePSApp.Core
         public static string QuickCheck(string code)
         {
             if (string.IsNullOrWhiteSpace(code)) return null;
-            int depth = 0;
-            foreach (char c in code)
+            int depth = 0, n = code.Length;
+            for (int i = 0; i < n; i++)
             {
-                if (c == '{') depth++;
-                else if (c == '}') depth--;
-                if (depth < 0) return T("Val_BraceUnopened");
+                char c = code[i];
+                char next = i + 1 < n ? code[i + 1] : '\0';
+                // Braces inside strings and comments are text, not code: -replace '\{', '' is valid PowerShell.
+                if (c == '@' && (next == '\'' || next == '"'))
+                {
+                    int end = code.IndexOf("\n" + next + "@", i + 2, StringComparison.Ordinal);
+                    if (end < 0) return null; // unfinished here-string: the real parser reports it when the package is generated
+                    i = end + 2;
+                }
+                else if (c == '\'')
+                {
+                    for (i++; i < n; i++)
+                    {
+                        if (code[i] != '\'') continue;
+                        if (i + 1 < n && code[i + 1] == '\'') { i++; continue; } // '' is an escaped quote
+                        break;
+                    }
+                }
+                else if (c == '"')
+                {
+                    for (i++; i < n && code[i] != '"'; i++) if (code[i] == '`') i++;
+                }
+                else if (c == '<' && next == '#')
+                {
+                    int end = code.IndexOf("#>", i + 2, StringComparison.Ordinal);
+                    if (end < 0) return null;
+                    i = end + 1;
+                }
+                else if (c == '#') { while (i < n && code[i] != '\n') i++; }
+                else if (c == '`') i++;
+                else if (c == '{') depth++;
+                else if (c == '}') { if (--depth < 0) return T("Val_BraceUnopened"); }
             }
             return depth != 0 ? T("Val_BraceUnbalanced") : null;
         }
@@ -250,13 +279,18 @@ namespace J365.IntunePSApp.Core
         {
             try
             {
+                // The last line proves the parser really ran: when PowerShell refuses the command (Constrained Language
+                // Mode, a blocked or missing file) there is no output at all, which must not read as "no syntax errors".
+                const string done = "J365-PARSE-DONE";
                 const string script = "$t=$null;$e=$null;[void][System.Management.Automation.Language.Parser]::ParseFile($env:J365_PS_FILE,[ref]$t,[ref]$e);" +
-                                      "foreach($x in $e){'{0}: {1}' -f $x.Extent.StartLineNumber,$x.Message}";
+                                      "foreach($x in $e){'{0}: {1}' -f $x.Extent.StartLineNumber,$x.Message};'" + done + "'";
                 var psi = ToolsService.PowerShellStartInfo("-NoProfile -NonInteractive -Command \"" + script + "\"");
                 psi.Environment["J365_PS_FILE"] = file;
                 var run = ToolsService.RunPowerShell(psi);
                 if (run.TimedOut) throw new TimeoutException(ToolsService.WindowsPowerShell);
-                return run.Output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                var lines = run.Output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).ToList();
+                if (!lines.Remove(done)) throw new InvalidOperationException(lines.FirstOrDefault() ?? ("exit code " + run.ExitCode));
+                return lines.ToArray();
             }
             catch (Exception ex)
             {

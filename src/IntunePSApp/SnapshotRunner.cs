@@ -104,6 +104,8 @@ namespace J365.IntunePSApp
                 await Shot("05-packages");
                 w.Navigate("settings");
                 await Shot("06-settings");
+                w.Settings.ScrollToEnd();
+                await Shot("06-settings-end");
 
                 // Switches the language while everything is loaded, to check that every page follows it live.
                 string relang = App.Arg("--snapshot-relang");

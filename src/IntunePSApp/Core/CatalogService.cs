@@ -5,6 +5,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using static J365.IntunePSApp.Localization.Loc;
@@ -116,6 +117,8 @@ namespace J365.IntunePSApp.Core
                 data = JsonSerializer.Deserialize<CatalogFile>(gz, Json.Catalog);
             }
             if (data?.Apps == null || data.Apps.Count == 0) throw new InvalidDataException(T("Err_CatalogEmpty"));
+            // A database written in a newer format would be read wrongly: say so instead of failing every day with "invalid".
+            if (data.Schema > SupportedSchema) throw new InvalidDataException(T("Err_CatalogNewer"));
             var byHash = new Dictionary<string, (CatalogApp, CatalogInstaller)>(StringComparer.OrdinalIgnoreCase);
             var byCode = new Dictionary<string, (CatalogApp, CatalogInstaller)>(StringComparer.OrdinalIgnoreCase);
             var byId = new Dictionary<string, CatalogApp>(StringComparer.OrdinalIgnoreCase);
@@ -127,12 +130,15 @@ namespace J365.IntunePSApp.Core
                 a.Installers ??= new List<CatalogInstaller>();
                 if (_curated.TryGetValue(a.Id, out var cur)) a.Extra = Merge(a.Extra, cur);
                 a.NameLower = a.Name.ToLowerInvariant();
+                a.NameWords = new HashSet<string>(Regex.Split(a.NameLower, @"[^\p{L}\p{N}\+#]+").Where(w => w.Length > 0));
                 a.SearchText = string.Join(" ", new[] { a.Name, a.Id, a.Publisher, a.Moniker, a.Tags == null ? null : string.Join(" ", a.Tags) }.Where(s => !string.IsNullOrEmpty(s))).ToLowerInvariant();
                 byId[a.Id] = a;
                 apps.Add(a);
                 foreach (var i in a.Installers)
                 {
-                    if (!string.IsNullOrEmpty(i.Sha256)) byHash[i.Sha256] = (a, i);
+                    // Manifests often list one file under several rows (x64 and arm64, user and machine scope):
+                    // the row that fits a managed x64 fleet is the one a hash lookup answers with.
+                    if (!string.IsNullOrEmpty(i.Sha256) && (!byHash.TryGetValue(i.Sha256, out var known) || HashRank(i) < HashRank(known.Item2))) byHash[i.Sha256] = (a, i);
                     if (IsGuid(i.ProductCode)) byCode[i.ProductCode] = (a, i);
                     if (i.Arp != null) foreach (var e in i.Arp) if (IsGuid(e.ProductCode)) byCode[e.ProductCode] = (a, i);
                 }
@@ -144,6 +150,14 @@ namespace J365.IntunePSApp.Core
         }
 
         private static bool IsGuid(string s) => !string.IsNullOrEmpty(s) && s.StartsWith("{");
+
+        /// <summary>Newest format of the database this version understands (CatalogFile.Schema).</summary>
+        public const int SupportedSchema = 2;
+
+        private static bool IsArm(CatalogInstaller i) => (i.Arch ?? "").StartsWith("arm", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>Lower is better: machine scope before user scope, x64/x86 before ARM.</summary>
+        private static int HashRank(CatalogInstaller i) => (i.Scope == "user" ? 2 : 0) + (IsArm(i) ? 1 : 0);
 
         /// <summary>The downloaded catalog wins; the curation embedded in the app fills whatever is missing.</summary>
         private static CuratedEntry Merge(CuratedEntry fromCatalog, CuratedEntry embedded)
@@ -208,22 +222,24 @@ namespace J365.IntunePSApp.Core
                 return src.Where(a => a.HasCuration).OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase).Take(max).ToList();
             var tokens = q.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             return src.Where(a => tokens.All(t => a.SearchText.Contains(t)))
-                .Select(a => (App: a, Score: Score(a, q)))
-                .OrderBy(x => x.Score).ThenBy(x => x.App.Name.Length).ThenBy(x => x.App.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(a => (App: a, Score: Score(a, q, tokens)))
+                .OrderBy(x => x.Score).ThenBy(x => x.App.HasCuration ? 0 : 1).ThenBy(x => x.App.Name.Length).ThenBy(x => x.App.Name, StringComparer.OrdinalIgnoreCase)
                 .Take(max).Select(x => x.App).ToList();
         }
 
-        private static int Score(CatalogApp a, string q)
+        /// <summary>
+        /// Lower is better. A whole word of the name beats a piece of a longer word: "edge" finds Microsoft Edge before
+        /// EdgeEver, "teams" finds Microsoft Teams before TeamSpeak. The winget moniker ("ssms", "vscode") counts as the name.
+        /// </summary>
+        internal static int Score(CatalogApp a, string q, string[] tokens)
         {
-            int s;
-            if (a.NameLower == q) s = 0;
-            else if (a.NameLower.StartsWith(q)) s = 1;
-            else if (a.Id.Equals(q, StringComparison.OrdinalIgnoreCase)) s = 1;
-            else if (a.NameLower.Contains(q)) s = 2;
-            else if (a.Id.Contains(q, StringComparison.OrdinalIgnoreCase)) s = 3;
-            else s = 4;
-            if (!a.HasCuration) s += 1;
-            return s;
+            if (a.NameLower == q || string.Equals(a.Moniker, q, StringComparison.OrdinalIgnoreCase)) return 0;
+            if (a.NameWords != null && tokens.All(a.NameWords.Contains)) return a.NameLower.StartsWith(q) ? 1 : 2;
+            if (a.Id.Equals(q, StringComparison.OrdinalIgnoreCase)) return 2;
+            if (a.NameLower.StartsWith(q)) return 3;
+            if (a.NameLower.Contains(q)) return 4;
+            if (a.Id.Contains(q, StringComparison.OrdinalIgnoreCase)) return 5;
+            return 6;
         }
 
         public List<CatalogApp> FindByName(string name, string publisher, int max = 3)
@@ -241,9 +257,12 @@ namespace J365.IntunePSApp.Core
         /// <summary>Best installer for Intune: preferred architecture, machine scope, MSI when available, preferred language.</summary>
         public static CatalogInstaller PickInstaller(CatalogApp app, string prefArch = "x64", string prefLocale = "pt-BR", bool? preferMsi = null)
         {
-            var list = (app?.Installers ?? new List<CatalogInstaller>()).Where(i => i.IsSupported).ToList();
-            if (list.Count == 0) return null;
             prefArch = string.IsNullOrEmpty(prefArch) ? "x64" : prefArch;
+            bool armTarget = prefArch.StartsWith("arm", StringComparison.OrdinalIgnoreCase);
+            // An installer the target cannot run is never an answer: ARM builds on x64/x86, x64 builds on x86.
+            var list = (app?.Installers ?? new List<CatalogInstaller>()).Where(i => i.IsSupported
+                && (armTarget || !IsArm(i)) && !(prefArch == "x86" && i.Arch == "x64")).ToList();
+            if (list.Count == 0) return null;
             prefLocale = string.IsNullOrEmpty(prefLocale) ? "en-US" : prefLocale;
             string lang = prefLocale.Split('-')[0];
             int ArchRank(CatalogInstaller i) => string.Equals(i.Arch, prefArch, StringComparison.OrdinalIgnoreCase) ? 0 : i.Arch == "neutral" || string.IsNullOrEmpty(i.Arch) ? 1 : i.Arch == "x86" ? 2 : 3;
@@ -257,7 +276,14 @@ namespace J365.IntunePSApp.Core
         public static string SilentArgsFor(CatalogInstaller i)
         {
             if (i == null) return "";
-            if (i.IsMsi) return (i.Custom ?? "").Trim();
+            // MSI: the quiet/log switches are added by the toolkit, but the properties a manifest puts in "Silent"
+            // (IACCEPTMSODBCSQLLICENSETERMS=YES, ACCEPTLICENSE=YES...) are needed for the installation to run at all.
+            if (i.IsMsi)
+            {
+                string custom = (i.Custom ?? "").Trim();
+                var extra = MsiProperties(i.Silent).Where(p => custom.IndexOf(p, StringComparison.OrdinalIgnoreCase) < 0);
+                return (string.Join(" ", extra) + " " + custom).Trim();
+            }
             string b = i.Silent;
             if (string.IsNullOrWhiteSpace(b))
             {
@@ -269,8 +295,27 @@ namespace J365.IntunePSApp.Core
                     _ => ""
                 };
             }
-            if (i.Type == "inno" && i.Scope == "machine" && b.IndexOf("/ALLUSERS", StringComparison.OrdinalIgnoreCase) < 0) b += " /ALLUSERS";
+            if (i.Type == "inno" && i.Scope == "machine" && (b + " " + i.Custom).IndexOf("/ALLUSERS", StringComparison.OrdinalIgnoreCase) < 0) b += " /ALLUSERS";
             return (b + " " + (i.Custom ?? "")).Trim();
+        }
+
+        /// <summary>
+        /// What is left of an msiexec command line once the interface, restart and log switches are removed:
+        /// the properties and anything else the manifest asks for.
+        /// </summary>
+        internal static List<string> MsiProperties(string switches)
+        {
+            var kept = new List<string>();
+            var tokens = Regex.Matches(switches ?? "", "(?:[^\\s\"]+|\"[^\"]*\")+").Select(m => m.Value).ToList();
+            for (int k = 0; k < tokens.Count; k++)
+            {
+                string t = tokens[k];
+                if (Regex.IsMatch(t, @"^[/-](q[nbrf]?[\+\-!]*|quiet|passive|norestart|promptrestart|forcerestart)$", RegexOptions.IgnoreCase)) continue;
+                // /l*v <file> and /log <file>: the switch and its file name.
+                if (Regex.IsMatch(t, @"^[/-](l[a-z\*\+!]*|log)$", RegexOptions.IgnoreCase)) { k++; continue; }
+                kept.Add(t);
+            }
+            return kept;
         }
 
         public static string UninstallArgsFor(CatalogInstaller i) => i?.Type switch
@@ -296,12 +341,19 @@ namespace J365.IntunePSApp.Core
             if (app == null) return;
             info.CatalogId = app.Id;
             info.CatalogMatch = match;
-            info.CatalogVersion = info.IsCatalogExact ? app.Version : null;
+            // Many vendors keep the MSI product code from one version to the next: the same code does not mean the same
+            // version. An older file then keeps its own version, so detection finds it and the "newer version" notice shows.
+            string arpOfMatch = inst?.Arp?.FirstOrDefault(e => !string.IsNullOrEmpty(e.DisplayVersion))?.DisplayVersion;
+            // Only decided when the manifest states the version the installer registers: some MSI packages number their
+            // versions differently from the database, and those are the same release.
+            bool sameVersion = match != "productcode" || string.IsNullOrEmpty(info.AppVersion) || arpOfMatch == null
+                || VersionUtil.Compare(info.AppVersion, app.Version) == 0 || VersionUtil.Compare(info.AppVersion, arpOfMatch) == 0;
+            info.CatalogVersion = !info.IsCatalogExact ? null : sameVersion ? app.Version : info.AppVersion;
             info.AppName = Names.CleanAppName(app.Name);
             if (!string.IsNullOrEmpty(app.Publisher)) info.AppVendor = app.Publisher;
             // MSI packages keep their own ProductVersion, unless the database has the same version written in full
             // ("2.8.0" instead of the trimmed "2.8").
-            if (info.IsCatalogExact && !string.IsNullOrEmpty(app.Version)
+            if (info.IsCatalogExact && sameVersion && !string.IsNullOrEmpty(app.Version)
                 && (info.Type != "MSI" || string.IsNullOrEmpty(info.AppVersion) || VersionUtil.Compare(app.Version, info.AppVersion) == 0))
                 info.AppVersion = app.Version;
             info.Description = app.LocalizedDescription;
@@ -315,9 +367,13 @@ namespace J365.IntunePSApp.Core
                 if (!string.IsNullOrEmpty(ua)) info.UninstallExeArgs = ua;
                 if (info.Type == "EXE") info.Technology = TechnologyFor(inst) ?? (info.Technology == InstallerAnalyzer.TechUnknown ? InstallerAnalyzer.TechVendor : info.Technology);
                 if (inst.Scope == "user") info.InstallBehavior = "User";
-                if (!string.IsNullOrEmpty(inst.Arch) && inst.Arch != "neutral") info.AppArch = inst.Arch;
+                // The row the user chose says the architecture. A row found by hash or product code only fills it in when
+                // the file itself did not tell: one file is often listed for x64 and for ARM64.
+                if (!string.IsNullOrEmpty(inst.Arch) && inst.Arch != "neutral" && (match == "download" || string.IsNullOrEmpty(info.AppArch))) info.AppArch = inst.Arch;
                 arpName = inst.Arp?.FirstOrDefault(e => !string.IsNullOrEmpty(e.DisplayName))?.DisplayName;
-                arpVersion = inst.Arp?.FirstOrDefault(e => !string.IsNullOrEmpty(e.DisplayVersion))?.DisplayVersion;
+                arpVersion = sameVersion ? arpOfMatch : null;
+                // Exit codes the manifest declares as success (besides 0).
+                if (inst.SuccessCodes != null && inst.SuccessCodes.Count > 0) info.SuccessCodes = string.Join(", ", inst.SuccessCodes.Where(c => c != 0).Distinct());
             }
             info.UninstallPattern = Names.NamePattern(arpName ?? (string.IsNullOrEmpty(info.MsiProductName) ? app.Name : info.MsiProductName));
             info.DetectionVersion = arpVersion ?? info.AppVersion;
@@ -331,7 +387,7 @@ namespace J365.IntunePSApp.Core
             if (!string.IsNullOrEmpty(x.DetectionFile)) { info.DetectionMethod = "File"; info.DetectionFilePath = x.DetectionFile; }
             if (x.CheckVersion.HasValue) info.DetectionCheckVersion = x.CheckVersion.Value;
             if (x.RemovePrevious.HasValue) info.RemovePrevious = x.RemovePrevious.Value;
-            if (!string.IsNullOrEmpty(x.LocalizedNotes)) info.Notes.Add(x.LocalizedNotes);
+            if (!string.IsNullOrEmpty(x.LocalizedNotes) && !info.Notes.Contains(x.LocalizedNotes)) info.Notes.Add(x.LocalizedNotes);
         }
 
         // ------------------------------------------------------------------ downloads

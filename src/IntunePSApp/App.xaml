@@ -1,6 +1,7 @@
 <Application x:Class="J365.IntunePSApp.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="clr-namespace:J365.IntunePSApp.Views"
              ShutdownMode="OnMainWindowClose">
   <Application.Resources>
     <ResourceDictionary>
@@ -8,6 +9,8 @@
         <ResourceDictionary Source="pack://application:,,,/PresentationFramework.Fluent;component/Themes/Fluent.Light.xaml"/>
         <ResourceDictionary Source="Styles.xaml"/>
       </ResourceDictionary.MergedDictionaries>
+      <!-- Icon of a generated package (Intune\AppIcon.png), loaded without keeping the file open. -->
+      <v:PackageIconConverter x:Key="PackageIcon"/>
     </ResourceDictionary>
   </Application.Resources>
 </Application>

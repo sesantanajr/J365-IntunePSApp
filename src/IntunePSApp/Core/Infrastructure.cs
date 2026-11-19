@@ -106,13 +106,17 @@ namespace J365.IntunePSApp.Core
             catch { return false; }
         }
 
-        /// <summary>Removes leftovers from previous sessions (temporary icons, validation folders).</summary>
+        /// <summary>
+        /// Removes leftovers from previous sessions (temporary icons, validation folders). Only entries older than a day:
+        /// another instance (a second window, a command-line build) may be using the recent ones right now.
+        /// </summary>
         public static void CleanTemp()
         {
             try
             {
-                foreach (var f in Directory.GetFiles(Temp)) { try { File.Delete(f); } catch { } }
-                foreach (var d in Directory.GetDirectories(Temp)) { try { Directory.Delete(d, true); } catch { } }
+                var limit = DateTime.UtcNow.AddDays(-1);
+                foreach (var f in Directory.GetFiles(Temp)) { try { if (File.GetLastWriteTimeUtc(f) < limit) File.Delete(f); } catch { } }
+                foreach (var d in Directory.GetDirectories(Temp)) { try { if (Directory.GetLastWriteTimeUtc(d) < limit) Directory.Delete(d, true); } catch { } }
             }
             catch { }
         }
@@ -414,8 +418,8 @@ namespace J365.IntunePSApp.Core
         /// </summary>
         public static int Compare(string a, string b)
         {
-            var pa = (a ?? "").Trim().TrimStart('v', 'V').Split('.');
-            var pb = (b ?? "").Trim().TrimStart('v', 'V').Split('.');
+            var pa = Normalize(a).Split('.');
+            var pb = Normalize(b).Split('.');
             int n = Math.Max(pa.Length, pb.Length);
             for (int i = 0; i < n; i++)
             {
@@ -428,6 +432,19 @@ namespace J365.IntunePSApp.Core
                 if (c != 0) return c;
             }
             return 0;
+        }
+
+        /// <summary>
+        /// Drops a prefix that is not part of the number, as winget does: "v2.7.6" is 2.7.6 and "b12532" is 12532.
+        /// Only when a digit comes before the first dot ("beta.1" is left alone).
+        /// </summary>
+        internal static string Normalize(string version)
+        {
+            string v = (version ?? "").Trim();
+            int digit = -1;
+            for (int i = 0; i < v.Length; i++) if (char.IsDigit(v[i])) { digit = i; break; }
+            int dot = v.IndexOf('.');
+            return digit > 0 && (dot < 0 || digit < dot) ? v.Substring(digit) : v;
         }
 
         private static void Split(string part, out long number, out string suffix)

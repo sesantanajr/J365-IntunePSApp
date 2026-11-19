@@ -24,7 +24,7 @@
       </StackPanel>
     </DockPanel>
 
-    <ScrollViewer Grid.Row="1" Grid.ColumnSpan="2" VerticalScrollBarVisibility="Auto">
+    <ScrollViewer x:Name="PageScroll" Grid.Row="1" Grid.ColumnSpan="2" VerticalScrollBarVisibility="Auto">
       <StackPanel Margin="28,0,28,28" MaxWidth="980" HorizontalAlignment="Left">
 
         <!-- Application -->
@@ -234,16 +234,21 @@
         <Border CornerRadius="12" Background="{StaticResource HeroBrush}" Padding="24,22">
           <Grid>
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/></Grid.ColumnDefinitions>
-            <Button Style="{StaticResource LogoBadge}" Margin="0,0,22,0" VerticalAlignment="Top" Click="Blog_Click" ToolTip="jornada365.cloud">
-              <Image Source="/Assets/j365-logo.png" Width="176" RenderOptions.BitmapScalingMode="HighQuality"/>
+            <!-- The author: photo (opens LinkedIn), who he is and where to find him. -->
+            <Button Style="{StaticResource AvatarButton}" Width="112" Height="112" Margin="0,2,24,0" VerticalAlignment="Top" Click="LinkedIn_Click" ToolTip="{l:T Credits_LinkedInTip}">
+              <Ellipse Width="104" Height="104">
+                <Ellipse.Fill>
+                  <ImageBrush ImageSource="/Assets/author.jpg" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
+                </Ellipse.Fill>
+              </Ellipse>
             </Button>
             <StackPanel Grid.Column="1">
               <TextBlock x:Name="AboutTitle" Foreground="White" FontFamily="{StaticResource DisplayFont}" FontSize="20" FontWeight="SemiBold"/>
-              <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+              <WrapPanel Margin="0,4,0,0">
                 <TextBlock Text="{l:T Credits_CreatedBy}" Foreground="#C9DBF0" VerticalAlignment="Center"/>
                 <TextBlock x:Name="AboutAuthor" Foreground="White" FontWeight="SemiBold" Margin="5,0,0,0" VerticalAlignment="Center"/>
-                <TextBlock Text="·  Jornada 365" Foreground="#C9DBF0" Margin="8,0,0,0" VerticalAlignment="Center"/>
-              </StackPanel>
+              </WrapPanel>
+              <TextBlock Text="{l:T About_AuthorBio}" Foreground="#E3EEFA" TextWrapping="Wrap" Margin="0,6,0,0"/>
               <TextBlock Text="{l:T About_BasedOn}" Foreground="White" TextWrapping="Wrap" Margin="0,12,0,0"/>
               <TextBlock Text="{l:T About_Licences}" Foreground="#C9DBF0" TextWrapping="Wrap" Margin="0,6,0,0" FontSize="12.5"/>
               <WrapPanel Margin="0,16,0,0">

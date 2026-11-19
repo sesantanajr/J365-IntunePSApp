@@ -131,6 +131,11 @@ public static class Program
         }
         apps.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
 
+        // A curated id that matches no package is dead weight (the package was renamed or removed): say so in the log.
+        var known = new HashSet<string>(apps.Select(a => a.Id), StringComparer.OrdinalIgnoreCase);
+        foreach (var id in curated.Keys.Where(k => !known.Contains(k)).OrderBy(k => k))
+            Console.WriteLine($"  [warning] curated.json: \"{id}\" is not a package of the source any more.");
+
         var catalog = new CatalogFile
         {
             Schema = 2,
@@ -168,10 +173,23 @@ public static class Program
 
     // ------------------------------------------------------------------ versions
 
+    /// <summary>
+    /// Drops a prefix that is not part of the number, as winget does: "v2.7.6" is 2.7.6 and "b12532" is 12532
+    /// (only when a digit comes before the first dot). Without it "v10" lost to every plain number and to "v9".
+    /// </summary>
+    public static string VersionNormalize(string version)
+    {
+        string v = (version ?? "").Trim();
+        int digit = -1;
+        for (int i = 0; i < v.Length; i++) if (char.IsDigit(v[i])) { digit = i; break; }
+        int dot = v.IndexOf('.');
+        return digit > 0 && (dot < 0 || digit < dot) ? v.Substring(digit) : v;
+    }
+
     public static int VersionCompare(string a, string b)
     {
-        var pa = (a ?? "").Split('.');
-        var pb = (b ?? "").Split('.');
+        var pa = VersionNormalize(a).Split('.');
+        var pb = VersionNormalize(b).Split('.');
         int n = Math.Max(pa.Length, pb.Length);
         for (int i = 0; i < n; i++)
         {
@@ -201,10 +219,17 @@ public static class Program
 
     private static CatalogApp BuildApp(VersionDir vd, IDeserializer des)
     {
-        Dictionary<object, object> installerDoc = null, defaultLocale = null, ptLocale = null;
+        Dictionary<object, object> installerDoc = null, defaultLocale = null, ptLocale = null, enLocale = null;
         foreach (var text in vd.Files.Values)
         {
-            var doc = des.Deserialize<Dictionary<object, object>>(text);
+            Dictionary<object, object> doc;
+            try { doc = des.Deserialize<Dictionary<object, object>>(text); }
+            catch
+            {
+                // One malformed translation must not drop the whole package; the installer and default manifests must parse.
+                if (text.Contains("ManifestType: locale") || text.Contains("ManifestType: \"locale\"")) continue;
+                throw;
+            }
             if (doc == null) continue;
             string type = S(doc, "ManifestType");
             switch (type)
@@ -215,10 +240,20 @@ public static class Program
                 case "locale":
                     var loc = S(doc, "PackageLocale") ?? "";
                     if (loc.StartsWith("pt", StringComparison.OrdinalIgnoreCase) && (ptLocale == null || loc.Equals("pt-BR", StringComparison.OrdinalIgnoreCase))) ptLocale = doc;
+                    if (loc.StartsWith("en", StringComparison.OrdinalIgnoreCase) && (enLocale == null || loc.Equals("en-US", StringComparison.OrdinalIgnoreCase))) enLocale = doc;
                     break;
             }
         }
         if (installerDoc == null || defaultLocale == null) return null;
+
+        // "d" is the English description when the package has one (hundreds of packages have a Chinese, German...
+        // default locale and an English translation); "dpt" is the Portuguese one, also when Portuguese is the default.
+        string defaultLanguage = S(defaultLocale, "PackageLocale") ?? "";
+        string defaultDescription = S(defaultLocale, "ShortDescription");
+        string description = defaultLanguage.StartsWith("en", StringComparison.OrdinalIgnoreCase)
+            ? defaultDescription : S(enLocale, "ShortDescription") ?? defaultDescription;
+        string descriptionPt = S(ptLocale, "ShortDescription")
+            ?? (defaultLanguage.StartsWith("pt", StringComparison.OrdinalIgnoreCase) ? defaultDescription : null);
 
         var app = new CatalogApp
         {
@@ -226,8 +261,8 @@ public static class Program
             Version = S(installerDoc, "PackageVersion") ?? vd.Version,
             Name = S(defaultLocale, "PackageName") ?? vd.Id,
             Publisher = S(defaultLocale, "Publisher"),
-            Description = Trim(S(defaultLocale, "ShortDescription") ?? S(ptLocale, "ShortDescription"), 260),
-            DescriptionPt = Trim(S(ptLocale, "ShortDescription"), 260),
+            Description = Trim(description ?? descriptionPt, 260),
+            DescriptionPt = Trim(descriptionPt, 260),
             Homepage = S(defaultLocale, "PackageUrl") ?? S(defaultLocale, "PublisherUrl"),
             License = Trim(S(defaultLocale, "License"), 60),
             Moniker = S(defaultLocale, "Moniker"),

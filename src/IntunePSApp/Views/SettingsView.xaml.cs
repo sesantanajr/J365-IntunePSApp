@@ -45,6 +45,13 @@ namespace J365.IntunePSApp.Views
             }
         }
 
+        /// <summary>Scrolls the page to its last section (About).</summary>
+        public void ScrollToEnd()
+        {
+            PageScroll.UpdateLayout();
+            PageScroll.ScrollToEnd();
+        }
+
         public void Refresh()
         {
             _loading = true;

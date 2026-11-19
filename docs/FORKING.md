@@ -10,7 +10,7 @@ J365 IntunePSApp is MIT-licensed: you may fork it, change it, ship it under anot
 |---|---|
 | Product name, author, links, GitHub repository (used for the update check and the default database URL) | `AppInfo` in [`src/IntunePSApp/Core/Models.cs`](../src/IntunePSApp/Core/Models.cs) |
 | Assembly name, version, company, copyright | [`src/IntunePSApp/IntunePSApp.csproj`](../src/IntunePSApp/IntunePSApp.csproj) |
-| Logo and icon | `src/IntunePSApp/Assets` (`app.ico`, `app-256.png`, `j365-cloud.png`) |
+| Logo and icon | `src/IntunePSApp/Assets` (`app.ico`, `app-256.png`, `j365-cloud.png`, `j365-logo.png`, and `author.jpg`, the photo of *Settings > About*) |
 | Colours and fonts | The palette at the top of [`src/IntunePSApp/Styles.xaml`](../src/IntunePSApp/Styles.xaml) |
 | Texts that mention the product by name | `src/IntunePSApp/Resources/Strings.*.json` (search for "J365") |
 | Data folder and per-user install location | `AppPaths` in [`Core/Infrastructure.cs`](../src/IntunePSApp/Core/Infrastructure.cs) and `InstallService` |

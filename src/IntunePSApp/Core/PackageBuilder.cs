@@ -94,7 +94,7 @@ namespace J365.IntunePSApp.Core
     /// <summary>Orchestrates a build: PSADT template + installer + actions + branding + detection + .intunewin + instructions.</summary>
     public static class PackageBuilder
     {
-        public static readonly string[] MinimumOsOptions = { "W10_1607", "W10_1809", "W10_1909", "W10_2004", "W10_21H2", "W10_22H2", "W11_21H2", "W11_22H2" };
+        public static readonly string[] MinimumOsOptions = { "W10_1607", "W10_1809", "W10_1909", "W10_2004", "W10_21H2", "W10_22H2", "W11_21H2", "W11_22H2", "W11_23H2" };
 
         private static readonly JsonSerializerOptions MetadataJson = new JsonSerializerOptions(Json.Options) { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
@@ -141,6 +141,9 @@ namespace J365.IntunePSApp.Core
             else if (!Regex.IsMatch(Path.GetExtension(s.InstallerPath), @"^\.(msi|exe)$", RegexOptions.IgnoreCase)) v.Errors.Add(T("Val_InstallerType"));
             else if (s.IncludeInstallerFolder && IsSharedFolder(Path.GetDirectoryName(Path.GetFullPath(s.InstallerPath))))
                 v.Errors.Add(T("Val_InstallerFolderUnsafe", Path.GetDirectoryName(Path.GetFullPath(s.InstallerPath))));
+            else if (s.IncludeInstallerFolder && IsInside(Path.GetDirectoryName(Path.GetFullPath(s.InstallerPath)), string.IsNullOrWhiteSpace(s.OutputRoot) ? ConfigStore.Current.OutputFolder : s.OutputRoot))
+                // Files under the output folder are never copied into a package (they are other packages): the installer itself would be left out.
+                v.Errors.Add(T("Val_InstallerFolderInOutput"));
             if (string.IsNullOrWhiteSpace(s.AppName)) v.Errors.Add(T("Val_AppName"));
             if (string.IsNullOrWhiteSpace(s.AppVersion)) v.Errors.Add(T("Val_AppVersion"));
 
@@ -155,8 +158,11 @@ namespace J365.IntunePSApp.Core
             if (s.CloseAppsCountdown < 0 || s.CloseAppsCountdown > 3000) v.Errors.Add(T("Val_CloseCountdown"));
             if (s.RestartPrompt && (s.RestartCountdown < 60 || s.RestartCountdown > 86400)) v.Errors.Add(T("Val_RestartCountdown"));
             if (!string.IsNullOrWhiteSpace(s.LogoPath) && !File.Exists(s.LogoPath)) v.Errors.Add(T("Val_LogoMissing", s.LogoPath));
+            if (!string.IsNullOrWhiteSpace(s.AppIconPath) && !File.Exists(s.AppIconPath)) v.Errors.Add(T("Val_IconMissing", s.AppIconPath));
             if (!string.IsNullOrWhiteSpace(s.AccentColor) && !Regex.IsMatch(s.AccentColor.Trim(), "^#?[0-9A-Fa-f]{6}$")) v.Errors.Add(T("Val_AccentColor"));
-            if (!string.IsNullOrWhiteSpace(s.ExtraSuccessCodes) && !Regex.IsMatch(s.ExtraSuccessCodes, @"^[\d,;\s\-]+$")) v.Errors.Add(T("Val_SuccessCodes"));
+            if (!ScriptGenerator.IsCodeList(s.ExtraSuccessCodes)) v.Errors.Add(T("Val_SuccessCodes"));
+            // PSAppDeployToolkit only shows the welcome dialog when there is something to decide: a deferral or an open application.
+            if (!string.IsNullOrWhiteSpace(s.WelcomeMessage) && !s.AllowDefer && s.ProcessesToClose.Count == 0) v.Warnings.Add(T("Val_Warn_WelcomeNotShown"));
 
             var extraNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var f in s.ExtraFiles)
@@ -168,6 +174,7 @@ namespace J365.IntunePSApp.Core
             foreach (var a in s.Actions)
             {
                 v.Errors.AddRange(ActionCatalog.Validate(a));
+                v.Warnings.AddRange(ActionCatalog.Warnings(a, s.InstallBehavior == "User"));
                 foreach (var reference in PackageFileReferences(a))
                 {
                     string first = reference.Replace('/', '\\').TrimStart('.', '\\').Split('\\')[0];
@@ -213,6 +220,14 @@ namespace J365.IntunePSApp.Core
                     if (a.P("Source") == "Package" && !string.IsNullOrWhiteSpace(a.P("FilePath"))) yield return a.P("FilePath").Trim();
                     break;
             }
+        }
+
+        /// <summary>True when <paramref name="dir"/> is <paramref name="root"/> or a folder below it.</summary>
+        public static bool IsInside(string dir, string root)
+        {
+            if (string.IsNullOrWhiteSpace(dir) || string.IsNullOrWhiteSpace(root)) return false;
+            string d = Path.GetFullPath(dir).TrimEnd('\\') + "\\", r = Path.GetFullPath(root).TrimEnd('\\') + "\\";
+            return d.StartsWith(r, StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>
@@ -290,6 +305,8 @@ namespace J365.IntunePSApp.Core
                 var inst = new FileInfo(s.InstallerPath);
                 if (s.IncludeInstallerFolder) await Task.Run(() => CopyInstallerFolder(inst, filesDir, outRoot, ct), ct);
                 else File.Copy(inst.FullName, Path.Combine(filesDir, inst.Name), true);
+                // A package without its installer would only fail on the devices.
+                if (!File.Exists(Path.Combine(filesDir, inst.Name))) throw new InvalidOperationException(T("Val_Installer"));
 
                 if (s.ExtraFiles.Count > 0)
                 {
@@ -319,12 +336,28 @@ namespace J365.IntunePSApp.Core
                 if (n > 0) Log.Info(T("Log_WelcomeApplied", n));
                 string assets = Path.Combine(srcDir, "Assets");
                 Directory.CreateDirectory(assets);
+
+                // Application icon for Intune and the Company Portal: always written, nothing to download separately.
+                string icon = Path.Combine(intuneDir, PackageLayout.AppIcon);
+                string iconSource = ImageTools.SaveAppIcon(s.AppIconPath, inst.FullName, s.AppName, s.CatalogId, icon);
+                Log.Info(iconSource switch
+                {
+                    ImageTools.IconCustom => T("Log_AppIconCustom"),
+                    ImageTools.IconInstaller => T("Log_AppIconInstaller"),
+                    _ => T("Log_AppIconGenerated")
+                });
+
                 string logoPng = null;
                 if (!string.IsNullOrWhiteSpace(s.LogoPath))
                 {
                     logoPng = Path.Combine(assets, "AppIcon.png");
                     ImageTools.SaveLogoPng(s.LogoPath, logoPng, 256);
                     Log.Ok(T("Log_LogoApplied"));
+                }
+                else if (iconSource != ImageTools.IconGenerated)
+                {
+                    // No company logo: the dialogs show the application's own icon instead of the toolkit's.
+                    File.Copy(icon, Path.Combine(assets, "AppIcon.png"), true);
                 }
                 if (!string.IsNullOrWhiteSpace(s.LogoPath) || !string.IsNullOrWhiteSpace(s.CompanyName))
                     ImageTools.SaveBanner(logoPng ?? Path.Combine(assets, "AppIcon.png"), s.CompanyName, s.AccentColor, Path.Combine(assets, "Banner.Classic.png"));
@@ -335,11 +368,6 @@ namespace J365.IntunePSApp.Core
                 var detErr = await Task.Run(() => PowerShellValidator.Validate(detPath), ct);
                 if (detErr.Length > 0) throw new InvalidDataException(T("Err_DetectionSyntax", detErr[0]));
                 Log.Ok(T("Log_DetectionOk", Path.GetFileName(detPath)));
-
-                string icon = null;
-                string iconPath = Path.Combine(intuneDir, PackageLayout.AppIcon);
-                if (s.InstallerType == "EXE" && ImageTools.SaveExeIcon(inst.FullName, iconPath)) icon = iconPath;
-                if (icon == null && logoPng != null) { File.Copy(logoPng, iconPath, true); icon = iconPath; }
 
                 Log.Step(T("Log_CreatingIntuneWin"));
                 string iwPath = Path.Combine(intuneDir, name + ".intunewin");
@@ -487,6 +515,7 @@ namespace J365.IntunePSApp.Core
                         Date = File.GetLastWriteTime(proj),
                         IntuneWin = PackageLayout.FindIntuneWin(dir),
                         SummaryHtml = PackageLayout.FindInstructions(dir),
+                        Icon = PackageLayout.FindIcon(dir),
                         LatestVersion = NewerCatalogVersion(s)
                     });
                 }

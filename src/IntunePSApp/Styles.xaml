@@ -467,6 +467,24 @@
     </Setter>
   </Style>
 
+  <!-- Round photo with a white ring (author, on dark surfaces) -->
+  <Style x:Key="AvatarButton" TargetType="Button">
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Grid>
+            <Ellipse x:Name="ring" Fill="#33FFFFFF"/>
+            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ring" Property="Fill" Value="#99FFFFFF"/></Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
   <!-- Notice banner (updates, missing dependencies) -->
   <Style x:Key="Notice" TargetType="Border">
     <Setter Property="Background" Value="{StaticResource BrandSoft}"/>

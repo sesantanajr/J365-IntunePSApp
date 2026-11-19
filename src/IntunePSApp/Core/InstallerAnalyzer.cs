@@ -164,7 +164,13 @@ namespace J365.IntunePSApp.Core
             info.CatalogMatch = "name";
             var x = similar.Extra;
             if (x?.Processes != null && info.Processes.Count == 0) info.Processes = new List<string>(x.Processes);
-            if (!string.IsNullOrEmpty(x?.NamePattern)) info.UninstallPattern = x.NamePattern;
+            // The pattern of a look-alike is only taken when it really matches this product: an installer of Python 3.12
+            // must not inherit "Python 3.13*" from the entry of 3.13 (Intune would never detect it, and 3.13 would be removed).
+            if (!string.IsNullOrEmpty(x?.NamePattern))
+            {
+                var rx = WildcardToRegex(x.NamePattern);
+                if (new[] { info.MsiProductName, info.AppName }.Any(n => !string.IsNullOrEmpty(n) && rx.IsMatch(n))) info.UninstallPattern = x.NamePattern;
+            }
             if (!string.IsNullOrEmpty(x?.UninstallArgs) && info.Type == "EXE") info.UninstallExeArgs = x.UninstallArgs;
             if (info.Technology == TechUnknown && info.Type == "EXE")
             {
@@ -313,6 +319,7 @@ namespace J365.IntunePSApp.Core
             s.AppVersion = info.AppVersion ?? "";
             s.AppArch = info.AppArch ?? "";
             s.InstallArgs = info.InstallArgs ?? "";
+            s.ExtraSuccessCodes = info.SuccessCodes ?? "";
             s.MsiProductCode = info.ProductCode ?? "";
             s.UninstallPattern = info.UninstallPattern ?? "";
             s.UninstallExeArgs = info.UninstallExeArgs ?? "";
@@ -334,6 +341,15 @@ namespace J365.IntunePSApp.Core
         /// </summary>
         public static void ApplyNewVersion(PackageSettings s, InstallerInfo info)
         {
+            // The new version comes in another format (an .exe became an .msi, or the reverse): the switches of the old
+            // installer mean nothing to the new one (msiexec fails with 1639 on "/VERYSILENT") and the product code is stale.
+            if (!string.IsNullOrEmpty(s.InstallerType) && !string.Equals(s.InstallerType, info.Type, StringComparison.OrdinalIgnoreCase))
+            {
+                s.InstallArgs = info.InstallArgs ?? "";
+                s.UninstallExeArgs = info.UninstallExeArgs ?? "";
+                s.MsiProductCode = info.ProductCode ?? "";
+                if (s.DetectionMethod == "ProductCode" && string.IsNullOrEmpty(s.MsiProductCode)) s.DetectionMethod = "Registry";
+            }
             s.InstallerPath = info.Path;
             s.InstallerType = info.Type;
             if (info.IsCatalogExact) { s.CatalogId = info.CatalogId ?? s.CatalogId; s.CatalogVersion = info.CatalogVersion ?? ""; }

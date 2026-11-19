@@ -204,6 +204,18 @@
                 <TextBox x:Name="TxtDescription" Style="{StaticResource Multi}" MinHeight="54"/>
                 <TextBlock Text="{l:T Ed_Homepage}" Style="{StaticResource Label}"/>
                 <TextBox x:Name="TxtHomepage"/>
+                <!-- Application icon (Intune and Company Portal). Empty = the icon of the installer, or a tile with the initials. -->
+                <TextBlock Text="{l:T Ed_AppIcon}" Style="{StaticResource Label}"/>
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <Border Width="40" Height="40" CornerRadius="8" BorderBrush="{StaticResource Line}" BorderThickness="1" Margin="0,0,10,0" Background="{StaticResource Subtle}">
+                    <Image x:Name="AppIconThumb" Margin="3" RenderOptions.BitmapScalingMode="HighQuality"/>
+                  </Border>
+                  <TextBox x:Name="TxtAppIcon" Grid.Column="1" TextChanged="AppIcon_Changed"/>
+                  <Button Grid.Column="2" Style="{StaticResource SecondaryButton}" Content="{l:T Common_Browse}" Margin="8,0,0,0" Click="AppIcon_Click"/>
+                  <Button Grid.Column="3" Style="{StaticResource GhostButton}" Content="{l:T Common_Remove}" Margin="4,0,0,0" Click="AppIconClear_Click"/>
+                </Grid>
+                <TextBlock x:Name="AppIconHint" Style="{StaticResource Hint}"/>
                 <TextBlock Text="{l:T Ed_MinOs}" Style="{StaticResource Label}"/>
                 <ComboBox x:Name="CmbMinOs" Width="260" HorizontalAlignment="Left"/>
                 <TextBlock Text="{l:T Ed_MinOsHint}" Style="{StaticResource Hint}"/>
@@ -549,6 +561,14 @@
                     <Button x:Name="BtnSandboxLogs" DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Content="{l:T Ed_SandboxLogs}" Margin="10,0,0,0" VerticalAlignment="Center" Click="SandboxLogs_Click" Visibility="Collapsed"/>
                     <TextBlock x:Name="SandboxStatusIcon" DockPanel.Dock="Left" Text="&#xE7F8;" Style="{StaticResource Icon}" Margin="0,0,10,0" Foreground="{StaticResource Brand}"/>
                     <TextBlock x:Name="SandboxStatusText" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="{StaticResource Ink2}"/>
+                  </DockPanel>
+                </Border>
+                <!-- Outcome of the publication, read from Intune\publish-result.json -->
+                <Border x:Name="PublishStatus" CornerRadius="10" Padding="14,10" Margin="0,6,0,0" Background="{StaticResource BrandSoft}" Visibility="Collapsed">
+                  <DockPanel>
+                    <Button x:Name="BtnPublishOpen" DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Content="{l:T Ed_PublishOpen}" Margin="10,0,0,0" VerticalAlignment="Center" Click="PublishOpen_Click" Visibility="Collapsed"/>
+                    <TextBlock x:Name="PublishStatusIcon" DockPanel.Dock="Left" Text="&#xE898;" Style="{StaticResource Icon}" Margin="0,0,10,0" Foreground="{StaticResource Brand}"/>
+                    <TextBlock x:Name="PublishStatusText" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="{StaticResource Ink2}"/>
                   </DockPanel>
                 </Border>
               </StackPanel>

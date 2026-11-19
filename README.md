@@ -48,6 +48,12 @@ Anyone can use it: there is nothing to install, no script to write and no PowerS
 - **Versions already installed**: the option to uninstall whatever is on the device before installing is on the first step, and the generated script logs what it found and removed.
 - **The window adapts to the screen**, down to 900 x 580.
 
+Added in 2.1.2:
+
+- **Publish to Intune rewritten**: the script talks to Microsoft Graph directly (no PowerShell module to install), detects an app with the same name, can update it or assign the new one, removes an incomplete app when something fails and reports the outcome back to the application. See [docs/INTUNE-PUBLISH.md](docs/INTUNE-PUBLISH.md).
+- **Every package has an application icon**: taken from the installer (now also from MSI files), chosen by you, or generated with the initials. Nothing to download.
+- **Fixes found by a full review of the generated scripts and of the database**: detection of names with accents, "continue on error" that really continues, MSI licence properties kept, the right installer row for x64, better search. The [changelog](CHANGELOG.md) lists them all.
+
 Details in [Testing in Windows Sandbox](#testing-in-windows-sandbox), [Troubleshooting](#troubleshooting) and the [changelog](CHANGELOG.md). Upgrading: replace the executable; settings, packages and projects keep working.
 
 ## Download
@@ -76,7 +82,8 @@ Details in [Testing in Windows Sandbox](#testing-in-windows-sandbox), [Troublesh
 | **Detection** | Generated detection script: by program name and minimum version, by product code, or by file. Test it on your computer with one click. |
 | **Keeping packages current** | *My packages* shows which packages have a **newer version in the database**. *Update* downloads the new installer and keeps every customisation. |
 | **Test before publishing** | **Windows Sandbox**: one click installs the package in a disposable Windows and runs the detection rule, with live progress; the result and the logs come back to the application. If the Windows feature is not installed, the application says so and installs it for you. Or test on the local computer. |
-| **Publish to Intune (preview)** | A generated `Publish-ToIntune.ps1` creates the app in your tenant with your own sign-in, without assignments. See [docs/INTUNE-PUBLISH.md](docs/INTUNE-PUBLISH.md). |
+| **Application icon** | Every package gets `Intune\AppIcon.png` for Intune and the Company Portal: the icon of the installer (`.exe` or `.msi`), a file you choose, or a generated tile with the initials. Nothing to download separately. |
+| **Publish to Intune (preview)** | A generated `Publish-ToIntune.ps1` creates or updates the app in your tenant through Microsoft Graph, with your own sign-in and no module to install; optional assignment; the result and a link to the admin center come back to the application. See [docs/INTUNE-PUBLISH.md](docs/INTUNE-PUBLISH.md). |
 | **English and Portuguese** | Switch the language at any time (sidebar or Settings). The generated instructions follow the same language. |
 | **Portable or installed** | Runs from any folder. Optionally installs for your user (Start menu, *Installed apps*) without administrator rights, and uninstalls cleanly. |
 | **Any screen size** | The window fits small notebooks, 125-150 % scaling and remote sessions: icon-only sidebar and pages that reflow. |
@@ -94,6 +101,7 @@ The installer is identified (technology, silent switches, database match) and yo
 
 **2. Customise** - experience, actions, dependencies, uninstall, detection and branding. Everything is filled in with sensible defaults.
 
+<p align="center"><img src="docs/screenshots/en/application.png" alt="Application step with the application icon for Intune and the Company Portal" width="88%"></p>
 <p align="center"><img src="docs/screenshots/en/experience.png" alt="User experience with live preview" width="88%"></p>
 <p align="center"><img src="docs/screenshots/en/actions.png" alt="Dependencies and ready-made actions" width="88%"></p>
 
@@ -174,10 +182,10 @@ Every release is built by GitHub Actions from the tagged commit and carries chec
 
 ```powershell
 # 1. Checksum: compare with SHA256SUMS.txt of the release
-Get-FileHash .\J365-IntunePSApp-2.1.1-win-x64.zip -Algorithm SHA256
+Get-FileHash .\J365-IntunePSApp-2.1.2-win-x64.zip -Algorithm SHA256
 
 # 2. Provenance: proves the file was built by this repository's workflow (GitHub CLI)
-gh attestation verify .\J365-IntunePSApp-2.1.1-win-x64.zip --repo sesantanajr/J365-IntunePSApp
+gh attestation verify .\J365-IntunePSApp-2.1.2-win-x64.zip --repo sesantanajr/J365-IntunePSApp
 ```
 
 What the application itself verifies: the database installers (SHA256 from the winget manifest), the PSAppDeployToolkit module (Authenticode signature), IntuneWinAppUtil (Microsoft signature, otherwise discarded) and every `.intunewin` it creates (HMAC and SHA256). See [SECURITY.md](SECURITY.md).
@@ -207,10 +215,11 @@ Application logs: `IntunePSApp-Data\logs` next to the executable (portable) or `
 
 ## What was tested (and what was not)
 
-- **Automated:** 136 unit tests run on every push (generated scripts are parsed by Windows PowerShell 5.1, `.intunewin` round trip, both languages, project migration, validations).
+- **Automated:** 157 unit tests run on every push (generated scripts are parsed by Windows PowerShell 5.1, `.intunewin` round trip, both languages, project migration, validations).
 - **End to end, by the author:** packages built from the interface and from the command line in both languages; a generated package executed for real with a test installer (install, repair, uninstall, 22 actions including dependency and `.reg` import); first-run setup on an empty folder; per-user install and uninstall; database generation.
 - **In Windows Sandbox (2.1):** the 7-Zip MSI package was installed by the test script in a real sandbox (exit code 0, detected, 31 s; the same installation took about 150 s before the Smart App Control fix), and run as SYSTEM three times in a row: install on a clean Windows, install again over the existing version (the log shows it being listed and uninstalled first) and uninstall (no longer detected). Not exercised: enabling the Windows feature from the application (it needs a computer without it) and the test of an `.exe` installer.
-- **Not verified by the author yet:** *Publish to Intune* against a real tenant (the script was reviewed against the IntuneWin32App module and its validation mode was run; that is why it is labelled **preview**). Feedback is welcome in the [issues](https://github.com/sesantanajr/J365-IntunePSApp/issues).
+- **For 2.1.2:** a package built with the new code was run as SYSTEM in Windows Sandbox (install, install over the existing version, uninstall; an action failing on purpose was logged and the deployment still returned 0; user code with a here-string ran). Icon extraction was checked with two real MSI files (one carrying an `.ico`, one an `.exe`). The publishing script was run end to end, in Windows PowerShell 5.1 and PowerShell 7, against a local stand-in for Entra ID, Microsoft Graph and Azure Storage that verified the uploaded content (MAC, IV, digest), the retries, the update of an existing app, the assignment and the removal of an incomplete app.
+- **Not verified yet:** *Publish to Intune* against a real tenant; that is why it is still labelled **preview**. The database generator changes were compiled but the database was not regenerated locally. Feedback is welcome in the [issues](https://github.com/sesantanajr/J365-IntunePSApp/issues).
 
 As with any packaging tool: **always test a package with a pilot group before a broad deployment.**
 
@@ -223,7 +232,6 @@ Dark theme · self-update · more languages (the texts are two JSON files) · AR
 - **[PSAppDeployToolkit](https://psappdeploytoolkit.com)** (LGPL-3.0) - the deployment framework this project is based on. Thank you to the PSAppDeployToolkit team and community.
 - **[winget-pkgs](https://github.com/microsoft/winget-pkgs)** (MIT) - source of the application database.
 - **[Microsoft Win32 Content Prep Tool](https://github.com/microsoft/Microsoft-Win32-Content-Prep-Tool)** - downloaded from Microsoft at run time, never redistributed.
-- **[IntuneWin32App](https://github.com/MSEndpointMgr/IntuneWin32App)** (MIT) - community module used by the optional publishing script.
 
 Not affiliated with Microsoft or with the PSAppDeployToolkit team. See [NOTICE.md](NOTICE.md) and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
@@ -276,6 +284,12 @@ Qualquer pessoa consegue usar: não há nada para instalar, nenhum script para e
 - **Versões já instaladas**: a opção de desinstalar o que houver no dispositivo antes de instalar está no primeiro passo, e o script gerado registra o que encontrou e removeu.
 - **A janela se ajusta à tela**, até 900 x 580.
 
+Incluído na 2.1.2:
+
+- **Publicação no Intune reescrita**: o script fala direto com o Microsoft Graph (nenhum módulo do PowerShell para instalar), detecta um app com o mesmo nome, pode atualizá-lo ou atribuir o novo, remove o app incompleto quando algo falha e devolve o resultado ao aplicativo. Veja [docs/INTUNE-PUBLISH.md](docs/INTUNE-PUBLISH.md#publicar-no-intune-prévia).
+- **Todo pacote tem ícone do aplicativo**: extraído do instalador (agora também de arquivos MSI), escolhido por você ou gerado com as iniciais. Nada para baixar.
+- **Correções encontradas em uma revisão completa dos scripts gerados e do banco de dados**: detecção de nomes com acento, "continuar em caso de erro" que realmente continua, propriedades de licença dos MSI preservadas, a linha certa do instalador para x64, busca melhor. O [changelog](CHANGELOG.md) lista todas.
+
 Detalhes em [Teste no Windows Sandbox](#teste-no-windows-sandbox), [Solução de problemas](#solução-de-problemas) e no [changelog](CHANGELOG.md). Para atualizar: substitua o executável; configurações, pacotes e projetos continuam funcionando.
 
 ## Download
@@ -304,7 +318,8 @@ Detalhes em [Teste no Windows Sandbox](#teste-no-windows-sandbox), [Solução de
 | **Detecção** | Script de detecção gerado: pelo nome do programa e versão mínima, pelo código do produto ou por arquivo. Teste no seu computador com um clique. |
 | **Pacotes sempre atuais** | *Meus pacotes* mostra quais pacotes têm **versão mais nova no banco de dados**. *Atualizar* baixa o novo instalador e mantém todas as personalizações. |
 | **Teste antes de publicar** | **Windows Sandbox**: um clique instala o pacote em um Windows descartável e executa a regra de detecção, com progresso ao vivo; o resultado e os logs voltam para o aplicativo. Se o recurso do Windows não estiver instalado, o aplicativo avisa e instala para você. Ou teste no computador local. |
-| **Publicar no Intune (prévia)** | Um `Publish-ToIntune.ps1` gerado cria o aplicativo no seu locatário com o seu próprio login, sem atribuições. Veja [docs/INTUNE-PUBLISH.md](docs/INTUNE-PUBLISH.md). |
+| **Ícone do aplicativo** | Todo pacote recebe `Intune\AppIcon.png` para o Intune e o Portal da Empresa: o ícone do instalador (`.exe` ou `.msi`), um arquivo que você escolher, ou um ícone gerado com as iniciais. Nada para baixar separado. |
+| **Publicar no Intune (prévia)** | Um `Publish-ToIntune.ps1` gerado cria ou atualiza o aplicativo no seu locatário pelo Microsoft Graph, com o seu próprio login e sem módulo para instalar; atribuição opcional; o resultado e um link para o centro de administração voltam para o aplicativo. Veja [docs/INTUNE-PUBLISH.md](docs/INTUNE-PUBLISH.md#publicar-no-intune-prévia). |
 | **Inglês e português** | Troque o idioma a qualquer momento (barra lateral ou Configurações). As instruções geradas seguem o mesmo idioma. |
 | **Portátil ou instalado** | Roda de qualquer pasta. Se quiser, instala para o seu usuário (Menu Iniciar, *Aplicativos instalados*) sem precisar de administrador, e desinstala sem deixar resíduos. |
 | **Qualquer tamanho de tela** | A janela cabe em notebooks pequenos, escala de 125-150 % e sessões remotas: barra lateral só com ícones e páginas que se reorganizam. |
@@ -322,6 +337,7 @@ O instalador é identificado (tecnologia, parâmetros silenciosos, correspondên
 
 **2. Personalize** - experiência, ações, dependências, desinstalação, detecção e visual. Tudo já vem preenchido com padrões sensatos.
 
+<p align="center"><img src="docs/screenshots/pt-BR/application.png" alt="Passo Aplicativo com o ícone do aplicativo para o Intune e o Portal da Empresa" width="88%"></p>
 <p align="center"><img src="docs/screenshots/pt-BR/experience.png" alt="Experiência do usuário com prévia" width="88%"></p>
 <p align="center"><img src="docs/screenshots/pt-BR/actions.png" alt="Dependências e ações prontas" width="88%"></p>
 
@@ -402,10 +418,10 @@ Cada versão é compilada pelo GitHub Actions a partir do commit marcado e traz 
 
 ```powershell
 # 1. Checksum: compare com o SHA256SUMS.txt da versão
-Get-FileHash .\J365-IntunePSApp-2.1.1-win-x64.zip -Algorithm SHA256
+Get-FileHash .\J365-IntunePSApp-2.1.2-win-x64.zip -Algorithm SHA256
 
 # 2. Procedência: prova que o arquivo foi compilado pelo workflow deste repositório (GitHub CLI)
-gh attestation verify .\J365-IntunePSApp-2.1.1-win-x64.zip --repo sesantanajr/J365-IntunePSApp
+gh attestation verify .\J365-IntunePSApp-2.1.2-win-x64.zip --repo sesantanajr/J365-IntunePSApp
 ```
 
 O que o próprio aplicativo verifica: os instaladores do banco de dados (SHA256 do manifesto do winget), o módulo do PSAppDeployToolkit (assinatura Authenticode), o IntuneWinAppUtil (assinatura da Microsoft, senão é descartado) e cada `.intunewin` criado (HMAC e SHA256). Veja [SECURITY.md](SECURITY.md).
@@ -435,10 +451,11 @@ Logs do aplicativo: `IntunePSApp-Data\logs` ao lado do executável (portátil) o
 
 ## O que foi testado (e o que não foi)
 
-- **Automatizado:** 136 testes unitários rodam a cada push (os scripts gerados são analisados pelo Windows PowerShell 5.1, ida e volta do `.intunewin`, os dois idiomas, migração de projetos, validações).
+- **Automatizado:** 157 testes unitários rodam a cada push (os scripts gerados são analisados pelo Windows PowerShell 5.1, ida e volta do `.intunewin`, os dois idiomas, migração de projetos, validações).
 - **De ponta a ponta, pelo autor:** pacotes gerados pela interface e pela linha de comando nos dois idiomas; um pacote gerado executado de verdade com um instalador de teste (instalação, reparo, desinstalação, 22 ações incluindo dependência e importação de `.reg`); preparação da primeira execução em uma pasta vazia; instalação e desinstalação por usuário; geração do banco de dados.
 - **No Windows Sandbox (2.1):** o pacote MSI do 7-Zip foi instalado pelo script de teste em um sandbox real (código de saída 0, detectado, 31 s; a mesma instalação levava cerca de 150 s antes da correção do Smart App Control) e executado como SYSTEM três vezes seguidas: instalação em um Windows limpo, instalação por cima da versão existente (o log mostra ela sendo listada e desinstalada antes) e desinstalação (não é mais detectado). Não exercitado: a ativação do recurso do Windows pelo aplicativo (exige um computador sem ele) e o teste de um instalador `.exe`.
-- **Ainda não verificado pelo autor:** *Publicar no Intune* contra um locatário real (o script foi revisado com base no módulo IntuneWin32App e o modo de validação foi executado; por isso está marcado como **prévia**). Relatos são bem-vindos nas [issues](https://github.com/sesantanajr/J365-IntunePSApp/issues).
+- **Para a 2.1.2:** um pacote gerado com o código novo foi executado como SYSTEM no Windows Sandbox (instalação, instalação por cima da versão existente, desinstalação; uma ação que falha de propósito foi registrada e a implantação ainda retornou 0; código do usuário com here-string rodou). A extração de ícone foi conferida com dois arquivos MSI reais (um com `.ico`, outro com `.exe`). O script de publicação foi executado de ponta a ponta, no Windows PowerShell 5.1 e no PowerShell 7, contra um substituto local do Entra ID, do Microsoft Graph e do Azure Storage que conferiu o conteúdo enviado (MAC, IV, hash), as repetições, a atualização de um app existente, a atribuição e a remoção de um app incompleto.
+- **Ainda não verificado:** *Publicar no Intune* contra um locatário real; por isso continua marcado como **prévia**. As alterações do gerador do banco de dados foram compiladas, mas o banco não foi regenerado localmente. Relatos são bem-vindos nas [issues](https://github.com/sesantanajr/J365-IntunePSApp/issues).
 
 Como em qualquer ferramenta de empacotamento: **sempre teste o pacote em um grupo piloto antes de uma implantação ampla.**
 
@@ -451,7 +468,6 @@ Tema escuro · atualização automática do aplicativo · mais idiomas (os texto
 - **[PSAppDeployToolkit](https://psappdeploytoolkit.com)** (LGPL-3.0) - o framework de implantação em que este projeto é baseado. Obrigado à equipe e à comunidade do PSAppDeployToolkit.
 - **[winget-pkgs](https://github.com/microsoft/winget-pkgs)** (MIT) - origem do banco de dados de aplicativos.
 - **[Microsoft Win32 Content Prep Tool](https://github.com/microsoft/Microsoft-Win32-Content-Prep-Tool)** - baixado da Microsoft em tempo de execução, nunca redistribuído.
-- **[IntuneWin32App](https://github.com/MSEndpointMgr/IntuneWin32App)** (MIT) - módulo da comunidade usado pelo script opcional de publicação.
 
 Sem vínculo com a Microsoft ou com a equipe do PSAppDeployToolkit. Veja [NOTICE.md](NOTICE.md) e [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 

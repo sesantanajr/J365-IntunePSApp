@@ -77,6 +77,7 @@ namespace J365.IntunePSApp.Views
             SetBuildButton(IsBuilding);
             UpdateExistingFlow();
             RefreshSandboxStatus();
+            RefreshPublishStatus();
         }
 
         // ------------------------------------------------------------------ load / collect
@@ -97,6 +98,7 @@ namespace J365.IntunePSApp.Views
                 TxtProcesses.Text = string.Join(", ", s.ProcessesToClose);
                 TxtDescription.Text = s.Description;
                 TxtHomepage.Text = s.Homepage;
+                TxtAppIcon.Text = s.AppIconPath;
                 SelectTag(CmbMinOs, s.MinimumOs);
                 ChkWaitChildren.IsChecked = s.WaitForChildProcesses;
                 TxtExtraCodes.Text = s.ExtraSuccessCodes;
@@ -137,6 +139,7 @@ namespace J365.IntunePSApp.Views
             ActionsEmpty.Visibility = _actions.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             UpdateHints();
             UpdateDetectionPanels();
+            RefreshAppIcon();
             UpdateLogo();
             UpdatePreview();
             UpdateHeader();
@@ -144,6 +147,57 @@ namespace J365.IntunePSApp.Views
             UpdateUpdateBanner();
             UpdateExistingFlow();
         }
+
+        // ------------------------------------------------------------------ application icon
+
+        private string _appIconKind;
+
+        /// <summary>
+        /// Works out the icon the package will get (chosen file, icon of the installer or generated tile) and shows it
+        /// in the header and on the Application step.
+        /// </summary>
+        private void RefreshAppIcon()
+        {
+            if (AppIconThumb == null) return;
+            string installer = _s?.InstallerPath ?? "";
+            string custom = TxtAppIcon.Text.Trim().Trim('"');
+            _installerIcon = null;
+            _appIconKind = null;
+            if (installer.Length > 0 || custom.Length > 0)
+            {
+                try
+                {
+                    string file = Path.Combine(AppPaths.Temp, "editor-app-icon.png");
+                    _appIconKind = ImageTools.SaveAppIcon(custom, installer, TxtName.Text.Trim(), _s?.CatalogId, file);
+                    _installerIcon = file;
+                }
+                catch (Exception ex) { Log.Warn(ex.Message); }
+            }
+            AppIconThumb.Source = MainWindow.LoadBitmap(_installerIcon);
+            AppIconHint.Text = _appIconKind switch
+            {
+                ImageTools.IconCustom => T("Ed_AppIconCustom"),
+                ImageTools.IconInstaller => T("Ed_AppIconInstaller"),
+                ImageTools.IconGenerated => T("Ed_AppIconGenerated"),
+                _ => T("Ed_AppIconNone")
+            };
+        }
+
+        private void AppIcon_Changed(object sender, TextChangedEventArgs e)
+        {
+            if (_loading) return;
+            RefreshAppIcon();
+            UpdateLogo();
+            UpdateHeader();
+        }
+
+        private void AppIcon_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new OpenFileDialog { Filter = T("Filter_Icons") + "|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.ico;*.exe;*.dll" };
+            if (dlg.ShowDialog(Window.GetWindow(this)) == true) TxtAppIcon.Text = dlg.FileName;
+        }
+
+        private void AppIconClear_Click(object sender, RoutedEventArgs e) => TxtAppIcon.Text = "";
 
         public PackageSettings Collect()
         {
@@ -160,6 +214,7 @@ namespace J365.IntunePSApp.Views
             s.ProcessesToClose = Names.ParseProcessList(TxtProcesses.Text);
             s.Description = TxtDescription.Text.Trim();
             s.Homepage = TxtHomepage.Text.Trim();
+            s.AppIconPath = TxtAppIcon.Text.Trim().Trim('"');
             s.MinimumOs = TagOf(CmbMinOs);
             s.WaitForChildProcesses = ChkWaitChildren.IsChecked == true;
             s.ExtraSuccessCodes = TxtExtraCodes.Text.Trim();
@@ -233,10 +288,14 @@ namespace J365.IntunePSApp.Views
             try
             {
                 var info = await Task.Run(() => InstallerAnalyzer.Analyze(path));
-                if (app != null && info.CatalogMatch != "hash")
+                if (app != null)
                 {
-                    CatalogService.Apply(info, app, inst, "download");
-                    info.Notes.Insert(0, T("Analysis_CatalogApplied", app.Name, app.Id));
+                    // The row chosen in the catalog decides scope and architecture, even when the file was also recognised
+                    // by its hash: manifests often list one file under several rows (x64 and ARM64, user and machine).
+                    bool byHash = info.CatalogMatch == "hash";
+                    if (!byHash || inst != null) CatalogService.Apply(info, app, inst, "download");
+                    if (byHash) info.CatalogMatch = "hash";
+                    else info.Notes.Insert(0, T("Analysis_CatalogApplied", app.Name, app.Id));
                 }
                 main.HideBusy();
 
@@ -266,12 +325,6 @@ namespace J365.IntunePSApp.Views
                 ResetSandboxStatus();
                 LoadSettings(s);
                 ShowAnalysis(info);
-                _installerIcon = null;
-                if (info.Type == "EXE")
-                {
-                    string ico = Path.Combine(AppPaths.Temp, $"icon_{Guid.NewGuid():N}.png");
-                    if (ImageTools.SaveExeIcon(path, ico)) _installerIcon = ico;
-                }
                 ResultCard.Visibility = Visibility.Collapsed;
                 LogCard.Visibility = Visibility.Collapsed;
                 UpdateHeader();
@@ -492,6 +545,8 @@ namespace J365.IntunePSApp.Views
         private void Preview_Changed(object sender, RoutedEventArgs e)
         {
             if (_loading) return;
+            // The generated tile carries the initials of the name.
+            if (sender == TxtName && _appIconKind == ImageTools.IconGenerated) RefreshAppIcon();
             UpdatePreview();
             if (sender == TxtName || sender == TxtVersion) UpdateHeader();
         }
@@ -552,6 +607,8 @@ namespace J365.IntunePSApp.Views
         {
             var img = MainWindow.LoadBitmap(TxtLogo.Text.Trim().Trim('"'));
             LogoThumb.Source = img;
+            // No company logo: the dialogs show the application's own icon (a generated tile is not used there).
+            if (img == null && _appIconKind != null && _appIconKind != ImageTools.IconGenerated) img = MainWindow.LoadBitmap(_installerIcon);
             if (img == null)
             {
                 var tpl = ToolsService.LocalPsadt();
@@ -1065,6 +1122,7 @@ namespace J365.IntunePSApp.Views
             _sandboxFolder = null;
             _sandboxResult = null;
             RefreshSandboxStatus();
+            ResetPublishStatus();
         }
 
         private static string SandboxSummary(SandboxStep step)
@@ -1094,12 +1152,93 @@ namespace J365.IntunePSApp.Views
             if (_sandboxFolder != null) Ui.OpenPath(SandboxService.ResultsDir(_sandboxFolder));
         }
 
-        private void Publish_Click(object sender, RoutedEventArgs e)
+        // Publish-ToIntune.ps1 writes Intune\publish-result.json on every exit path; this page shows it.
+        private string _publishFolder;
+        private PublishResult _publishResult;
+        private bool _publishRunning;
+
+        private async void Publish_Click(object sender, RoutedEventArgs e)
         {
-            if (_last == null) return;
-            if (string.IsNullOrEmpty(_last.PublishScript) || !File.Exists(_last.PublishScript)) { MainWindow.Current.Toast(T("Ed_OldPackage"), "warn"); return; }
-            var dialog = new PublishDialog(_last.PublishScript, HeaderTitle.Text) { Owner = Window.GetWindow(this) };
-            if (dialog.ShowDialog() == true) MainWindow.Current.Toast(T("Ed_PublishStarted"), "info");
+            if (_last == null || _publishRunning) return;
+            string intune = _last.IntuneFolder;
+            if (string.IsNullOrEmpty(intune) || !File.Exists(Path.Combine(intune, PackageLayout.MetadataFile))) { MainWindow.Current.Toast(T("Ed_OldPackage"), "warn"); return; }
+            string script;
+            // Packages generated by an older version get the current script (no community module, result file).
+            try { script = IntunePublisher.Prepare(intune); }
+            catch (Exception ex) { Ui.Error(ex.Message); return; }
+
+            var dialog = new PublishDialog(script, HeaderTitle.Text) { Owner = Window.GetWindow(this) };
+            if (dialog.ShowDialog() != true || dialog.Started == null) return;
+            MainWindow.Current.Toast(T("Ed_PublishStarted"), "info");
+            _publishFolder = intune;
+            _publishResult = null;
+            _publishRunning = true;
+            RefreshPublishStatus();
+
+            var started = DateTime.UtcNow;
+            using (var process = dialog.Started)
+            {
+                try { await process.WaitForExitAsync(); } catch { }
+            }
+            _publishRunning = false;
+            if (_publishFolder != intune) return; // another package was opened while the window was running
+            var result = IntunePublisher.ReadResult(intune);
+            // A file older than this run belongs to a previous publication (the window was closed before it wrote anything).
+            if (result != null && File.GetLastWriteTimeUtc(IntunePublisher.ResultFile(intune)) < started.AddSeconds(-5)) result = null;
+            _publishResult = result;
+            RefreshPublishStatus();
+            if (result != null) MainWindow.Current.Toast(PublishSummary(result), result.IsPublished ? "ok" : result.Status == "cancelled" ? "warn" : "error");
+        }
+
+        /// <summary>A reopened package shows the outcome of its last publication, when one was recorded.</summary>
+        private void ShowLastPublishResult(string intuneFolder)
+        {
+            if (string.IsNullOrEmpty(intuneFolder)) return;
+            var result = IntunePublisher.ReadResult(intuneFolder);
+            if (result == null || !result.IsPublished) return;
+            _publishFolder = intuneFolder;
+            _publishResult = result;
+            RefreshPublishStatus();
+        }
+
+        private void ResetPublishStatus()
+        {
+            _publishFolder = null;
+            _publishResult = null;
+            RefreshPublishStatus();
+        }
+
+        private static string PublishSummary(PublishResult r)
+        {
+            if (r.IsPublished)
+            {
+                string text = r.Action == "updated" ? T("Ed_PublishUpdated", r.DisplayName, r.TenantId) : T("Ed_PublishCreated", r.DisplayName, r.TenantId);
+                if (!string.IsNullOrWhiteSpace(r.Assignment)) text += " " + T("Ed_PublishAssigned", r.Assignment);
+                return text;
+            }
+            return r.Status == "cancelled" ? T("Ed_PublishCancelled") : T("Ed_PublishFailed", r.Error);
+        }
+
+        private void RefreshPublishStatus()
+        {
+            if (PublishStatus == null) return;
+            bool show = _publishFolder != null && (_publishRunning || _publishResult != null);
+            PublishStatus.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            if (!show) return;
+            var r = _publishResult;
+            bool ok = r != null && r.IsPublished;
+            bool failed = r != null && !ok && r.Status != "cancelled";
+            PublishStatus.Background = (Brush)FindResource(ok ? "SuccessSoft" : failed ? "DangerSoft" : "BrandSoft");
+            PublishStatusIcon.Foreground = (Brush)FindResource(ok ? "Success" : failed ? "Danger" : "Brand");
+            PublishStatusText.Text = r == null ? T("Ed_PublishRunning") : PublishSummary(r);
+            BtnPublishOpen.Visibility = ok && !string.IsNullOrWhiteSpace(r.PortalUrl) ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void PublishOpen_Click(object sender, RoutedEventArgs e)
+        {
+            // Only the Intune admin center is opened from here, whatever the result file says.
+            string url = _publishResult?.PortalUrl ?? "";
+            if (url.StartsWith("https://intune.microsoft.com/", StringComparison.OrdinalIgnoreCase)) MainWindow.OpenUrl(url);
         }
 
         // ------------------------------------------------------------------ projects
@@ -1124,7 +1263,7 @@ namespace J365.IntunePSApp.Views
                 DropText.Text = string.IsNullOrEmpty(s.InstallerPath) ? T("Ed_DropHere") : Path.GetFileName(s.InstallerPath);
                 // A project inside a package folder brings the previous result back (commands, tests, publishing).
                 _last = PackageBuilder.TryLoadResult(path, s);
-                if (_last != null) { ShowResult(_last); ShowLastSandboxResult(_last.PackageFolder); }
+                if (_last != null) { ShowResult(_last); ShowLastSandboxResult(_last.PackageFolder); ShowLastPublishResult(_last.IntuneFolder); }
                 else ResultCard.Visibility = Visibility.Collapsed;
                 main.Navigate("editor");
                 GoStep(_last != null ? ReviewStep : 1);

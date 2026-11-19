@@ -155,13 +155,33 @@ namespace J365.IntunePSApp.Core
             if ((a.Type == "SetRegistry" || a.Type == "RemoveRegistry") && !string.IsNullOrWhiteSpace(a.P("Key"))
                 && !Regex.IsMatch(a.P("Key"), @"^(HKLM|HKCU|HKCR|HKU|HKEY_[A-Z_]+):?\\", RegexOptions.IgnoreCase)) errs.Add(T("Val_ActionRegistryKey"));
             if (a.Type == "UninstallApp" && Regex.Replace(a.P("NamePattern"), @"[\*\?\s]", "").Length < 3) errs.Add(T("Val_PatternTooGeneric", a.P("NamePattern")));
-            if (a.Type == "InstallDependency" && !string.IsNullOrWhiteSpace(a.P("SuccessCodes")) && !Regex.IsMatch(a.P("SuccessCodes"), @"^[\d,;\s\-]+$")) errs.Add(T("Val_SuccessCodes"));
+            if (a.Type == "InstallDependency" && !ScriptGenerator.IsCodeList(a.P("SuccessCodes"))) errs.Add(T("Val_SuccessCodes"));
+            // A number that cannot be read would silently become 0 in the registry.
+            if (a.Type == "SetRegistry" && a.P("Type") is "DWord" or "QWord" && !IsRegistryNumber(a.P("Value"))) errs.Add(T("Val_ActionRegistryNumber", a.P("Value")));
+            // Instant feedback for "Run PowerShell" (braces outside strings and comments); the real parser checks the
+            // whole script when the package is generated.
             if (a.Type == "RunPowerShell")
             {
                 var perr = PowerShellValidator.QuickCheck(a.P("Code"));
                 if (perr != null) errs.Add(T("Val_ActionScript", perr));
             }
             return errs;
+        }
+
+        private static bool IsRegistryNumber(string value)
+        {
+            value = (value ?? "").Trim();
+            return long.TryParse(value, System.Globalization.NumberStyles.AllowLeadingSign, System.Globalization.CultureInfo.InvariantCulture, out _) || Regex.IsMatch(value, "^0x[0-9A-Fa-f]+$");
+        }
+
+        /// <summary>Things that work but probably not the way the user expects (shown as warnings on the review step).</summary>
+        public static List<string> Warnings(PackageAction a, bool userContext)
+        {
+            var list = new List<string>();
+            // Under the System account HKCU is the hive of SYSTEM itself: no user ever sees the value.
+            if (!userContext && (a.Type == "SetRegistry" || a.Type == "RemoveRegistry") && Regex.IsMatch(a.P("Key").Trim(), @"^(HKCU|HKEY_CURRENT_USER):?\\", RegexOptions.IgnoreCase))
+                list.Add(T("Val_Warn_ActionHkcu", a.P("Key").Trim()));
+            return list;
         }
 
         /// <summary>Converts values saved by version 1.x (Portuguese display texts) into language-neutral codes.</summary>
@@ -263,7 +283,8 @@ namespace J365.IntunePSApp.Core
                         string v = a.P("Value");
                         string valueExpr = type switch
                         {
-                            "DWord" or "QWord" => long.TryParse(v.Trim(), out var n) ? n.ToString() : (Regex.IsMatch(v.Trim(), "^0x[0-9A-Fa-f]+$") ? v.Trim() : "0"),
+                            "DWord" or "QWord" => long.TryParse(v.Trim(), System.Globalization.NumberStyles.AllowLeadingSign, System.Globalization.CultureInfo.InvariantCulture, out var n)
+                                ? n.ToString(System.Globalization.CultureInfo.InvariantCulture) : (Regex.IsMatch(v.Trim(), "^0x[0-9A-Fa-f]+$") ? v.Trim() : "0"),
                             "MultiString" => "@(" + string.Join(", ", v.Split(';').Select(x => L(x.Trim()))) + ")",
                             _ => L(v)
                         };
@@ -308,7 +329,8 @@ namespace J365.IntunePSApp.Core
                         break;
                     }
                 case "RunPowerShell":
-                    body.AddRange(a.P("Code").Replace("\r\n", "\n").Split('\n').Select(l => l.TrimEnd()));
+                    // Written exactly as typed (see below): indenting it would break here-strings and change multi-line strings.
+                    body.AddRange(a.P("Code").Replace("\r\n", "\n").Split('\n'));
                     break;
                 case "ShowMessage":
                     body.Add($"Show-ADTInstallationPrompt -Message {L(a.P("Text"))} -ButtonRightText 'OK' -Icon 'Information'" + (a.P("Wait") == "true" ? "" : " -NoWait"));
@@ -323,18 +345,24 @@ namespace J365.IntunePSApp.Core
             var lines = new List<string>();
             string comment = Regex.Replace($"{label} - {Summarize(a)}", @"[\r\n]+", " ").Replace("→", "->");
             lines.Add("    ## Action: " + ScriptGenerator.Ascii(comment));
+            // User code keeps its own columns: a here-string terminator must start the line.
+            bool verbatim = a.Type == "RunPowerShell";
             if (a.ContinueOnError)
             {
+                // PSAppDeployToolkit records the exit code of a failed process before it throws; without restoring it,
+                // an action that "failed and continued" would still make the whole deployment report a failure.
+                lines.Add("    $j365ExitCode = $adtSession.GetExitCode()");
                 lines.Add("    try");
                 lines.Add("    {");
-                lines.AddRange(body.Select(b => "        " + b));
+                lines.AddRange(body.Select(b => verbatim ? b : "        " + b));
                 lines.Add("    }");
                 lines.Add("    catch");
                 lines.Add("    {");
                 lines.Add($"        Write-ADTLogEntry -Message ({L("Action failed [" + label + "]: ")} + $_.Exception.Message) -Severity 2");
+                lines.Add("        $adtSession.SetExitCode($j365ExitCode)");
                 lines.Add("    }");
             }
-            else lines.AddRange(body.Select(b => "    " + b));
+            else lines.AddRange(body.Select(b => verbatim ? b : "    " + b));
             lines.Add("");
             return lines;
         }

@@ -15,7 +15,7 @@ J365 IntunePSApp does not contain or modify PSAppDeployToolkit's code. At run ti
 
 - Application database derived from **microsoft/winget-pkgs** (MIT).
 - **Microsoft Win32 Content Prep Tool** is downloaded from Microsoft at run time and is not redistributed.
-- The optional publishing script uses the community module **IntuneWin32App** (MIT), installed by the user from the PowerShell Gallery.
+- The optional publishing script calls Microsoft Graph directly; it uses no third-party module.
 
 Details in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 

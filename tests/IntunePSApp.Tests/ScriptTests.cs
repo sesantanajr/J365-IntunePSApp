@@ -252,6 +252,8 @@ namespace J365.IntunePSApp.Tests
                         "Source" => "file with 'quote'.exe",
                         "SuccessCodes" => "0, 1638",
                         "NamePattern" => "Old App*",
+                        // The first registry type is numeric: text there is a validation error (it used to become 0 silently).
+                        "Value" when def.Type == "SetRegistry" => "1",
                         _ => "value with 'quote'"
                     }
                 };
@@ -327,6 +329,48 @@ namespace J365.IntunePSApp.Tests
             Assert.NotEmpty(ActionCatalog.Validate(new PackageAction { Type = "RunPowerShell", Params = { ["Code"] = "if ($true) {" } }));
             Assert.NotEmpty(ActionCatalog.Validate(new PackageAction { Type = "InstallDependency", Params = { ["Source"] = "a.exe", ["SuccessCodes"] = "zero" } }));
             Assert.Empty(ActionCatalog.Validate(new PackageAction { Type = "RunPowerShell", Params = { ["Code"] = "if ($true) { 'ok' }" } }));
+            // Braces inside strings, here-strings and comments are text: valid code is not rejected.
+            foreach (var valid in new[] { "$x = $s -replace '\\{', ''", "$a = \"}}\" # }", "<# { #> 'ok'", "$t = @'\n{{{\n'@\n'ok'" })
+                Assert.Empty(ActionCatalog.Validate(new PackageAction { Type = "RunPowerShell", Params = { ["Code"] = valid } }));
+            // A number that cannot be read is an error (it used to be written as 0); success codes are checked one by one.
+            Assert.NotEmpty(ActionCatalog.Validate(new PackageAction { Type = "SetRegistry", Params = { ["Key"] = @"HKLM:\SOFTWARE\X", ["Name"] = "n", ["Type"] = "DWord", ["Value"] = "true" } }));
+            Assert.Empty(ActionCatalog.Validate(new PackageAction { Type = "SetRegistry", Params = { ["Key"] = @"HKLM:\SOFTWARE\X", ["Name"] = "n", ["Type"] = "DWord", ["Value"] = "0x10" } }));
+            Assert.NotEmpty(ActionCatalog.Validate(new PackageAction { Type = "InstallDependency", Params = { ["Source"] = "a.exe", ["SuccessCodes"] = "3010-3015" } }));
+            // HKCU under the System account reaches no user: a warning, not an error.
+            var hkcu = new PackageAction { Type = "SetRegistry", Params = { ["Key"] = @"HKCU:\Software\X", ["Name"] = "n", ["Type"] = "String", ["Value"] = "v" } };
+            Assert.Single(ActionCatalog.Warnings(hkcu, userContext: false));
+            Assert.Empty(ActionCatalog.Warnings(hkcu, userContext: true));
+        }
+
+        [Fact]
+        public void User_code_is_written_as_typed_and_a_continued_failure_does_not_fail_the_deployment()
+        {
+            var a = new PackageAction { Type = "RunPowerShell", ContinueOnError = true, Params = { ["Code"] = "$text = @'\nline one   \n  line two\n'@\nWrite-ADTLogEntry -Message $text" } };
+            var lines = ActionCatalog.Generate(a);
+            Assert.Contains("'@", lines);                 // the here-string terminator stays in column 0
+            Assert.Contains("line one   ", lines);        // trailing spaces inside a string are kept
+            Assert.Contains("    $j365ExitCode = $adtSession.GetExitCode()", lines);
+            Assert.Contains("        $adtSession.SetExitCode($j365ExitCode)", lines);
+            Ps.AssertParses("function T {\r\n" + string.Join("\r\n", lines) + "\r\n}");
+        }
+
+        [Fact]
+        public void Detection_keeps_accented_names_and_paths_matchable_in_an_ascii_script()
+        {
+            var s = Fakes.Settings();
+            s.DetectionNamePattern = "Aplicação Fiscal*";
+            string byName = ScriptGenerator.DetectionScript(s);
+            Assert.True(Ps.IsAscii(byName));
+            Assert.Contains("$NamePattern = 'Aplica??o Fiscal*'", byName);   // "Aplicacao*" would never match "Aplicação"
+            Ps.AssertParses(byName);
+
+            s.DetectionMethod = "File";
+            s.DetectionFilePath = @"%ProgramFiles%\Sped Contábil\sped.exe";
+            string byFile = ScriptGenerator.DetectionScript(s);
+            Assert.True(Ps.IsAscii(byFile));
+            Assert.Contains(@"('%ProgramFiles%\Sped Cont' + [char]0x00E1 + 'bil\sped.exe')", byFile);
+            Ps.AssertParses(byFile);
+            Assert.Equal("'plain'", ScriptGenerator.AsciiExpression("plain"));
         }
 
         [Fact]

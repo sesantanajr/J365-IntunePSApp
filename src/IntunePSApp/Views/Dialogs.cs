@@ -78,6 +78,18 @@ namespace J365.IntunePSApp.Views
         public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture) => throw new NotSupportedException();
     }
 
+    /// <summary>
+    /// Path of an image file -> image, read into memory at once: the file is not kept open, so the package folder it
+    /// belongs to can still be renamed or deleted. A missing file gives no image.
+    /// </summary>
+    public sealed class PackageIconConverter : System.Windows.Data.IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+            => value is string path ? MainWindow.LoadBitmap(path) : null;
+
+        public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture) => throw new NotSupportedException();
+    }
+
     /// <summary>Common look of the dialog windows (application theme and fonts).</summary>
     public class DialogWindow : Window
     {
@@ -409,15 +421,20 @@ namespace J365.IntunePSApp.Views
     /// <summary>"Publish to Intune (preview)": collects the tenant and app registration and starts Publish-ToIntune.ps1.</summary>
     public class PublishDialog : DialogWindow
     {
-        private readonly TextBox _tenant, _client, _command;
+        private readonly TextBox _tenant, _client, _group, _command;
         private readonly CheckBox _deviceCode;
+        private readonly ComboBox _ifExists, _assign;
+        private readonly StackPanel _groupPanel;
         private readonly string _script;
+
+        /// <summary>The PowerShell process of the publication, when the dialog was confirmed.</summary>
+        public Process Started { get; private set; }
 
         public PublishDialog(string publishScript, string appTitle)
         {
             _script = publishScript;
             Title = T("Publish_Title");
-            Width = 680;
+            Width = 720;
             SizeToContent = SizeToContent.Height;
             ResizeMode = ResizeMode.NoResize;
             var cfg = ConfigStore.Current;
@@ -426,15 +443,48 @@ namespace J365.IntunePSApp.Views
             root.Children.Add(new TextBlock { Text = T("Publish_Heading", appTitle), Style = S("H2"), TextWrapping = TextWrapping.Wrap });
             root.Children.Add(new TextBlock { Text = T("Publish_Intro"), Style = S("MutedText"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 2) });
 
-            root.Children.Add(Label(T("Publish_Tenant")));
+            var ids = new Grid();
+            ids.ColumnDefinitions.Add(new ColumnDefinition());
+            ids.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(16) });
+            ids.ColumnDefinitions.Add(new ColumnDefinition());
+            var left = new StackPanel();
+            left.Children.Add(Label(T("Publish_Tenant")));
             _tenant = new TextBox { Text = cfg.IntuneTenantId ?? "" };
-            root.Children.Add(_tenant);
-            root.Children.Add(Hint(T("Publish_TenantHint")));
-
-            root.Children.Add(Label(T("Publish_Client")));
+            left.Children.Add(_tenant);
+            left.Children.Add(Hint(T("Publish_TenantHint")));
+            var right = new StackPanel();
+            Grid.SetColumn(right, 2);
+            right.Children.Add(Label(T("Publish_Client")));
             _client = new TextBox { Text = cfg.IntuneClientId ?? "" };
-            root.Children.Add(_client);
+            right.Children.Add(_client);
+            ids.Children.Add(left);
+            ids.Children.Add(right);
+            root.Children.Add(ids);
             root.Children.Add(Hint(T("Publish_ClientHint")));
+
+            root.Children.Add(Label(T("Publish_IfExists")));
+            _ifExists = new ComboBox();
+            foreach (var (tag, key) in new[] { ("Ask", "Publish_ExistsAsk"), ("Update", "Publish_ExistsUpdate"), ("CreateNew", "Publish_ExistsNew"), ("Fail", "Publish_ExistsFail") })
+                _ifExists.Items.Add(new ComboBoxItem { Tag = tag, Content = T(key) });
+            _ifExists.SelectedIndex = 0;
+            root.Children.Add(_ifExists);
+
+            root.Children.Add(Label(T("Publish_Assign")));
+            _assign = new ComboBox();
+            foreach (var (tag, key) in new[]
+            {
+                ("none|AllUsers", "Publish_AssignNone"), ("available|Group", "Publish_AssignAvailableGroup"), ("available|AllUsers", "Publish_AssignAvailableAll"),
+                ("required|Group", "Publish_AssignRequiredGroup"), ("required|AllUsers", "Publish_AssignRequiredUsers"), ("required|AllDevices", "Publish_AssignRequiredDevices")
+            })
+                _assign.Items.Add(new ComboBoxItem { Tag = tag, Content = T(key) });
+            _assign.SelectedIndex = 0;
+            root.Children.Add(_assign);
+            root.Children.Add(Hint(T("Publish_AssignHint")));
+            _groupPanel = new StackPanel { Visibility = Visibility.Collapsed };
+            _groupPanel.Children.Add(Label(T("Publish_Group")));
+            _group = new TextBox { FontFamily = Ui.Font("MonoFont") };
+            _groupPanel.Children.Add(_group);
+            root.Children.Add(_groupPanel);
 
             _deviceCode = new CheckBox { Style = S("Switch"), Content = T("Publish_DeviceCode"), Margin = new Thickness(0, 16, 0, 0) };
             root.Children.Add(_deviceCode);
@@ -447,51 +497,95 @@ namespace J365.IntunePSApp.Views
             var guide = MakeButton(T("Publish_Guide"), "GhostButton", (s, e) => Ui.OpenPath(AppInfo.PublishDocsUrl), 0);
             DockPanel.SetDock(guide, Dock.Left);
             bar.Children.Add(guide);
+            var validate = MakeButton(T("Publish_Validate"), "GhostButton", async (s, e) => await ValidatePackageAsync((Button)s), 4);
+            DockPanel.SetDock(validate, Dock.Left);
+            bar.Children.Add(validate);
             var run = MakeButton(T("Publish_Run"), "PrimaryButton", (s, e) => Run());
             DockPanel.SetDock(run, Dock.Right);
             bar.Children.Add(run);
-            var copy = MakeButton(T("Publish_CopyCommand"), "SecondaryButton", (s, e) => { if (Validate(false)) Ui.CopyText(_command.Text); });
+            var copy = MakeButton(T("Publish_CopyCommand"), "SecondaryButton", (s, e) => { if (Check(false) is PublishOptions o) Ui.CopyText(IntunePublisher.CommandLine(_script, o)); });
             DockPanel.SetDock(copy, Dock.Right);
             bar.Children.Add(copy);
             var cancel = MakeButton(T("Common_Cancel"), "SecondaryButton", (s, e) => DialogResult = false);
             DockPanel.SetDock(cancel, Dock.Right);
             bar.Children.Add(cancel);
             root.Children.Add(bar);
-            Content = root;
+            // Small screens: the form scrolls instead of leaving the buttons out of reach.
+            Content = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = root };
 
             _tenant.TextChanged += (s, e) => UpdateCommand();
             _client.TextChanged += (s, e) => UpdateCommand();
+            _group.TextChanged += (s, e) => UpdateCommand();
             _deviceCode.Checked += (s, e) => UpdateCommand();
             _deviceCode.Unchecked += (s, e) => UpdateCommand();
+            _ifExists.SelectionChanged += (s, e) => UpdateCommand();
+            _assign.SelectionChanged += (s, e) => UpdateCommand();
             UpdateCommand();
+        }
+
+        private static string TagOf(ComboBox combo) => (combo.SelectedItem as ComboBoxItem)?.Tag as string ?? "";
+
+        private PublishOptions Options()
+        {
+            var assign = TagOf(_assign).Split('|');
+            return new PublishOptions
+            {
+                TenantId = _tenant.Text.Trim(),
+                ClientId = _client.Text.Trim(),
+                DeviceCode = _deviceCode.IsChecked == true,
+                IfExists = TagOf(_ifExists),
+                AssignIntent = assign[0],
+                AssignTo = assign.Length > 1 ? assign[1] : "AllUsers",
+                GroupId = _group.Text.Trim()
+            };
         }
 
         private void UpdateCommand()
         {
-            string tenant = string.IsNullOrWhiteSpace(_tenant.Text) ? "<tenant>" : _tenant.Text.Trim();
-            string client = string.IsNullOrWhiteSpace(_client.Text) ? "<client-id>" : _client.Text.Trim();
-            _command.Text = IntunePublisher.CommandLine(_script, tenant, client, _deviceCode.IsChecked == true);
+            var o = Options();
+            _groupPanel.Visibility = o.AssignIntent != "none" && o.AssignTo == "Group" ? Visibility.Visible : Visibility.Collapsed;
+            if (string.IsNullOrWhiteSpace(o.TenantId)) o.TenantId = "<tenant>";
+            if (string.IsNullOrWhiteSpace(o.ClientId)) o.ClientId = "<client-id>";
+            if (string.IsNullOrWhiteSpace(o.GroupId)) o.GroupId = "<group-id>";
+            _command.Text = IntunePublisher.CommandLine(_script, o);
         }
 
-        private bool Validate(bool save)
+        /// <summary>The options when they are valid (optionally remembering tenant and client id); otherwise a message and null.</summary>
+        private PublishOptions Check(bool save)
         {
-            if (!IntunePublisher.IsTenant(_tenant.Text)) { Ui.Warn(T("Publish_InvalidTenant")); return false; }
-            if (!IntunePublisher.IsGuid(_client.Text)) { Ui.Warn(T("Publish_InvalidClient")); return false; }
+            var o = Options();
+            string problem = IntunePublisher.Check(o);
+            if (problem != null) { Ui.Warn(Localization.Loc.T(problem)); return null; }
             if (save)
             {
-                ConfigStore.Current.IntuneTenantId = _tenant.Text.Trim();
-                ConfigStore.Current.IntuneClientId = _client.Text.Trim();
+                ConfigStore.Current.IntuneTenantId = o.TenantId;
+                ConfigStore.Current.IntuneClientId = o.ClientId;
                 ConfigStore.Save();
             }
-            return true;
+            return o;
+        }
+
+        private async System.Threading.Tasks.Task ValidatePackageAsync(Button button)
+        {
+            button.IsEnabled = false;
+            try
+            {
+                var result = await System.Threading.Tasks.Task.Run(() => IntunePublisher.Validate(_script));
+                new TextViewerWindow(T("Publish_ValidateTitle"), result.Output) { Owner = this, Width = 760, Height = 460 }.ShowDialog();
+            }
+            catch (Exception ex) { Ui.Error(ex.Message); }
+            finally { button.IsEnabled = true; }
         }
 
         private void Run()
         {
-            if (!Validate(true)) return;
+            var o = Check(true);
+            if (o == null) return;
+            bool broad = o.AssignIntent == "required" && o.AssignTo != "Group";
+            if (broad && !Ui.Confirm(T("Publish_ConfirmBroad"), danger: true)) return;
             try
             {
-                IntunePublisher.Launch(_script, _tenant.Text, _client.Text, _deviceCode.IsChecked == true);
+                Started = IntunePublisher.Launch(_script, o);
                 DialogResult = true;
             }
             catch (Exception ex) { Ui.Error(ex.Message); }

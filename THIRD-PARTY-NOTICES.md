@@ -21,12 +21,6 @@ J365 IntunePSApp is distributed under the MIT License. It uses the components be
 - Licence: MIT
 - Use: the application database (`catalog.json.gz`) is derived from the public manifests of this repository (name, publisher, version, official URLs, SHA256, silent switches, product codes, *Installed apps* entries and package dependencies).
 
-## IntuneWin32App (optional, not bundled)
-
-- Project: https://github.com/MSEndpointMgr/IntuneWin32App
-- Licence: MIT
-- Use: PowerShell module called by the optional `Publish-ToIntune.ps1` script. It is installed by the user from the PowerShell Gallery, after confirmation; it is not included in this project or in the generated packages.
-
 ## YamlDotNet
 
 - Project: https://github.com/aaubry/YamlDotNet
