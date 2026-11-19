@@ -2,6 +2,9 @@
   <Folder Name="/src/">
     <Project Path="src/IntunePSApp/IntunePSApp.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/IntunePSApp.Tests/IntunePSApp.Tests.csproj" />
+  </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/CatalogBuilder/CatalogBuilder.csproj" />
   </Folder>

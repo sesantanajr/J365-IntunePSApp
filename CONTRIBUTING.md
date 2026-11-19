@@ -1,58 +1,72 @@
-# Como contribuir
+# Contributing
 
-Obrigado por ajudar o J365 IntunePSApp! Toda contribuição é bem-vinda: código, correções no banco de dados, testes com instaladores reais, documentação e ideias.
+*Português: [abaixo](#como-contribuir).*
 
-## Curadoria de aplicativos (a forma mais rápida de ajudar)
+Thank you for helping J365 IntunePSApp! Code, database corrections, tests with real installers, translations, documentation and ideas are all welcome. Issues and pull requests can be written in English or Portuguese.
 
-O banco de dados vem do winget e já traz os parâmetros silenciosos e as URLs. A curadoria em [`catalog/curated.json`](catalog/curated.json) acrescenta o que falta para um pacote corporativo perfeito:
+## The quickest way to help: curated application knowledge
+
+The database comes from winget and already has silent switches and URLs. [`catalog/curated.json`](catalog/curated.json) adds what a good enterprise package still needs:
 
 ```json
 "Notepad++.Notepad++": {
   "processes": ["notepad++"],
   "namePattern": "Notepad++*",
   "uninstallArgs": "/S",
-  "notes": "Observação exibida no catálogo."
+  "notesEn": "Note shown in the catalog (English).",
+  "notes": "Observação exibida no catálogo (português)."
 }
 ```
 
-| Campo | Descrição |
+| Field | Description |
 |---|---|
-| `processes` | Executáveis que precisam estar fechados (sem `.exe`) |
-| `namePattern` | Nome em "Aplicativos instalados" (aceita `*`), usado para desinstalar, remover versões anteriores e detectar |
-| `uninstallArgs` | Parâmetros silenciosos do desinstalador `.exe` |
-| `installArgs` | Substitui os parâmetros de instalação do winget, se necessário |
-| `detectionFile` | Arquivo recomendado para detecção (ex.: apps que se atualizam sozinhos) |
-| `checkVersion` | `false` para detectar apenas a presença |
-| `removePrevious` | `false` para bibliotecas compartilhadas (ex.: VC++ Redistributable) |
-| `notes` | Avisos importantes para quem empacota |
+| `processes` | Executables that must be closed (without `.exe`) |
+| `namePattern` | Name in *Installed apps* (wildcards allowed): used to uninstall, remove previous versions and detect |
+| `uninstallArgs` | Silent switches of the `.exe` uninstaller |
+| `installArgs` | Replaces the winget install switches when needed |
+| `detectionFile` | Recommended file for detection (for example apps that update themselves) |
+| `checkVersion` | `false` to detect presence only |
+| `removePrevious` | `false` for shared libraries (for example the VC++ Redistributable) |
+| `notesEn` / `notes` | Important warnings for whoever packages the app, in English / Portuguese |
 
-A chave é o **ID do winget** (procure em https://winget.run ou com `winget search`). Antes de abrir o pull request, teste o pacote gerado com:
+The key is the **winget ID** (`winget search <name>`). Before opening the pull request, test the generated package: *Test in Sandbox*, or on a test computer with `Invoke-AppDeployToolkit.exe -DeploymentType Install` and `-DeploymentType Uninstall`.
 
-```powershell
-.\Invoke-AppDeployToolkit.exe -DeploymentType Install -DeployMode Interactive
-.\Invoke-AppDeployToolkit.exe -DeploymentType Uninstall -DeployMode Interactive
-```
+## Code
+
+1. Read [docs/BUILDING.md](docs/BUILDING.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+2. Keep `Core` free of UI code. Code, comments and generated scripts are in English.
+3. Every text shown to the user goes into **both** `Resources/Strings.en.json` and `Strings.pt-BR.json` (the tests fail otherwise). Values saved in projects must be language-neutral codes.
+4. Anything written into a generated PowerShell script must go through `ScriptGenerator.Lit` and be covered by a test that parses the result.
+5. Run `dotnet test` before opening the pull request and describe how you tested (application, installer type, System or User context).
+
+## Reporting problems
+
+Use the issue templates. For a package that failed on a device, attach `build.log` and the PSAppDeployToolkit log (`C:\ProgramData\Microsoft\IntuneManagementExtension\Logs` or `C:\Windows\Logs\Software`) after removing sensitive data. Security problems: see [SECURITY.md](SECURITY.md).
+
+By contributing you agree that your contribution is licensed under the [MIT License](LICENSE).
+
+---
+
+# Como contribuir
+
+Obrigado por ajudar o J365 IntunePSApp! Código, correções no banco de dados, testes com instaladores reais, traduções, documentação e ideias são bem-vindos. Issues e pull requests podem ser escritos em português ou inglês.
+
+## A forma mais rápida de ajudar: curadoria de aplicativos
+
+O banco de dados vem do winget e já traz os parâmetros silenciosos e os endereços. O [`catalog/curated.json`](catalog/curated.json) acrescenta o que falta para um bom pacote corporativo: processos a fechar (`processes`), nome em *Aplicativos instalados* (`namePattern`), parâmetros do desinstalador (`uninstallArgs`), parâmetros de instalação (`installArgs`), arquivo para detecção (`detectionFile`), `checkVersion`, `removePrevious` e observações em português (`notes`) e inglês (`notesEn`). Veja o exemplo e a tabela na seção em inglês acima.
+
+A chave é o **ID do winget** (`winget search <nome>`). Antes de abrir o pull request, teste o pacote gerado: *Testar no Sandbox*, ou em um computador de teste com `Invoke-AppDeployToolkit.exe -DeploymentType Install` e `-DeploymentType Uninstall`.
 
 ## Código
 
-1. Instale o [.NET SDK 10](https://dotnet.microsoft.com/download).
-2. `dotnet run --project src/IntunePSApp`
-3. Use o modo de captura para revisar a interface sem cliques:
-   `J365.IntunePSApp.exe --snapshot <pasta> --snapshot-installer <instalador> [--snapshot-build]`
-4. Para testar com dados isolados, defina a variável `J365_INTUNEPSAPP_DATA` com uma pasta temporária.
-
-Padrões do projeto:
-
-- Textos da interface em português do Brasil.
-- O script de detecção deve continuar 100% ASCII e compatível com o Windows PowerShell 5.1.
-- Todo `Invoke-AppDeployToolkit.ps1` gerado é validado pelo parser do PowerShell. Novas ações devem passar nessa validação.
+1. Leia [docs/BUILDING.md](docs/BUILDING.md) e [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+2. Mantenha o `Core` sem código de interface. Código, comentários e scripts gerados ficam em inglês.
+3. Todo texto exibido ao usuário entra nos **dois** arquivos, `Resources/Strings.en.json` e `Strings.pt-BR.json` (os testes falham se faltar). Valores salvos nos projetos devem ser códigos independentes de idioma.
+4. Tudo o que for escrito em um script PowerShell gerado deve passar por `ScriptGenerator.Lit` e ter um teste que analisa o resultado.
+5. Rode `dotnet test` antes de abrir o pull request e descreva como testou (aplicativo, tipo de instalador, contexto Sistema ou Usuário).
 
 ## Relatando problemas
 
-Abra uma *issue* com:
+Use os modelos de issue. Para um pacote que falhou em um dispositivo, anexe o `build.log` e o log do PSAppDeployToolkit depois de remover dados sensíveis. Problemas de segurança: veja o [SECURITY.md](SECURITY.md).
 
-- o app e o arquivo do instalador (link oficial);
-- o `geracao.log` do pacote;
-- o log do PSADT (`C:\ProgramData\Microsoft\IntuneManagementExtension\Logs` ou `C:\Windows\Logs\Software`).
-
-Não publique dados sensíveis (chaves de licença, nomes de servidores internos) nas issues.
+Ao contribuir, você concorda que a sua contribuição é licenciada sob a [licença MIT](LICENSE).

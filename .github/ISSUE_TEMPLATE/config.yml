@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security problem / Problema de segurança
+    url: https://github.com/sesantanajr/J365-IntunePSApp/blob/main/SECURITY.md
+    about: Please report security problems privately. / Relate problemas de segurança de forma privada.
+  - name: PSAppDeployToolkit documentation
+    url: https://psappdeploytoolkit.com/docs
+    about: Questions about the toolkit functions used inside the generated packages.

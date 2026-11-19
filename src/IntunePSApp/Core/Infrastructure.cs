@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
@@ -8,8 +9,10 @@ using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using static J365.IntunePSApp.Localization.Loc;
 
 namespace J365.IntunePSApp.Core
 {
@@ -32,17 +35,18 @@ namespace J365.IntunePSApp.Core
             AllowTrailingCommas = true
         };
 
-        public static T Load<T>(string path) where T : new()
+        public static TValue Load<TValue>(string path) where TValue : new()
         {
             try
             {
-                if (File.Exists(path)) return JsonSerializer.Deserialize<T>(File.ReadAllText(path, Encoding.UTF8), Options) ?? new T();
+                if (File.Exists(path)) return JsonSerializer.Deserialize<TValue>(File.ReadAllText(path, Encoding.UTF8), Options) ?? new TValue();
             }
-            catch (Exception ex) { Log.Warn($"Não foi possível ler {Path.GetFileName(path)}: {ex.Message}"); }
-            return new T();
+            catch (Exception ex) { Log.Warn(T("Log_FileReadFailed", Path.GetFileName(path), ex.Message)); }
+            return new TValue();
         }
 
-        public static void Save<T>(string path, T value)
+        /// <summary>Atomic save: writes to a temporary file and swaps it in.</summary>
+        public static void Save<TValue>(string path, TValue value)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path));
             string tmp = path + ".tmp";
@@ -51,20 +55,27 @@ namespace J365.IntunePSApp.Core
         }
     }
 
-    /// <summary>Pastas do aplicativo. Modo portatil: tudo fica ao lado do .exe (IntunePSApp-Data).</summary>
+    /// <summary>
+    /// Application folders. Portable mode keeps everything next to the executable (IntunePSApp-Data);
+    /// the per-user installed copy and read-only locations use %LOCALAPPDATA%\J365\IntunePSApp.
+    /// </summary>
     public static class AppPaths
     {
         public static string ExeDir { get; } = AppContext.BaseDirectory.TrimEnd('\\');
+        public static string ExePath { get; } = Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "J365.IntunePSApp.exe");
+        public static string InstallDir { get; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "J365 IntunePSApp");
+        public static string UserDataDir { get; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "J365", "IntunePSApp");
         public static string Data { get; }
         public static bool IsPortable { get; }
+        public static bool IsInstalledCopy { get; }
 
         static AppPaths()
         {
+            IsInstalledCopy = string.Equals(ExeDir, InstallDir, StringComparison.OrdinalIgnoreCase);
             string env = Environment.GetEnvironmentVariable("J365_INTUNEPSAPP_DATA");
-            string portable = Path.Combine(ExeDir, "IntunePSApp-Data");
             if (!string.IsNullOrWhiteSpace(env)) { Data = env; IsPortable = true; }
-            else if (CanWrite(ExeDir)) { Data = portable; IsPortable = true; }
-            else { Data = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "J365", "IntunePSApp"); IsPortable = false; }
+            else if (!IsInstalledCopy && CanWrite(ExeDir)) { Data = Path.Combine(ExeDir, "IntunePSApp-Data"); IsPortable = true; }
+            else { Data = UserDataDir; IsPortable = false; }
             Directory.CreateDirectory(Data);
         }
 
@@ -73,9 +84,12 @@ namespace J365.IntunePSApp.Core
         public static string Downloads => Ensure(Path.Combine(Data, "downloads"));
         public static string Branding => Ensure(Path.Combine(Data, "branding"));
         public static string Logs => Ensure(Path.Combine(Data, "logs"));
-        public static string DefaultOutput => Path.Combine(Data, "Pacotes");
-        public static string ConfigFile => Path.Combine(Data, "config.json");
         public static string Temp => Ensure(Path.Combine(Data, "temp"));
+        /// <summary>Portable: next to the data. Installed: Documents (a place the user can find).</summary>
+        public static string DefaultOutput => IsPortable
+            ? Path.Combine(Data, "Packages")
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "J365 IntunePSApp");
+        public static string ConfigFile => Path.Combine(Data, "config.json");
 
         private static string Ensure(string p) { Directory.CreateDirectory(p); return p; }
 
@@ -83,12 +97,24 @@ namespace J365.IntunePSApp.Core
         {
             try
             {
+                if (dir.StartsWith(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), StringComparison.OrdinalIgnoreCase)) return false;
                 string probe = Path.Combine(dir, ".j365-write-test");
                 File.WriteAllText(probe, "ok");
                 File.Delete(probe);
-                return !dir.StartsWith(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), StringComparison.OrdinalIgnoreCase);
+                return true;
             }
             catch { return false; }
+        }
+
+        /// <summary>Removes leftovers from previous sessions (temporary icons, validation folders).</summary>
+        public static void CleanTemp()
+        {
+            try
+            {
+                foreach (var f in Directory.GetFiles(Temp)) { try { File.Delete(f); } catch { } }
+                foreach (var d in Directory.GetDirectories(Temp)) { try { Directory.Delete(d, true); } catch { } }
+            }
+            catch { }
         }
     }
 
@@ -124,6 +150,7 @@ namespace J365.IntunePSApp.Core
         private static readonly AsyncLocal<string> PackageLog = new AsyncLocal<string>();
         public static event Action<LogEntry> Entry;
 
+        /// <summary>When set, entries written by the current async flow are also appended to this file (build.log of a package).</summary>
         public static string PackageLogFile { get => PackageLog.Value; set => PackageLog.Value = value; }
 
         public static void Write(string text, LogLevel level = LogLevel.Info)
@@ -144,6 +171,16 @@ namespace J365.IntunePSApp.Core
         public static void Ok(string t) => Write(t, LogLevel.Ok);
         public static void Warn(string t) => Write(t, LogLevel.Warn);
         public static void Error(string t) => Write(t, LogLevel.Error);
+
+        /// <summary>Keeps the last 14 daily log files.</summary>
+        public static void Prune()
+        {
+            try
+            {
+                foreach (var f in new DirectoryInfo(AppPaths.Logs).GetFiles("app-*.log").OrderByDescending(f => f.Name).Skip(14)) f.Delete();
+            }
+            catch { }
+        }
     }
 
     public static class ConfigStore
@@ -154,12 +191,24 @@ namespace J365.IntunePSApp.Core
         private static AppConfig Load()
         {
             var c = Json.Load<AppConfig>(AppPaths.ConfigFile);
-            if (string.IsNullOrWhiteSpace(c.OutputFolder)) c.OutputFolder = AppPaths.DefaultOutput;
+            if (string.IsNullOrWhiteSpace(c.OutputFolder)) c.OutputFolder = DefaultOutputFolder();
             if (string.IsNullOrWhiteSpace(c.CatalogUrl)) c.CatalogUrl = AppInfo.DefaultCatalogUrl;
+            if (c.CatalogUpdateDays < 1) c.CatalogUpdateDays = 1;
             return c;
         }
 
-        public static void Save() => Json.Save(AppPaths.ConfigFile, Current);
+        /// <summary>Keeps packages created by 1.x (folder "Pacotes") visible after upgrading.</summary>
+        private static string DefaultOutputFolder()
+        {
+            string legacy = Path.Combine(AppPaths.Data, "Pacotes");
+            return Directory.Exists(legacy) ? legacy : AppPaths.DefaultOutput;
+        }
+
+        public static void Save()
+        {
+            try { Json.Save(AppPaths.ConfigFile, Current); }
+            catch (Exception ex) { Log.Warn(T("Log_ConfigSaveFailed", ex.Message)); }
+        }
     }
 
     public static class Http
@@ -175,42 +224,83 @@ namespace J365.IntunePSApp.Core
                 AllowAutoRedirect = true,
                 MaxAutomaticRedirections = 15
             };
-            var c = new HttpClient(handler) { Timeout = TimeSpan.FromMinutes(30) };
+            var c = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
             c.DefaultRequestHeaders.UserAgent.ParseAdd($"J365-IntunePSApp/{AppInfo.Version} (+{AppInfo.RepoUrl})");
             return c;
         }
 
-        /// <summary>Baixa um arquivo com progresso e (opcionalmente) confere o SHA256.</summary>
+        /// <summary>GET with a per-request timeout; returns null when the request fails.</summary>
+        public static async Task<string> TryGetStringAsync(string url, int timeoutSeconds, CancellationToken ct)
+        {
+            try
+            {
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+                using var resp = await Client.GetAsync(url, cts.Token);
+                if (!resp.IsSuccessStatusCode) return null;
+                return await resp.Content.ReadAsStringAsync(cts.Token);
+            }
+            catch { return null; }
+        }
+
+        /// <summary>
+        /// Downloads a file with progress, retries transient failures and (optionally) verifies its SHA256.
+        /// The file only appears at <paramref name="destination"/> when complete and verified.
+        /// </summary>
         public static async Task DownloadAsync(string url, string destination, IProgress<(long read, long? total)> progress, CancellationToken ct, string expectedSha256 = null)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(destination));
             string tmp = destination + ".part";
-            using (var resp = await Client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct))
+            const int attempts = 3;
+            for (int attempt = 1; ; attempt++)
             {
-                resp.EnsureSuccessStatusCode();
-                long? total = resp.Content.Headers.ContentLength;
-                using var src = await resp.Content.ReadAsStreamAsync(ct);
-                using var dst = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16, true);
-                var buf = new byte[1 << 16];
-                long read = 0; int n; var last = DateTime.MinValue;
-                while ((n = await src.ReadAsync(buf.AsMemory(0, buf.Length), ct)) > 0)
+                try
                 {
-                    await dst.WriteAsync(buf.AsMemory(0, n), ct);
-                    read += n;
-                    if ((DateTime.Now - last).TotalMilliseconds > 120) { progress?.Report((read, total)); last = DateTime.Now; }
+                    await DownloadOnceAsync(url, tmp, progress, ct);
+                    break;
                 }
-                progress?.Report((read, total));
+                catch (Exception ex) when (attempt < attempts && !ct.IsCancellationRequested && (ex is HttpRequestException || ex is IOException || ex is TimeoutException || ex is OperationCanceledException))
+                {
+                    Log.Warn(T("Log_DownloadRetry", attempt, attempts - 1, ex.Message));
+                    await Task.Delay(TimeSpan.FromSeconds(2 * attempt), ct);
+                }
             }
             if (!string.IsNullOrWhiteSpace(expectedSha256))
             {
-                string actual = Hashing.Sha256File(tmp);
+                string actual = await Task.Run(() => Hashing.Sha256File(tmp), ct);
                 if (!actual.Equals(expectedSha256.Trim(), StringComparison.OrdinalIgnoreCase))
                 {
-                    File.Delete(tmp);
-                    throw new InvalidDataException($"O arquivo baixado não confere com o hash SHA256 do catálogo (esperado {expectedSha256}, obtido {actual}). Download descartado por segurança.");
+                    try { File.Delete(tmp); } catch { }
+                    throw new InvalidDataException(T("Err_HashMismatch", expectedSha256, actual));
                 }
             }
             File.Move(tmp, destination, true);
+        }
+
+        private static async Task DownloadOnceAsync(string url, string tmp, IProgress<(long read, long? total)> progress, CancellationToken ct)
+        {
+            using var resp = await Client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+            resp.EnsureSuccessStatusCode();
+            long? total = resp.Content.Headers.ContentLength;
+            using var src = await resp.Content.ReadAsStreamAsync(ct);
+            using var dst = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16, true);
+            var buf = new byte[1 << 16];
+            long read = 0;
+            var last = DateTime.MinValue;
+            while (true)
+            {
+                // A stalled connection fails after 60 s without data instead of hanging forever.
+                using var stall = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                stall.CancelAfter(TimeSpan.FromSeconds(60));
+                int n;
+                try { n = await src.ReadAsync(buf.AsMemory(0, buf.Length), stall.Token); }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested) { throw new TimeoutException(T("Err_DownloadStalled")); }
+                if (n <= 0) break;
+                await dst.WriteAsync(buf.AsMemory(0, n), ct);
+                read += n;
+                if ((DateTime.Now - last).TotalMilliseconds > 120) { progress?.Report((read, total)); last = DateTime.Now; }
+            }
+            progress?.Report((read, total));
         }
     }
 
@@ -219,8 +309,7 @@ namespace J365.IntunePSApp.Core
         public static string Sha256File(string path)
         {
             using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1 << 20);
-            using var sha = SHA256.Create();
-            return Convert.ToHexString(sha.ComputeHash(fs));
+            return Convert.ToHexString(SHA256.HashData(fs));
         }
     }
 
@@ -242,27 +331,29 @@ namespace J365.IntunePSApp.Core
 
     public static class Names
     {
+        private static readonly string[] Palette = { "#0A5CA8", "#0E7490", "#6D28D9", "#B45309", "#BE185D", "#15803D", "#1E3A8A", "#9333EA" };
+
         public static string Safe(string text)
         {
             var invalid = Path.GetInvalidFileNameChars();
             var sb = new StringBuilder();
             foreach (char c in text ?? "") sb.Append(Array.IndexOf(invalid, c) >= 0 ? '_' : c);
-            string r = System.Text.RegularExpressions.Regex.Replace(sb.ToString(), @"\s+", "_");
-            r = System.Text.RegularExpressions.Regex.Replace(r, "_+", "_").Trim('_', '.', ' ');
-            return string.IsNullOrEmpty(r) ? "Pacote" : r;
+            string r = Regex.Replace(sb.ToString(), @"\s+", "_");
+            r = Regex.Replace(r, "_+", "_").Trim('_', '.', ' ');
+            return string.IsNullOrEmpty(r) ? "Package" : r;
         }
 
         /// <summary>"7-Zip 26.06 (x64 edition)" -> "7-Zip"</summary>
         public static string CleanAppName(string name)
         {
             if (string.IsNullOrWhiteSpace(name)) return "";
-            string n = System.Text.RegularExpressions.Regex.Replace(name, @"\s*[\(\[].*$", "");
-            n = System.Text.RegularExpressions.Regex.Replace(n, @"\s+v?\d+([\.\-_]\d+)+.*$", "");
+            string n = Regex.Replace(name, @"\s*[\(\[].*$", "");
+            n = Regex.Replace(n, @"\s+v?\d+([\.\-_]\d+)+.*$", "");
             n = n.Trim(' ', '-', '_', ',');
             return string.IsNullOrEmpty(n) ? name.Trim() : n;
         }
 
-        /// <summary>Padrao (curinga) para "Aplicativos instalados": "7-Zip 26.06 (x64)" -> "7-Zip*"</summary>
+        /// <summary>Wildcard pattern for "Installed apps": "7-Zip 26.06 (x64)" -> "7-Zip*"</summary>
         public static string NamePattern(string name)
         {
             string n = CleanAppName(name);
@@ -273,16 +364,17 @@ namespace J365.IntunePSApp.Core
 
         public static string CleanVersion(string text)
         {
-            var m = System.Text.RegularExpressions.Regex.Match(text ?? "", @"\d+(\.\d+)+");
+            var m = Regex.Match(text ?? "", @"\d+(\.\d+)+");
             if (m.Success) return m.Value;
-            m = System.Text.RegularExpressions.Regex.Match(text ?? "", @"\d+");
+            m = Regex.Match(text ?? "", @"\d+");
             return m.Success ? m.Value : "";
         }
 
+        /// <summary>"26.06.00.0" -> "26.06" (trailing zero parts do not change version comparisons).</summary>
         public static string TrimVersionZeros(string v)
         {
             var parts = new List<string>((v ?? "").Split('.'));
-            while (parts.Count > 2 && System.Text.RegularExpressions.Regex.IsMatch(parts[^1], "^0+$")) parts.RemoveAt(parts.Count - 1);
+            while (parts.Count > 2 && Regex.IsMatch(parts[^1], "^0+$")) parts.RemoveAt(parts.Count - 1);
             return string.Join(".", parts);
         }
 
@@ -296,6 +388,55 @@ namespace J365.IntunePSApp.Core
                 if (p.Length > 0 && !list.Exists(x => x.Equals(p, StringComparison.OrdinalIgnoreCase))) list.Add(p);
             }
             return list;
+        }
+
+        public static string Initials(string name)
+        {
+            var words = Regex.Matches(name ?? "", @"[\p{L}\p{N}]+").Select(m => m.Value).ToList();
+            if (words.Count == 0) return "?";
+            if (words.Count == 1) return words[0].Substring(0, Math.Min(2, words[0].Length)).ToUpperInvariant();
+            return (words[0].Substring(0, 1) + words[1].Substring(0, 1)).ToUpperInvariant();
+        }
+
+        public static string AvatarColor(string id)
+        {
+            int h = 0;
+            foreach (char c in id ?? "") h = (h * 31 + c) & 0x7FFFFFFF;
+            return Palette[h % Palette.Length];
+        }
+    }
+
+    public static class VersionUtil
+    {
+        /// <summary>
+        /// Compares versions the way winget does: dot-separated parts, numeric prefix first, then the text suffix
+        /// ("1.0" is newer than "1.0-beta"; missing parts count as zero).
+        /// </summary>
+        public static int Compare(string a, string b)
+        {
+            var pa = (a ?? "").Trim().TrimStart('v', 'V').Split('.');
+            var pb = (b ?? "").Trim().TrimStart('v', 'V').Split('.');
+            int n = Math.Max(pa.Length, pb.Length);
+            for (int i = 0; i < n; i++)
+            {
+                Split(i < pa.Length ? pa[i] : "0", out long na, out string sa);
+                Split(i < pb.Length ? pb[i] : "0", out long nb, out string sb);
+                if (na != nb) return na.CompareTo(nb);
+                if (sa.Length == 0 && sb.Length > 0) return 1;
+                if (sa.Length > 0 && sb.Length == 0) return -1;
+                int c = string.Compare(sa, sb, StringComparison.OrdinalIgnoreCase);
+                if (c != 0) return c;
+            }
+            return 0;
+        }
+
+        private static void Split(string part, out long number, out string suffix)
+        {
+            int i = 0;
+            while (i < part.Length && char.IsDigit(part[i])) i++;
+            number = 0;
+            if (i > 0) long.TryParse(part.AsSpan(0, Math.Min(i, 18)), out number);
+            suffix = part[i..];
         }
     }
 }

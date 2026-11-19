@@ -1,36 +1,54 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Text.Json.Serialization;
+using J365.IntunePSApp.Localization;
+using static J365.IntunePSApp.Localization.Loc;
 
 namespace J365.IntunePSApp.Core
 {
+    /// <summary>Product identity. Forks: change these constants (see docs/FORKING.md).</summary>
     public static class AppInfo
     {
         public const string Name = "J365 IntunePSApp";
-        public const string GitHubRepo = "sesantanajr/J365-IntunePSApp";
+        public const string Author = "Sérgio Sant'Ana Junior";
+        public const string AuthorLinkedIn = "https://www.linkedin.com/in/sergiosantanacloud/";
+        public const string Brand = "Jornada 365";
         public const string BlogUrl = "https://jornada365.cloud";
+        public const string GitHubRepo = "sesantanajr/J365-IntunePSApp";
+        public const string PsadtName = "PSAppDeployToolkit";
+        public const string PsadtUrl = "https://psappdeploytoolkit.com";
+
         public static string RepoUrl => "https://github.com/" + GitHubRepo;
+        public static string ReleasesUrl => RepoUrl + "/releases/latest";
+        public static string LatestReleaseApi => "https://api.github.com/repos/" + GitHubRepo + "/releases/latest";
         public static string DefaultCatalogUrl => RepoUrl + "/releases/download/catalog/catalog.json.gz";
+        public static string PublishDocsUrl => RepoUrl + "/blob/main/docs/INTUNE-PUBLISH.md";
+
         public static string Version
         {
             get
             {
                 var v = typeof(AppInfo).Assembly.GetName().Version;
-                return v == null ? "1.0.0" : $"{v.Major}.{v.Minor}.{v.Build}";
+                return v == null ? "0.0.0" : $"{v.Major}.{v.Minor}.{v.Build}";
             }
         }
     }
 
-    /// <summary>Todas as opcoes de um pacote (salvas em projeto.json).</summary>
+    /// <summary>Every option of a package (persisted as project.json).</summary>
     public class PackageSettings
     {
-        // Instalador
+        public const int CurrentSchema = 2;
+        public int SchemaVersion { get; set; }
+
+        // Installer
         public string InstallerPath { get; set; } = "";
         public bool IncludeInstallerFolder { get; set; }
         public string InstallerType { get; set; } = "";       // MSI | EXE
         public string CatalogId { get; set; } = "";
-        // Aplicativo
+        public string CatalogVersion { get; set; } = "";     // winget version of the catalog entry the installer came from
+        // Application
         public string AppName { get; set; } = "";
         public string AppVendor { get; set; } = "";
         public string AppVersion { get; set; } = "";
@@ -42,7 +60,8 @@ namespace J365.IntunePSApp.Core
         public string ExtraSuccessCodes { get; set; } = "";
         public string Description { get; set; } = "";
         public string Homepage { get; set; } = "";
-        // Experiencia
+        public string MinimumOs { get; set; } = "W10_1607";
+        // User experience
         public string DeployMode { get; set; } = "Auto";      // Auto | Silent | Interactive
         public List<string> ProcessesToClose { get; set; } = new List<string>();
         public int CloseAppsCountdown { get; set; } = 300;
@@ -55,14 +74,14 @@ namespace J365.IntunePSApp.Core
         public string CompletionMessage { get; set; } = "";
         public bool RestartPrompt { get; set; }
         public int RestartCountdown { get; set; } = 600;
-        // Desinstalacao / versoes anteriores
+        // Uninstall / previous versions
         public bool RemovePreviousVersions { get; set; } = true;
         public string UninstallPattern { get; set; } = "";
         public string UninstallExeArgs { get; set; } = "";
-        // Acoes e arquivos extras
+        // Actions and extra files
         public List<PackageAction> Actions { get; set; } = new List<PackageAction>();
         public List<string> ExtraFiles { get; set; } = new List<string>();
-        // Visual
+        // Branding (PSADT dialogs)
         public string CompanyName { get; set; } = "";
         public string LogoPath { get; set; } = "";
         public string AccentColor { get; set; } = "";
@@ -70,19 +89,19 @@ namespace J365.IntunePSApp.Core
         public string Language { get; set; } = "Auto";
         public bool LogsInIntuneFolder { get; set; } = true;
         public string Author { get; set; } = "";
-        // Deteccao
+        // Detection
         public string DetectionMethod { get; set; } = "Registry"; // Registry | ProductCode | File
         public string DetectionNamePattern { get; set; } = "";
         public string DetectionVersion { get; set; } = "";
         public bool DetectionCheckVersion { get; set; } = true;
         public string DetectionFilePath { get; set; } = "";
-        // Saida
+        // Output
         public string OutputRoot { get; set; } = "";
 
         public PackageSettings Clone()
         {
-            var json = System.Text.Json.JsonSerializer.Serialize(this, Json.Options);
-            return System.Text.Json.JsonSerializer.Deserialize<PackageSettings>(json, Json.Options);
+            var json = JsonSerializer.Serialize(this, Json.Options);
+            return JsonSerializer.Deserialize<PackageSettings>(json, Json.Options);
         }
     }
 
@@ -101,9 +120,17 @@ namespace J365.IntunePSApp.Core
         [JsonIgnore] public string Glyph => ActionCatalog.Get(Type)?.Glyph ?? "";
     }
 
-    /// <summary>Configuracao do aplicativo e padroes da empresa (portatil).</summary>
+    /// <summary>Application preferences and company defaults (portable: stored next to the executable).</summary>
     public class AppConfig
     {
+        // Application
+        public string UiLanguage { get; set; } = "auto";      // auto | en | pt-BR
+        public bool SetupCompleted { get; set; }
+        public bool CheckForUpdates { get; set; } = true;
+        public DateTime? LastUpdateCheck { get; set; }
+        public string LatestAppVersion { get; set; } = "";
+        public string LatestPsadtVersion { get; set; } = "";
+        // Company branding
         public string CompanyName { get; set; } = "";
         public string LogoPath { get; set; } = "";
         public string AccentColor { get; set; } = "#0A5CA8";
@@ -111,6 +138,7 @@ namespace J365.IntunePSApp.Core
         public string Language { get; set; } = "Auto";
         public bool LogsInIntuneFolder { get; set; } = true;
         public string Author { get; set; } = "";
+        // Experience defaults
         public string DeployMode { get; set; } = "Auto";
         public bool AllowDefer { get; set; } = true;
         public int DeferTimes { get; set; } = 3;
@@ -120,17 +148,21 @@ namespace J365.IntunePSApp.Core
         public bool RemovePreviousVersions { get; set; } = true;
         public string WelcomeMessage { get; set; } = "";
         public string CompletionMessage { get; set; } = "";
+        // Folders, catalog and Intune
         public string OutputFolder { get; set; } = "";
         public string CatalogUrl { get; set; } = "";
-        public int CatalogUpdateDays { get; set; } = 3;
+        public int CatalogUpdateDays { get; set; } = 1;
         public DateTime? LastCatalogCheck { get; set; }
         public string PreferredArch { get; set; } = "x64";
         public string PreferredLocale { get; set; } = "pt-BR";
+        public string IntuneTenantId { get; set; } = "";
+        public string IntuneClientId { get; set; } = "";
 
         public PackageSettings NewPackage()
         {
             return new PackageSettings
             {
+                SchemaVersion = PackageSettings.CurrentSchema,
                 CompanyName = CompanyName,
                 LogoPath = LogoPath,
                 AccentColor = AccentColor,
@@ -152,7 +184,7 @@ namespace J365.IntunePSApp.Core
         }
     }
 
-    /// <summary>Resultado da analise de um instalador.</summary>
+    /// <summary>Result of analysing an installer file.</summary>
     public class InstallerInfo
     {
         public string Path { get; set; }
@@ -180,10 +212,13 @@ namespace J365.IntunePSApp.Core
         public string Signer { get; set; }
         public string Sha256 { get; set; }
         public string CatalogId { get; set; }
-        public string CatalogMatch { get; set; }   // "hash" | "productcode" | "nome"
+        public string CatalogVersion { get; set; }
+        public string CatalogMatch { get; set; }   // hash | productcode | download | name
         public string Description { get; set; }
         public string Homepage { get; set; }
         public List<string> Notes { get; set; } = new List<string>();
+
+        [JsonIgnore] public bool IsCatalogExact => CatalogMatch is "hash" or "productcode" or "download";
     }
 
     public class BuildResult
@@ -193,6 +228,8 @@ namespace J365.IntunePSApp.Core
         public string IntuneFolder { get; set; }
         public string IntuneWinFile { get; set; }
         public string IntuneWinTool { get; set; }
+        public long IntuneWinSize { get; set; }
+        public string Sha256 { get; set; }
         public string DetectionScript { get; set; }
         public string AppIcon { get; set; }
         public string InstallCommand { get; set; }
@@ -200,8 +237,9 @@ namespace J365.IntunePSApp.Core
         public string PsadtVersion { get; set; }
         public string SummaryHtml { get; set; }
         public string SummaryTxt { get; set; }
+        public string MetadataFile { get; set; }
+        public string PublishScript { get; set; }
         public string ProjectFile { get; set; }
-        public long IntuneWinSize { get; set; }
         public List<string> Warnings { get; set; } = new List<string>();
     }
 
@@ -212,7 +250,7 @@ namespace J365.IntunePSApp.Core
         public bool IsValid => Errors.Count == 0;
     }
 
-    // ------------------------------------------------------------------ Catalogo (banco de dados)
+    // ------------------------------------------------------------------ Catalog (application database)
 
     public class CatalogFile
     {
@@ -231,40 +269,25 @@ namespace J365.IntunePSApp.Core
         [JsonPropertyName("p")] public string Publisher { get; set; }
         [JsonPropertyName("v")] public string Version { get; set; }
         [JsonPropertyName("d")] public string Description { get; set; }
+        [JsonPropertyName("dpt")] public string DescriptionPt { get; set; }
         [JsonPropertyName("hp")] public string Homepage { get; set; }
         [JsonPropertyName("lic")] public string License { get; set; }
         [JsonPropertyName("m")] public string Moniker { get; set; }
         [JsonPropertyName("tg")] public List<string> Tags { get; set; }
+        [JsonPropertyName("dep")] public List<string> Dependencies { get; set; }
         [JsonPropertyName("i")] public List<CatalogInstaller> Installers { get; set; } = new List<CatalogInstaller>();
         [JsonPropertyName("x")] public CuratedEntry Extra { get; set; }
 
         [JsonIgnore] public string SearchText { get; set; }
         [JsonIgnore] public string NameLower { get; set; }
-        [JsonIgnore] public string Initials
-        {
-            get
-            {
-                var parts = (Name ?? "?").Split(new[] { ' ', '-', '.', '_' }, StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length == 0) return "?";
-                if (parts.Length == 1) return parts[0].Substring(0, Math.Min(2, parts[0].Length)).ToUpperInvariant();
-                return (parts[0].Substring(0, 1) + parts[1].Substring(0, 1)).ToUpperInvariant();
-            }
-        }
+        [JsonIgnore] public string LocalizedDescription => Loc.Instance.IsPortuguese && !string.IsNullOrEmpty(DescriptionPt) ? DescriptionPt : Description;
+        [JsonIgnore] public string Initials => Names.Initials(Name);
         [JsonIgnore] public string Subtitle => string.IsNullOrEmpty(Publisher) ? Id : $"{Publisher}  ·  {Id}";
         [JsonIgnore] public string TypesLabel => string.Join("  ", (Installers ?? new List<CatalogInstaller>()).Select(i => i.TypeLabel).Distinct().Take(3));
         [JsonIgnore] public bool HasCuration => Extra != null;
         [JsonIgnore] public bool IsSupported => Installers != null && Installers.Any(i => i.IsSupported);
-        [JsonIgnore] public string AvatarColor
-        {
-            get
-            {
-                string[] palette = { "#0A5CA8", "#0E7490", "#6D28D9", "#B45309", "#BE185D", "#15803D", "#1E3A8A", "#9333EA" };
-                int h = 0;
-                foreach (char c in Id ?? "") h = (h * 31 + c) & 0x7FFFFFFF;
-                return palette[h % palette.Length];
-            }
-        }
         [JsonIgnore] public string VersionLabel => string.IsNullOrEmpty(Version) ? "" : "v" + Version;
+        [JsonIgnore] public string AvatarColor => Names.AvatarColor(Id);
     }
 
     public class CatalogInstaller
@@ -282,6 +305,7 @@ namespace J365.IntunePSApp.Core
         [JsonPropertyName("cu")] public string Custom { get; set; }
         [JsonPropertyName("el")] public string Elevation { get; set; }
         [JsonPropertyName("sc")] public List<long> SuccessCodes { get; set; }
+        [JsonPropertyName("dep")] public List<string> Dependencies { get; set; }
         [JsonPropertyName("arp")] public List<ArpEntry> Arp { get; set; }
 
         [JsonIgnore] public bool IsMsi => Type == "msi" || Type == "wix";
@@ -297,22 +321,21 @@ namespace J365.IntunePSApp.Core
             "msix" => "MSIX",
             "appx" => "APPX",
             "zip" => "ZIP",
-            "portable" => "Portátil",
+            "portable" => T("Type_Portable"),
             _ => (Type ?? "?").ToUpperInvariant()
         };
         [JsonIgnore] public string ArchLabel => string.IsNullOrEmpty(Arch) ? "—" : Arch;
-        [JsonIgnore] public string ScopeLabel => Scope switch { "machine" => "Computador", "user" => "Usuário", _ => "Ambos" };
-        [JsonIgnore] public string LocaleLabel => string.IsNullOrEmpty(Locale) ? "Neutro" : Locale;
+        [JsonIgnore] public string ScopeLabel => Scope switch { "machine" => T("Scope_Machine"), "user" => T("Scope_User"), _ => T("Scope_Both") };
+        [JsonIgnore] public string LocaleLabel => string.IsNullOrEmpty(Locale) ? T("Locale_Neutral") : Locale;
         [JsonIgnore] public string SilentLabel
         {
             get
             {
                 var s = CatalogService.SilentArgsFor(this);
-                if (IsMsi) return string.IsNullOrEmpty(s) ? "msiexec /qn (automático)" : "/qn + " + s;
-                return string.IsNullOrEmpty(s) ? "(sem parâmetro conhecido)" : s;
+                if (IsMsi) return string.IsNullOrEmpty(s) ? T("Silent_MsiAuto") : "/qn + " + s;
+                return string.IsNullOrEmpty(s) ? T("Silent_Unknown") : s;
             }
         }
-        [JsonIgnore] public string SupportLabel => IsSupported ? "" : "Não suportado";
     }
 
     public class ArpEntry
@@ -329,6 +352,7 @@ namespace J365.IntunePSApp.Core
         [JsonPropertyName("apps")] public Dictionary<string, CuratedEntry> Apps { get; set; }
     }
 
+    /// <summary>Curated knowledge the winget manifests do not carry (catalog/curated.json).</summary>
     public class CuratedEntry
     {
         [JsonPropertyName("processes")] public List<string> Processes { get; set; }
@@ -339,6 +363,17 @@ namespace J365.IntunePSApp.Core
         [JsonPropertyName("checkVersion")] public bool? CheckVersion { get; set; }
         [JsonPropertyName("removePrevious")] public bool? RemovePrevious { get; set; }
         [JsonPropertyName("notes")] public string Notes { get; set; }
+        [JsonPropertyName("notesEn")] public string NotesEn { get; set; }
+
+        [JsonIgnore]
+        public string LocalizedNotes
+        {
+            get
+            {
+                if (Loc.Instance.IsPortuguese) return string.IsNullOrEmpty(Notes) ? NotesEn : Notes;
+                return string.IsNullOrEmpty(NotesEn) ? Notes : NotesEn;
+            }
+        }
     }
 
     public class InstalledProgram
@@ -350,7 +385,7 @@ namespace J365.IntunePSApp.Core
         public bool QuietUninstall { get; set; }
         public string Scope { get; set; }
         public string KeyName { get; set; }
-        public string SilentLabel => Type == "MSI" || QuietUninstall ? "Sim" : "Precisa de parâmetro";
+        public string SilentLabel => Type == "MSI" || QuietUninstall ? T("Common_Yes") : T("Installed_NeedsParameter");
     }
 
     public class PackageHistoryItem
@@ -360,11 +395,29 @@ namespace J365.IntunePSApp.Core
         public string AppName { get; set; }
         public string AppVersion { get; set; }
         public string Vendor { get; set; }
+        public string CatalogId { get; set; }
         public DateTime Date { get; set; }
         public string IntuneWin { get; set; }
         public string SummaryHtml { get; set; }
+        public string LatestVersion { get; set; }
+
         public string Title => $"{AppName} {AppVersion}".Trim();
-        public string DateLabel => Date.ToString("dd/MM/yyyy HH:mm");
-        public string Initials { get { var c = new string((AppName ?? "").Where(char.IsLetterOrDigit).Take(2).ToArray()).ToUpperInvariant(); return c.Length == 0 ? "?" : c; } }
+        public string DateLabel => Date.ToString("g", Loc.Instance.Culture);
+        public string Initials => Names.Initials(AppName);
+        public bool HasUpdate => !string.IsNullOrEmpty(LatestVersion);
+        public string UpdateLabel => HasUpdate ? T("Packages_UpdateTo", LatestVersion) : "";
+    }
+
+    /// <summary>A package dependency declared by the winget manifest of an application.</summary>
+    public class DependencyInfo
+    {
+        public string Id { get; set; }
+        public CatalogApp App { get; set; }
+        public bool Included { get; set; }
+
+        public string Title => App?.Name ?? Id;
+        public string Subtitle => App == null ? T("Deps_NotInCatalog") : $"{App.Publisher}  ·  v{App.Version}  ·  {Id}";
+        public bool CanInclude => App != null && App.IsSupported && !Included;
+        public string StatusLabel => Included ? T("Deps_Included") : App == null || !App.IsSupported ? T("Deps_Manual") : "";
     }
 }

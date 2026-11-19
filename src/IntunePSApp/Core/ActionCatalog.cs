@@ -1,131 +1,123 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using J365.IntunePSApp.Localization;
+using static J365.IntunePSApp.Localization.Loc;
 
 namespace J365.IntunePSApp.Core
 {
+    /// <summary>One input of an action. Values are stored as language-neutral codes; labels come from the string tables.</summary>
     public class ActionField
     {
+        public string Owner { get; set; }
         public string Key { get; set; }
-        public string Label { get; set; }
-        public string Hint { get; set; }
         public string Kind { get; set; } = "text"; // text | multiline | choice | bool | number | code
         public string[] Options { get; set; }
         public string Default { get; set; } = "";
         public bool Required { get; set; }
+
+        public string Label => T($"ActF_{Owner}_{Key}");
+        public string Hint => Loc.Instance.Has($"ActH_{Owner}_{Key}") ? T($"ActH_{Owner}_{Key}") : null;
+        public string OptionLabel(string code) => ActionCatalog.OptionLabel(Owner, Key, code);
     }
 
     public class ActionDef
     {
         public string Type { get; set; }
-        public string Label { get; set; }
-        public string Description { get; set; }
         public string Glyph { get; set; }
         public string Category { get; set; }
         public string DefaultPhase { get; set; } = "PostInstall";
         public List<ActionField> Fields { get; set; } = new List<ActionField>();
+
+        public string Label => T("Act_" + Type);
+        public string LabelEn => En("Act_" + Type);
+        public string Description => T("ActD_" + Type);
+        public string CategoryLabel => T("ActCat_" + Category);
     }
 
-    /// <summary>Acoes prontas (sem script) que viram chamadas do PSAppDeployToolkit no pacote.</summary>
+    /// <summary>
+    /// Ready-made actions (no scripting required). Each one becomes PSAppDeployToolkit / PowerShell calls
+    /// inside the generated Invoke-AppDeployToolkit.ps1.
+    /// </summary>
     public static class ActionCatalog
     {
         public static readonly string[] Phases = { "PreInstall", "PostInstall", "PreUninstall", "PostUninstall" };
 
-        public static string PhaseLabel(string p) => p switch
-        {
-            "PreInstall" => "Antes de instalar",
-            "PostInstall" => "Depois de instalar",
-            "PreUninstall" => "Antes de desinstalar",
-            "PostUninstall" => "Depois de desinstalar",
-            _ => p
-        };
+        public static string PhaseLabel(string phase) => T("Phase_" + (Phases.Contains(phase) ? phase : "PostInstall"));
 
-        public static readonly List<ActionDef> All = new List<ActionDef>
+        private static ActionField F(string key, string kind = "text", bool required = false, string def = "", params string[] options)
+            => new ActionField { Key = key, Kind = kind, Required = required, Default = def, Options = options.Length > 0 ? options : null };
+
+        public static readonly List<ActionDef> All = Build();
+
+        private static List<ActionDef> Build()
         {
-            new ActionDef { Type = "RemoveDesktopShortcut", Category = "Atalhos", Label = "Remover atalho da área de trabalho", Glyph = "",
-                Description = "Remove atalhos criados pelo instalador na área de trabalho pública.",
-                Fields = { new ActionField { Key = "Name", Label = "Nome do atalho", Hint = "Ex.: 7-Zip File Manager (aceita *). A extensão .lnk é adicionada automaticamente.", Required = true } } },
-            new ActionDef { Type = "CreateShortcut", Category = "Atalhos", Label = "Criar atalho", Glyph = "",
-                Description = "Cria um atalho na área de trabalho ou no Menu Iniciar de todos os usuários.",
-                Fields = {
-                    new ActionField { Key = "Location", Label = "Local", Kind = "choice", Options = new[] { "Área de trabalho (todos os usuários)", "Menu Iniciar (todos os usuários)" }, Default = "Área de trabalho (todos os usuários)" },
-                    new ActionField { Key = "Name", Label = "Nome do atalho", Required = true },
-                    new ActionField { Key = "Target", Label = "Destino", Hint = "Aceita variáveis: %ProgramFiles%\\7-Zip\\7zFM.exe", Required = true },
-                    new ActionField { Key = "Arguments", Label = "Argumentos (opcional)" },
-                    new ActionField { Key = "Icon", Label = "Ícone (opcional)", Hint = "Caminho de um .exe ou .ico" } } },
-            new ActionDef { Type = "CopyFile", Category = "Arquivos", Label = "Copiar arquivo extra para o computador", Glyph = "",
-                Description = "Copia um arquivo ou pasta adicionado em 'Arquivos extras' (ex.: licença, configuração) para uma pasta do computador.",
-                Fields = {
-                    new ActionField { Key = "Source", Label = "Arquivo ou pasta (dos arquivos extras)", Hint = "Ex.: rarreg.key", Required = true },
-                    new ActionField { Key = "Destination", Label = "Pasta de destino", Hint = "Ex.: %ProgramFiles%\\WinRAR", Required = true } } },
-            new ActionDef { Type = "CopyToUserProfiles", Category = "Arquivos", Label = "Copiar arquivo extra para todos os perfis", Glyph = "",
-                Description = "Copia um arquivo extra para o perfil de cada usuário do computador (AppData, Área de trabalho...).",
-                Fields = {
-                    new ActionField { Key = "Source", Label = "Arquivo ou pasta (dos arquivos extras)", Required = true },
-                    new ActionField { Key = "BasePath", Label = "Base", Kind = "choice", Options = new[] { "AppData", "LocalAppData", "Desktop", "Documents", "StartMenu", "Profile" }, Default = "AppData" },
-                    new ActionField { Key = "Destination", Label = "Subpasta", Hint = "Ex.: Notepad++ (fica em %AppData%\\Notepad++)", Required = true } } },
-            new ActionDef { Type = "DeleteFile", Category = "Arquivos", Label = "Excluir arquivos", Glyph = "",
-                Description = "Exclui arquivos (aceita * e variáveis de ambiente).",
-                Fields = { new ActionField { Key = "Path", Label = "Caminho", Hint = "Ex.: %Public%\\Desktop\\*.url", Required = true } } },
-            new ActionDef { Type = "DeleteFolder", Category = "Arquivos", Label = "Excluir pasta", Glyph = "",
-                Description = "Exclui uma pasta e todo o seu conteúdo.",
-                Fields = { new ActionField { Key = "Path", Label = "Pasta", Hint = "Ex.: %ProgramData%\\App\\Cache", Required = true } } },
-            new ActionDef { Type = "SetRegistry", Category = "Registro", Label = "Definir valor no registro", Glyph = "",
-                Description = "Cria ou altera um valor do registro (ex.: desativar atualização automática).",
-                Fields = {
-                    new ActionField { Key = "Key", Label = "Chave", Hint = "Ex.: HKLM:\\SOFTWARE\\Policies\\Fabricante\\App", Required = true },
-                    new ActionField { Key = "Name", Label = "Nome do valor", Required = true },
-                    new ActionField { Key = "Value", Label = "Dados" },
-                    new ActionField { Key = "Type", Label = "Tipo", Kind = "choice", Options = new[] { "DWord", "String", "ExpandString", "QWord", "MultiString" }, Default = "DWord" } } },
-            new ActionDef { Type = "RemoveRegistry", Category = "Registro", Label = "Remover chave ou valor do registro", Glyph = "",
-                Description = "Remove um valor (se o nome for informado) ou a chave inteira.",
-                Fields = {
-                    new ActionField { Key = "Key", Label = "Chave", Required = true },
-                    new ActionField { Key = "Name", Label = "Nome do valor (opcional)", Hint = "Em branco: remove a chave inteira." } } },
-            new ActionDef { Type = "StopProcess", Category = "Sistema", Label = "Encerrar processos", Glyph = "", DefaultPhase = "PreInstall",
-                Description = "Fecha processos sem perguntar (ex.: serviços de bandeja, atualizadores).",
-                Fields = { new ActionField { Key = "Names", Label = "Processos", Hint = "Separados por vírgula, sem .exe", Required = true } } },
-            new ActionDef { Type = "StopService", Category = "Sistema", Label = "Parar ou desativar serviço", Glyph = "",
-                Description = "Para um serviço do Windows e altera o tipo de inicialização (ex.: serviço de atualização do fabricante).",
-                Fields = {
-                    new ActionField { Key = "Name", Label = "Nome do serviço", Hint = "Ex.: AdobeARMservice, gupdate", Required = true },
-                    new ActionField { Key = "Mode", Label = "Ação", Kind = "choice", Options = new[] { "Parar e desativar", "Parar e deixar manual", "Somente parar" }, Default = "Parar e desativar" } } },
-            new ActionDef { Type = "DisableScheduledTask", Category = "Sistema", Label = "Desativar tarefa agendada", Glyph = "",
-                Description = "Desativa tarefas agendadas (ex.: atualizadores automáticos). Aceita *.",
-                Fields = { new ActionField { Key = "Name", Label = "Nome da tarefa", Hint = "Ex.: GoogleUpdateTaskMachine*", Required = true } } },
-            new ActionDef { Type = "SetEnvironment", Category = "Sistema", Label = "Definir variável de ambiente", Glyph = "",
-                Description = "Cria ou altera uma variável de ambiente do sistema.",
-                Fields = {
-                    new ActionField { Key = "Name", Label = "Nome", Required = true },
-                    new ActionField { Key = "Value", Label = "Valor" } } },
-            new ActionDef { Type = "RunProgram", Category = "Execução", Label = "Executar programa", Glyph = "",
-                Description = "Executa um programa do computador ou um arquivo extra do pacote.",
-                Fields = {
-                    new ActionField { Key = "Source", Label = "Origem", Kind = "choice", Options = new[] { "Arquivo extra do pacote", "Caminho no computador" }, Default = "Caminho no computador" },
-                    new ActionField { Key = "FilePath", Label = "Programa", Hint = "Ex.: %ProgramFiles%\\App\\config.exe ou nome do arquivo extra", Required = true },
-                    new ActionField { Key = "Arguments", Label = "Argumentos (opcional)" },
-                    new ActionField { Key = "IgnoreExitCode", Label = "Ignorar o código de saída", Kind = "bool", Default = "true" } } },
-            new ActionDef { Type = "RunPowerShell", Category = "Execução", Label = "Executar script PowerShell", Glyph = "",
-                Description = "Código PowerShell livre (pode usar as funções do PSAppDeployToolkit).",
-                Fields = { new ActionField { Key = "Code", Label = "Código", Kind = "code", Required = true, Hint = "Ex.: Set-ADTRegistryKey -LiteralPath 'HKLM:\\SOFTWARE\\X' -Name 'Y' -Value 1 -Type DWord" } } },
-            new ActionDef { Type = "ShowMessage", Category = "Usuário", Label = "Mostrar mensagem ao usuário", Glyph = "",
-                Description = "Exibe uma mensagem na janela do PSADT (não aparece no modo silencioso).",
-                Fields = {
-                    new ActionField { Key = "Text", Label = "Mensagem", Kind = "multiline", Required = true },
-                    new ActionField { Key = "Wait", Label = "Aguardar o usuário clicar em OK", Kind = "bool", Default = "false" } } },
-            new ActionDef { Type = "Wait", Category = "Usuário", Label = "Aguardar alguns segundos", Glyph = "",
-                Description = "Pausa a execução (útil depois de instaladores que continuam trabalhando em segundo plano).",
-                Fields = { new ActionField { Key = "Seconds", Label = "Segundos", Kind = "number", Default = "10", Required = true } } },
-        };
+            var list = new List<ActionDef>
+            {
+                new ActionDef { Type = "InstallDependency", Category = "Apps", Glyph = "", DefaultPhase = "PreInstall",
+                    Fields = { F("Source", required: true), F("Arguments"), F("SuccessCodes", def: "0, 1638") } },
+                new ActionDef { Type = "UninstallApp", Category = "Apps", Glyph = "", DefaultPhase = "PreInstall",
+                    Fields = { F("NamePattern", required: true), F("ExeArguments") } },
+                new ActionDef { Type = "RemoveDesktopShortcut", Category = "Shortcuts", Glyph = "",
+                    Fields = { F("Name", required: true) } },
+                new ActionDef { Type = "RemoveStartMenuShortcut", Category = "Shortcuts", Glyph = "",
+                    Fields = { F("Name", required: true) } },
+                new ActionDef { Type = "CreateShortcut", Category = "Shortcuts", Glyph = "",
+                    Fields = { F("Location", "choice", def: "Desktop", options: new[] { "Desktop", "StartMenu" }), F("Name", required: true), F("Target", required: true), F("Arguments"), F("Icon") } },
+                new ActionDef { Type = "CopyFile", Category = "Files", Glyph = "",
+                    Fields = { F("Source", required: true), F("Destination", required: true) } },
+                new ActionDef { Type = "CopyToUserProfiles", Category = "Files", Glyph = "",
+                    Fields = { F("Source", required: true), F("BasePath", "choice", def: "AppData", options: new[] { "AppData", "LocalAppData", "Desktop", "Documents", "StartMenu", "Profile" }), F("Destination", required: true) } },
+                new ActionDef { Type = "DeleteFile", Category = "Files", Glyph = "",
+                    Fields = { F("Path", required: true) } },
+                new ActionDef { Type = "DeleteFolder", Category = "Files", Glyph = "",
+                    Fields = { F("Path", required: true) } },
+                new ActionDef { Type = "SetRegistry", Category = "Registry", Glyph = "",
+                    Fields = { F("Key", required: true), F("Name", required: true), F("Value"), F("Type", "choice", def: "DWord", options: new[] { "DWord", "String", "ExpandString", "QWord", "MultiString" }) } },
+                new ActionDef { Type = "RemoveRegistry", Category = "Registry", Glyph = "",
+                    Fields = { F("Key", required: true), F("Name") } },
+                new ActionDef { Type = "ImportRegFile", Category = "Registry", Glyph = "",
+                    Fields = { F("Source", required: true) } },
+                new ActionDef { Type = "StopProcess", Category = "System", Glyph = "", DefaultPhase = "PreInstall",
+                    Fields = { F("Names", required: true) } },
+                new ActionDef { Type = "StopService", Category = "System", Glyph = "",
+                    Fields = { F("Name", required: true), F("Mode", "choice", def: "StopDisable", options: new[] { "StopDisable", "StopManual", "StopOnly" }) } },
+                new ActionDef { Type = "DisableScheduledTask", Category = "System", Glyph = "",
+                    Fields = { F("Name", required: true) } },
+                new ActionDef { Type = "SetEnvironment", Category = "System", Glyph = "",
+                    Fields = { F("Name", required: true), F("Value") } },
+                new ActionDef { Type = "RunProgram", Category = "Run", Glyph = "",
+                    Fields = { F("Source", "choice", def: "Path", options: new[] { "Path", "Package" }), F("FilePath", required: true), F("Arguments"), F("IgnoreExitCode", "bool", def: "true") } },
+                new ActionDef { Type = "RunPowerShell", Category = "Run", Glyph = "",
+                    Fields = { F("Code", "code", required: true) } },
+                new ActionDef { Type = "ShowMessage", Category = "User", Glyph = "",
+                    Fields = { F("Text", "multiline", required: true), F("Wait", "bool", def: "false") } },
+                new ActionDef { Type = "Wait", Category = "User", Glyph = "",
+                    Fields = { F("Seconds", "number", required: true, def: "10") } },
+            };
+            foreach (var d in list) foreach (var f in d.Fields) f.Owner = d.Type;
+            return list;
+        }
 
         public static ActionDef Get(string type) => All.FirstOrDefault(d => d.Type == type);
+
+        /// <summary>Display text of a stored option code (codes without a translation, such as registry types, are shown as they are).</summary>
+        public static string OptionLabel(string type, string field, string code)
+        {
+            string key = $"ActO_{type}_{field}_{code}";
+            return Loc.Instance.Has(key) ? T(key) : code ?? "";
+        }
 
         public static string Summarize(PackageAction a)
         {
             switch (a.Type)
             {
-                case "RemoveDesktopShortcut": return a.P("Name");
+                case "InstallDependency": return $"{a.P("Source")} {a.P("Arguments")}".Trim();
+                case "UninstallApp": return a.P("NamePattern");
+                case "RemoveDesktopShortcut":
+                case "RemoveStartMenuShortcut": return a.P("Name");
                 case "CreateShortcut": return $"{a.P("Name")} → {a.P("Target")}";
                 case "CopyFile": return $"{a.P("Source")} → {a.P("Destination")}";
                 case "CopyToUserProfiles": return $"{a.P("Source")} → %{a.P("BasePath")}%\\{a.P("Destination")}";
@@ -133,14 +125,15 @@ namespace J365.IntunePSApp.Core
                 case "DeleteFolder": return a.P("Path");
                 case "SetRegistry": return $"{a.P("Key")}\\{a.P("Name")} = {a.P("Value")} ({a.P("Type")})";
                 case "RemoveRegistry": return string.IsNullOrEmpty(a.P("Name")) ? a.P("Key") : $"{a.P("Key")}\\{a.P("Name")}";
+                case "ImportRegFile": return a.P("Source");
                 case "StopProcess": return a.P("Names");
-                case "StopService": return $"{a.P("Name")} ({a.P("Mode")})";
+                case "StopService": return $"{a.P("Name")} ({OptionLabel("StopService", "Mode", a.P("Mode"))})";
                 case "DisableScheduledTask": return a.P("Name");
                 case "SetEnvironment": return $"{a.P("Name")} = {a.P("Value")}";
                 case "RunProgram": return $"{a.P("FilePath")} {a.P("Arguments")}".Trim();
                 case "RunPowerShell": return FirstLine(a.P("Code"));
                 case "ShowMessage": return FirstLine(a.P("Text"));
-                case "Wait": return $"{a.P("Seconds")} segundos";
+                case "Wait": return T("Act_Wait_Summary", a.P("Seconds"));
                 default: return "";
             }
         }
@@ -155,23 +148,45 @@ namespace J365.IntunePSApp.Core
         {
             var errs = new List<string>();
             var def = Get(a.Type);
-            if (def == null) { errs.Add($"Ação desconhecida: {a.Type}"); return errs; }
+            if (def == null) { errs.Add(T("Val_ActionUnknown", a.Type)); return errs; }
             foreach (var f in def.Fields.Where(f => f.Required))
-                if (string.IsNullOrWhiteSpace(a.P(f.Key))) errs.Add($"Ação \"{def.Label}\": preencha \"{f.Label}\".");
-            if (a.Type == "Wait" && !int.TryParse(a.P("Seconds"), out _)) errs.Add("Ação \"Aguardar\": informe um número de segundos.");
-            if (a.Type == "SetRegistry" && !Regex.IsMatch(a.P("Key"), @"^(HKLM|HKCU|HKCR|HKU|HKEY_[A-Z_]+):?\\", RegexOptions.IgnoreCase)) errs.Add("Ação \"Registro\": a chave deve começar com HKLM:\\ ou HKCU:\\.");
+                if (string.IsNullOrWhiteSpace(a.P(f.Key))) errs.Add(T("Val_ActionField", def.Label, f.Label));
+            if (a.Type == "Wait" && !int.TryParse(a.P("Seconds"), out _)) errs.Add(T("Val_ActionSeconds"));
+            if ((a.Type == "SetRegistry" || a.Type == "RemoveRegistry") && !string.IsNullOrWhiteSpace(a.P("Key"))
+                && !Regex.IsMatch(a.P("Key"), @"^(HKLM|HKCU|HKCR|HKU|HKEY_[A-Z_]+):?\\", RegexOptions.IgnoreCase)) errs.Add(T("Val_ActionRegistryKey"));
+            if (a.Type == "UninstallApp" && Regex.Replace(a.P("NamePattern"), @"[\*\?\s]", "").Length < 3) errs.Add(T("Val_PatternTooGeneric", a.P("NamePattern")));
+            if (a.Type == "InstallDependency" && !string.IsNullOrWhiteSpace(a.P("SuccessCodes")) && !Regex.IsMatch(a.P("SuccessCodes"), @"^[\d,;\s\-]+$")) errs.Add(T("Val_SuccessCodes"));
             if (a.Type == "RunPowerShell")
             {
                 var perr = PowerShellValidator.QuickCheck(a.P("Code"));
-                if (perr != null) errs.Add("Ação \"Script PowerShell\": " + perr);
+                if (perr != null) errs.Add(T("Val_ActionScript", perr));
             }
             return errs;
         }
 
-        // ------------------------------------------------------------------ geracao de codigo
+        /// <summary>Converts values saved by version 1.x (Portuguese display texts) into language-neutral codes.</summary>
+        public static void Normalize(PackageAction a)
+        {
+            if (a?.Params == null) return;
+            void Map(string key, params (string Old, string Code)[] map)
+            {
+                if (!a.Params.TryGetValue(key, out var v) || v == null) return;
+                foreach (var (old, code) in map) if (v.StartsWith(old, StringComparison.OrdinalIgnoreCase)) { a.Params[key] = code; return; }
+            }
+            switch (a.Type)
+            {
+                case "CreateShortcut": Map("Location", ("Área de trabalho", "Desktop"), ("Menu Iniciar", "StartMenu")); break;
+                case "StopService": Map("Mode", ("Parar e desativar", "StopDisable"), ("Parar e deixar manual", "StopManual"), ("Somente parar", "StopOnly")); break;
+                case "RunProgram": Map("Source", ("Arquivo extra", "Package"), ("Caminho no computador", "Path")); break;
+            }
+            if (!Phases.Contains(a.Phase)) a.Phase = Get(a.Type)?.DefaultPhase ?? "PostInstall";
+        }
+
+        // ------------------------------------------------------------------ code generation
 
         private static string L(string s) => ScriptGenerator.Lit(s);
         private static string Exp(string s) => $"([Environment]::ExpandEnvironmentVariables({L(s)}))";
+        private static string Support(string name) => $"(Join-Path -Path $adtSession.DirSupportFiles -ChildPath {L(name)})";
 
         private static string Lnk(string name)
         {
@@ -179,17 +194,48 @@ namespace J365.IntunePSApp.Core
             return name.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase) || name.EndsWith("*") ? name : name + ".lnk";
         }
 
+        private static string CodeList(string text, string fallback)
+        {
+            var codes = Regex.Split(text ?? "", @"[,;\s]+").Where(c => Regex.IsMatch(c, @"^-?\d+$")).Distinct().ToList();
+            return codes.Count == 0 ? fallback : string.Join(", ", codes);
+        }
+
+        /// <summary>PowerShell lines (4-space indented) for one action, including the optional try/catch wrapper.</summary>
         public static List<string> Generate(PackageAction a)
         {
             var body = new List<string>();
             switch (a.Type)
             {
+                case "InstallDependency":
+                    {
+                        string file = a.P("Source");
+                        string args = a.P("Arguments").Trim();
+                        string codes = CodeList(a.P("SuccessCodes"), "0, 1638");
+                        if (Path.GetExtension(file).Equals(".msi", StringComparison.OrdinalIgnoreCase))
+                            body.Add($"Start-ADTMsiProcess -Action 'Install' -FilePath {Support(file)}" + (args.Length > 0 ? $" -AdditionalArgumentList {L(args)}" : "") + $" -SuccessExitCodes @({codes})");
+                        else
+                            body.Add($"Start-ADTProcess -FilePath {Support(file)}" + (args.Length > 0 ? $" -ArgumentList {L(args)}" : "") + $" -SuccessExitCodes @({codes})");
+                        break;
+                    }
+                case "UninstallApp":
+                    {
+                        string pat = L(a.P("NamePattern"));
+                        string ua = a.P("ExeArguments").Trim();
+                        body.Add($"Uninstall-ADTApplication -Name {pat} -NameMatch 'Wildcard' -ApplicationType 'MSI'");
+                        body.Add(ua.Length > 0
+                            ? $"Uninstall-ADTApplication -Name {pat} -NameMatch 'Wildcard' -ApplicationType 'EXE' -ArgumentList {L(ua)}"
+                            : $"Uninstall-ADTApplication -Name {pat} -NameMatch 'Wildcard' -ApplicationType 'EXE' -FilterScript {{ ![System.String]::IsNullOrWhiteSpace($_.QuietUninstallString) }}");
+                        break;
+                    }
                 case "RemoveDesktopShortcut":
                     body.Add($"Remove-ADTFile -Path (Join-Path -Path ([Environment]::GetFolderPath('CommonDesktopDirectory')) -ChildPath {L(Lnk(a.P("Name")))})");
                     break;
+                case "RemoveStartMenuShortcut":
+                    body.Add($"Get-ChildItem -LiteralPath ([Environment]::GetFolderPath('CommonPrograms')) -Filter {L(Lnk(a.P("Name")))} -Recurse -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue");
+                    break;
                 case "CreateShortcut":
                     {
-                        string folder = a.P("Location").StartsWith("Menu", StringComparison.OrdinalIgnoreCase) ? "CommonPrograms" : "CommonDesktopDirectory";
+                        string folder = a.P("Location") == "StartMenu" ? "CommonPrograms" : "CommonDesktopDirectory";
                         string cmd = $"New-ADTShortcut -LiteralPath (Join-Path -Path ([Environment]::GetFolderPath('{folder}')) -ChildPath {L(Lnk(a.P("Name")))}) -TargetPath {Exp(a.P("Target"))}";
                         if (!string.IsNullOrWhiteSpace(a.P("Arguments"))) cmd += $" -Arguments {L(a.P("Arguments"))}";
                         if (!string.IsNullOrWhiteSpace(a.P("Icon"))) cmd += $" -IconLocation {Exp(a.P("Icon"))}";
@@ -199,10 +245,10 @@ namespace J365.IntunePSApp.Core
                 case "CopyFile":
                     body.Add($"$j365Dest = {Exp(a.P("Destination"))}");
                     body.Add("if (-not (Test-Path -LiteralPath $j365Dest)) { $null = New-Item -Path $j365Dest -ItemType Directory -Force }");
-                    body.Add($"Copy-ADTFile -Path (Join-Path -Path $adtSession.DirSupportFiles -ChildPath {L(a.P("Source"))}) -Destination $j365Dest -Recurse");
+                    body.Add($"Copy-ADTFile -Path {Support(a.P("Source"))} -Destination $j365Dest -Recurse");
                     break;
                 case "CopyToUserProfiles":
-                    body.Add($"Copy-ADTFileToUserProfiles -Path (Join-Path -Path $adtSession.DirSupportFiles -ChildPath {L(a.P("Source"))}) -Destination {L(a.P("Destination"))} -BasePath {L(string.IsNullOrEmpty(a.P("BasePath")) ? "AppData" : a.P("BasePath"))} -Recurse");
+                    body.Add($"Copy-ADTFileToUserProfiles -Path {Support(a.P("Source"))} -Destination {L(a.P("Destination"))} -BasePath {L(string.IsNullOrEmpty(a.P("BasePath")) ? "AppData" : a.P("BasePath"))} -Recurse");
                     break;
                 case "DeleteFile":
                     body.Add($"Remove-ADTFile -Path {Exp(a.P("Path"))}");
@@ -217,7 +263,7 @@ namespace J365.IntunePSApp.Core
                         string v = a.P("Value");
                         string valueExpr = type switch
                         {
-                            "DWord" or "QWord" => long.TryParse(v.Trim(), out var n) ? n.ToString() : (v.Trim().StartsWith("0x", StringComparison.OrdinalIgnoreCase) ? v.Trim() : "0"),
+                            "DWord" or "QWord" => long.TryParse(v.Trim(), out var n) ? n.ToString() : (Regex.IsMatch(v.Trim(), "^0x[0-9A-Fa-f]+$") ? v.Trim() : "0"),
                             "MultiString" => "@(" + string.Join(", ", v.Split(';').Select(x => L(x.Trim()))) + ")",
                             _ => L(v)
                         };
@@ -227,6 +273,10 @@ namespace J365.IntunePSApp.Core
                 case "RemoveRegistry":
                     if (string.IsNullOrWhiteSpace(a.P("Name"))) body.Add($"Remove-ADTRegistryKey -LiteralPath {L(NormalizeKey(a.P("Key")))} -Recurse");
                     else body.Add($"Remove-ADTRegistryKey -LiteralPath {L(NormalizeKey(a.P("Key")))} -Name {L(a.P("Name"))}");
+                    break;
+                case "ImportRegFile":
+                    body.Add($"$j365Reg = {Support(a.P("Source"))}");
+                    body.Add("Start-ADTProcess -FilePath (Join-Path -Path $env:SystemRoot -ChildPath 'System32\\reg.exe') -ArgumentList ('import \"' + $j365Reg + '\"')");
                     break;
                 case "StopProcess":
                     {
@@ -238,8 +288,8 @@ namespace J365.IntunePSApp.Core
                     {
                         string n = L(a.P("Name"));
                         body.Add($"Stop-Service -Name {n} -Force -ErrorAction SilentlyContinue");
-                        if (a.P("Mode").Contains("desativar")) body.Add($"Set-Service -Name {n} -StartupType Disabled");
-                        else if (a.P("Mode").Contains("manual")) body.Add($"Set-Service -Name {n} -StartupType Manual");
+                        if (a.P("Mode") == "StopDisable") body.Add($"Set-Service -Name {n} -StartupType Disabled");
+                        else if (a.P("Mode") == "StopManual") body.Add($"Set-Service -Name {n} -StartupType Manual");
                         break;
                     }
                 case "DisableScheduledTask":
@@ -250,9 +300,7 @@ namespace J365.IntunePSApp.Core
                     break;
                 case "RunProgram":
                     {
-                        string fp = a.P("Source").StartsWith("Arquivo", StringComparison.OrdinalIgnoreCase)
-                            ? $"(Join-Path -Path $adtSession.DirSupportFiles -ChildPath {L(a.P("FilePath"))})"
-                            : Exp(a.P("FilePath"));
+                        string fp = a.P("Source") == "Package" ? Support(a.P("FilePath")) : Exp(a.P("FilePath"));
                         string cmd = $"Start-ADTProcess -FilePath {fp}";
                         if (!string.IsNullOrWhiteSpace(a.P("Arguments"))) cmd += $" -ArgumentList {L(a.P("Arguments"))}";
                         if (!string.Equals(a.P("IgnoreExitCode"), "false", StringComparison.OrdinalIgnoreCase)) cmd += " -IgnoreExitCodes '*'";
@@ -270,9 +318,11 @@ namespace J365.IntunePSApp.Core
                     break;
             }
 
+            var def = Get(a.Type);
+            string label = def?.LabelEn ?? a.Type;
             var lines = new List<string>();
-            string title = Regex.Replace($"{a.TypeLabel}: {Summarize(a)}", @"[\r\n]+", " ");
-            lines.Add($"    ## Ação - {title}");
+            string comment = Regex.Replace($"{label} - {Summarize(a)}", @"[\r\n]+", " ").Replace("→", "->");
+            lines.Add("    ## Action: " + ScriptGenerator.Ascii(comment));
             if (a.ContinueOnError)
             {
                 lines.Add("    try");
@@ -281,7 +331,7 @@ namespace J365.IntunePSApp.Core
                 lines.Add("    }");
                 lines.Add("    catch");
                 lines.Add("    {");
-                lines.Add($"        Write-ADTLogEntry -Message ({L("Falha na ação [" + a.TypeLabel + "]: ")} + $_.Exception.Message) -Severity 2");
+                lines.Add($"        Write-ADTLogEntry -Message ({L("Action failed [" + label + "]: ")} + $_.Exception.Message) -Severity 2");
                 lines.Add("    }");
             }
             else lines.AddRange(body.Select(b => "    " + b));
@@ -294,6 +344,8 @@ namespace J365.IntunePSApp.Core
             key = (key ?? "").Trim();
             key = Regex.Replace(key, @"^HKEY_LOCAL_MACHINE\\", "HKLM:\\", RegexOptions.IgnoreCase);
             key = Regex.Replace(key, @"^HKEY_CURRENT_USER\\", "HKCU:\\", RegexOptions.IgnoreCase);
+            key = Regex.Replace(key, @"^HKEY_CLASSES_ROOT\\", "HKCR:\\", RegexOptions.IgnoreCase);
+            key = Regex.Replace(key, @"^HKEY_USERS\\", "HKU:\\", RegexOptions.IgnoreCase);
             key = Regex.Replace(key, @"^(HKLM|HKCU|HKCR|HKU)\\", "$1:\\", RegexOptions.IgnoreCase);
             return key;
         }

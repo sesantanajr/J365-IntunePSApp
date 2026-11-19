@@ -7,10 +7,14 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using static J365.IntunePSApp.Localization.Loc;
 
 namespace J365.IntunePSApp.Core
 {
-    /// <summary>Baixa e valida o PSAppDeployToolkit (template v4) e o IntuneWinAppUtil.exe oficial da Microsoft.</summary>
+    /// <summary>
+    /// Downloads and validates the two external dependencies: the PSAppDeployToolkit v4 template
+    /// (official GitHub release) and Microsoft's IntuneWinAppUtil.exe (Win32 Content Prep Tool).
+    /// </summary>
     public static class ToolsService
     {
         private const string FallbackVersion = "4.1.8";
@@ -33,27 +37,28 @@ namespace J365.IntunePSApp.Core
         public static string PsadtVersion => LocalPsadt() is string p ? Path.GetFileName(p) : null;
         public static bool HasIntuneWinAppUtil => File.Exists(IntuneWinAppUtilPath);
 
-        public static async Task<string> EnsurePsadtAsync(CancellationToken ct)
+        public static async Task<string> EnsurePsadtAsync(CancellationToken ct, IProgress<(long, long?)> progress = null)
         {
             var local = LocalPsadt();
             if (local != null) return local;
+            // Offline use: a template zip dropped into the tools folder is installed without any download.
             var zip = Directory.GetFiles(AppPaths.Tools, "PSAppDeployToolkit_Template_v4*.zip").OrderByDescending(File.GetLastWriteTime).FirstOrDefault();
             if (zip != null)
             {
-                Log.Info($"Usando o template do PSADT encontrado em tools: {Path.GetFileName(zip)}");
+                Log.Info(T("Log_PsadtLocalZip", Path.GetFileName(zip)));
                 return InstallFromZip(zip);
             }
-            return await UpdatePsadtAsync(ct);
+            return await UpdatePsadtAsync(ct, progress);
         }
 
-        public static async Task<string> UpdatePsadtAsync(CancellationToken ct)
+        /// <summary>Latest stable 4.x release of the toolkit template, or null when GitHub cannot be reached.</summary>
+        public static async Task<(string Version, string Url)?> GetLatestPsadtReleaseAsync(CancellationToken ct)
         {
-            string url = null, ver = null;
+            string json = await Http.TryGetStringAsync(ReleasesApi, 30, ct);
+            if (json == null) return null;
             try
             {
-                using var resp = await Http.Client.GetAsync(ReleasesApi, ct);
-                resp.EnsureSuccessStatusCode();
-                using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+                using var doc = JsonDocument.Parse(json);
                 foreach (var r in doc.RootElement.EnumerateArray())
                 {
                     if (r.GetProperty("prerelease").GetBoolean() || r.GetProperty("draft").GetBoolean()) continue;
@@ -63,26 +68,31 @@ namespace J365.IntunePSApp.Core
                     {
                         string name = a.GetProperty("name").GetString() ?? "";
                         if (Regex.IsMatch(name, @"^PSAppDeployToolkit_Template_v4.*\.zip$", RegexOptions.IgnoreCase))
-                        {
-                            url = a.GetProperty("browser_download_url").GetString();
-                            ver = tag.TrimStart('v');
-                            break;
-                        }
+                            return (tag.TrimStart('v'), a.GetProperty("browser_download_url").GetString());
                     }
-                    if (url != null) break;
                 }
             }
-            catch (Exception ex) { Log.Warn($"Não foi possível consultar o GitHub do PSADT ({ex.Message}). Usando a versão {FallbackVersion}."); }
-            url ??= FallbackUrl; ver ??= FallbackVersion;
+            catch { }
+            return null;
+        }
+
+        public static async Task<string> UpdatePsadtAsync(CancellationToken ct, IProgress<(long, long?)> progress = null)
+        {
+            var latest = await GetLatestPsadtReleaseAsync(ct);
+            if (latest == null) Log.Warn(T("Log_PsadtGitHubFailed", FallbackVersion));
+            string ver = latest?.Version ?? FallbackVersion;
+            string url = latest?.Url ?? FallbackUrl;
 
             var local = LocalPsadt();
-            if (local != null && Path.GetFileName(local) == ver) { Log.Ok($"PSAppDeployToolkit {ver} já está atualizado."); return local; }
-            Log.Step($"Baixando PSAppDeployToolkit {ver} (GitHub oficial)...");
+            if (local != null && Path.GetFileName(local) == ver) { Log.Ok(T("Log_PsadtUpToDate", ver)); return local; }
+            // Without GitHub's answer we never replace a working local copy with the (possibly older) fallback.
+            if (local != null && latest == null) return local;
+            Log.Step(T("Log_PsadtDownloading", ver));
             string zipPath = Path.Combine(AppPaths.Tools, $"PSAppDeployToolkit_Template_v4_{ver}.zip");
-            await Http.DownloadAsync(url, zipPath, null, ct);
-            var dest = InstallFromZip(zipPath);
+            await Http.DownloadAsync(url, zipPath, progress, ct);
+            var dest = await Task.Run(() => InstallFromZip(zipPath), ct);
             try { File.Delete(zipPath); } catch { }
-            Log.Ok($"PSAppDeployToolkit {Path.GetFileName(dest)} pronto.");
+            Log.Ok(T("Log_PsadtReady", Path.GetFileName(dest)));
             return dest;
         }
 
@@ -93,16 +103,17 @@ namespace J365.IntunePSApp.Core
             {
                 ZipFile.ExtractToDirectory(zip, tmp, true);
                 var launcher = Directory.GetFiles(tmp, "Invoke-AppDeployToolkit.ps1", SearchOption.AllDirectories).FirstOrDefault()
-                    ?? throw new InvalidDataException("O arquivo não é um template do PSAppDeployToolkit v4.");
+                    ?? throw new InvalidDataException(T("Err_NotPsadtTemplate"));
                 string root = Path.GetDirectoryName(launcher);
                 string psd1 = Path.Combine(root, "PSAppDeployToolkit", "PSAppDeployToolkit.psd1");
-                if (!File.Exists(psd1)) throw new InvalidDataException("Módulo PSAppDeployToolkit não encontrado no template.");
+                if (!File.Exists(psd1)) throw new InvalidDataException(T("Err_PsadtModuleMissing"));
                 var m = Regex.Match(File.ReadAllText(psd1), @"ModuleVersion\s*=\s*'([^']+)'");
                 string version = m.Success ? m.Groups[1].Value : "4.0.0";
-                if (!version.StartsWith("4.")) throw new InvalidDataException($"Versão do PSAppDeployToolkit não suportada: {version}.");
+                if (!version.StartsWith("4.")) throw new InvalidDataException(T("Err_PsadtUnsupported", version));
                 string psm1 = Path.Combine(root, "PSAppDeployToolkit", "PSAppDeployToolkit.psm1");
-                if (!Signature.IsValid(psm1)) Log.Warn("Atenção: a assinatura digital do módulo PSADT não foi validada.");
-                else Log.Info($"Assinatura do PSADT válida ({Signature.Signer(psm1).Name}).");
+                if (!Signature.IsValid(psm1)) Log.Warn(T("Log_PsadtSignatureInvalid"));
+                else Log.Info(T("Log_PsadtSignatureOk", Signature.Signer(psm1).Name));
+                ValidateTemplate(root, version);
                 foreach (var f in Directory.GetFiles(root, "*", SearchOption.AllDirectories)) Unblock(f);
                 Directory.CreateDirectory(PsadtBase);
                 string dest = Path.Combine(PsadtBase, version);
@@ -116,19 +127,38 @@ namespace J365.IntunePSApp.Core
             }
         }
 
-        public static async Task<string> EnsureIntuneWinAppUtilAsync(CancellationToken ct)
+        /// <summary>Makes sure this application can build packages from a template before it replaces the current one.</summary>
+        private static void ValidateTemplate(string root, string version)
+        {
+            try
+            {
+                var (tpl, _) = TextFiles.Read(Path.Combine(root, "Invoke-AppDeployToolkit.ps1"));
+                var probe = new PackageSettings { AppName = "Probe", AppVersion = "1.0", InstallerType = "EXE", UninstallPattern = "Probe*" };
+                ScriptGenerator.DeployScript(tpl, probe, "setup.exe");
+                string config = File.ReadAllText(Path.Combine(root, "Config", "config.psd1"));
+                foreach (var key in new[] { "CompanyName", "LogPath", "DialogStyle", "FluentAccentColor", "LanguageOverride" })
+                    if (!Regex.IsMatch(config, @"(?m)^\s*" + key + @"\s*=")) throw new InvalidDataException(key);
+            }
+            catch (Exception ex) when (ex is InvalidDataException || ex is IOException)
+            {
+                throw new InvalidDataException(T("Err_PsadtIncompatible", version), ex);
+            }
+        }
+
+        /// <summary>Returns the path of a Microsoft-signed IntuneWinAppUtil.exe, or null (the built-in packager is used instead).</summary>
+        public static async Task<string> EnsureIntuneWinAppUtilAsync(CancellationToken ct, IProgress<(long, long?)> progress = null)
         {
             string exe = IntuneWinAppUtilPath;
             if (!File.Exists(exe))
             {
                 try
                 {
-                    Log.Step("Baixando IntuneWinAppUtil.exe (Microsoft Win32 Content Prep Tool)...");
-                    await Http.DownloadAsync(IntuneWinAppUtilUrl, exe, null, ct);
+                    Log.Step(T("Log_IwauDownloading"));
+                    await Http.DownloadAsync(IntuneWinAppUtilUrl, exe, progress, ct);
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
                 {
-                    Log.Warn($"Não foi possível baixar o IntuneWinAppUtil.exe ({ex.Message}). Será usado o empacotador interno.");
+                    Log.Warn(T("Log_IwauDownloadFailed", ex.Message));
                     try { File.Delete(exe); } catch { }
                     return null;
                 }
@@ -136,7 +166,7 @@ namespace J365.IntunePSApp.Core
             var signer = Signature.Signer(exe);
             if (!Signature.IsValid(exe) || signer.Subject == null || !signer.Subject.Contains("O=Microsoft Corporation"))
             {
-                Log.Warn("IntuneWinAppUtil.exe sem assinatura válida da Microsoft: arquivo descartado. Será usado o empacotador interno.");
+                Log.Warn(T("Log_IwauSignatureInvalid"));
                 try { File.Delete(exe); } catch { }
                 return null;
             }
@@ -158,42 +188,61 @@ namespace J365.IntunePSApp.Core
                 return File.Exists(p) ? p : "powershell.exe";
             }
         }
+
+        public static bool HasWindowsPowerShell => File.Exists(WindowsPowerShell);
+
+        /// <summary>
+        /// Starts Windows PowerShell 5.1 for one of our own generated scripts. PSModulePath is cleared so modules of
+        /// PowerShell 7 never leak into the 5.1 session (that breaks Get-AuthenticodeSignature and others).
+        /// </summary>
+        public static ProcessStartInfo PowerShellStartInfo(string arguments)
+        {
+            var psi = new ProcessStartInfo(WindowsPowerShell, arguments)
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+            psi.Environment["PSModulePath"] = "";
+            return psi;
+        }
     }
 
-    /// <summary>Valida a sintaxe dos scripts gerados com o parser do Windows PowerShell 5.1 (o mesmo que executara o pacote).</summary>
+    /// <summary>Checks the syntax of generated scripts with the Windows PowerShell 5.1 parser (the engine that runs the package).</summary>
     public static class PowerShellValidator
     {
+        /// <summary>Instant feedback while typing: unbalanced braces. Returns null when nothing looks wrong.</summary>
         public static string QuickCheck(string code)
         {
             if (string.IsNullOrWhiteSpace(code)) return null;
             int depth = 0;
-            foreach (char c in code) { if (c == '{') depth++; else if (c == '}') depth--; if (depth < 0) return "chave '}' sem abertura."; }
-            return depth != 0 ? "chaves { } não estão balanceadas." : null;
+            foreach (char c in code)
+            {
+                if (c == '{') depth++;
+                else if (c == '}') depth--;
+                if (depth < 0) return T("Val_BraceUnopened");
+            }
+            return depth != 0 ? T("Val_BraceUnbalanced") : null;
         }
 
+        /// <summary>Parses the file without running it. Returns one "line: message" entry per syntax error.</summary>
         public static string[] Validate(string file)
         {
             try
             {
-                string script = "$t=$null;$e=$null;[void][System.Management.Automation.Language.Parser]::ParseFile($env:J365_PS_FILE,[ref]$t,[ref]$e);" +
-                                "foreach($x in $e){'{0}: {1}' -f $x.Extent.StartLineNumber,$x.Message}";
-                var psi = new ProcessStartInfo(ToolsService.WindowsPowerShell, "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"" + script + "\"")
-                {
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true
-                };
+                const string script = "$t=$null;$e=$null;[void][System.Management.Automation.Language.Parser]::ParseFile($env:J365_PS_FILE,[ref]$t,[ref]$e);" +
+                                      "foreach($x in $e){'{0}: {1}' -f $x.Extent.StartLineNumber,$x.Message}";
+                var psi = ToolsService.PowerShellStartInfo("-NoProfile -NonInteractive -Command \"" + script + "\"");
                 psi.Environment["J365_PS_FILE"] = file;
-                psi.Environment["PSModulePath"] = "";
                 using var p = Process.Start(psi);
                 string output = p.StandardOutput.ReadToEnd();
-                p.WaitForExit(60000);
+                if (!p.WaitForExit(60000)) { try { p.Kill(true); } catch { } }
                 return output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
             }
             catch (Exception ex)
             {
-                Log.Warn($"Validação de sintaxe ignorada: {ex.Message}");
+                Log.Warn(T("Log_SyntaxCheckSkipped", ex.Message));
                 return Array.Empty<string>();
             }
         }

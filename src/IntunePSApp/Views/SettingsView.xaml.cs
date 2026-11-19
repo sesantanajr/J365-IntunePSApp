@@ -1,29 +1,56 @@
 using System;
-using System.Diagnostics;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using J365.IntunePSApp.Core;
+using J365.IntunePSApp.Localization;
 using Microsoft.Win32;
+using static J365.IntunePSApp.Localization.Loc;
 
 namespace J365.IntunePSApp.Views
 {
-    public partial class SettingsView : UserControl, IRefreshable
+    public partial class SettingsView : UserControl, IRefreshable, ILocalized
     {
-        public SettingsView() { InitializeComponent(); }
+        private readonly List<SetupItem> _dependencies = SetupService.CreateItems();
+        private bool _loading;
+        private bool _working;
 
-        private static void SelectTag(ComboBox c, string tag)
+        public SettingsView()
+        {
+            InitializeComponent();
+            DependencyList.ItemsSource = _dependencies;
+            AboutAuthor.Text = AppInfo.Author;
+        }
+
+        public static void SelectTag(ComboBox c, string tag)
         {
             foreach (ComboBoxItem it in c.Items) if (string.Equals(it.Tag as string, tag, StringComparison.OrdinalIgnoreCase)) { c.SelectedItem = it; return; }
             c.SelectedIndex = 0;
         }
 
-        private static string TagOf(ComboBox c) => (c.SelectedItem as ComboBoxItem)?.Tag as string ?? "";
+        public static string TagOf(ComboBox c) => (c.SelectedItem as ComboBoxItem)?.Tag as string ?? "";
+
+        /// <summary>The selection box of a ComboBox keeps the text it had when the item was selected: select again after a language change.</summary>
+        public static void RefreshSelection(params ComboBox[] combos)
+        {
+            foreach (var c in combos)
+            {
+                int i = c.SelectedIndex;
+                if (i < 0) continue;
+                c.SelectedIndex = -1;
+                c.SelectedIndex = i;
+            }
+        }
 
         public void Refresh()
         {
+            _loading = true;
             var c = ConfigStore.Current;
+            SelectTag(CmbUiLanguage, c.UiLanguage);
+            ChkUpdates.IsChecked = c.CheckForUpdates;
             TxtCompany.Text = c.CompanyName;
             TxtAuthor.Text = c.Author;
             TxtLogo.Text = c.LogoPath;
@@ -44,54 +71,144 @@ namespace J365.IntunePSApp.Views
             SelectTag(CmbLocale, c.PreferredLocale);
             TxtOutput.Text = c.OutputFolder;
             TxtData.Text = AppPaths.Data;
-            PortableInfo.Text = AppPaths.IsPortable
-                ? "Modo portátil: configurações, ferramentas, banco de dados e downloads ficam ao lado do .exe — leve a pasta para qualquer computador."
-                : "Os dados ficam no perfil do usuário porque a pasta do .exe não permite gravação.";
             TxtCatalogUrl.Text = c.CatalogUrl;
             TxtCatalogDays.Text = c.CatalogUpdateDays.ToString();
+            TxtTenant.Text = c.IntuneTenantId;
+            TxtClient.Text = c.IntuneClientId;
+            _loading = false;
+            UpdateInfo();
+        }
+
+        public void OnLanguageChanged()
+        {
+            _loading = true;
+            RefreshSelection(CmbUiLanguage, CmbStyle, CmbLanguage, CmbMode, CmbArch);
+            _loading = false;
+            foreach (var d in _dependencies) d.RefreshTexts();
             UpdateInfo();
         }
 
         private void UpdateInfo()
         {
+            var culture = Loc.Instance.Culture;
             var cat = CatalogService.Instance;
             CatalogInfo.Text = cat.IsLoaded
-                ? $"{cat.Apps.Count:N0} aplicativos · gerado em {cat.Generated?.ToLocalTime():dd/MM/yyyy HH:mm}" + (string.IsNullOrEmpty(cat.Commit) ? "" : $" · winget-pkgs {cat.Commit[..Math.Min(8, cat.Commit.Length)]}")
-                : "Ainda não baixado.";
-            PsadtInfo.Text = ToolsService.PsadtVersion is string v ? $"Versão {v} instalada em {ToolsService.LocalPsadt()}" : "Não baixado (é baixado automaticamente na primeira geração).";
-            IwauInfo.Text = ToolsService.HasIntuneWinAppUtil ? $"Pronto · {ToolsService.IntuneWinAppUtilPath}" : "Não baixado (sem ele, o empacotador interno compatível é usado).";
-            AboutTitle.Text = $"J365 IntunePSApp {AppInfo.Version}";
+                ? T("Settings_CatalogInfo", cat.Apps.Count.ToString("N0", culture), cat.Generated?.ToLocalTime().ToString("g", culture) ?? "?")
+                  + (string.IsNullOrEmpty(cat.Commit) ? "" : $" · winget-pkgs {cat.Commit[..Math.Min(8, cat.Commit.Length)]}")
+                : T("Main_NotDownloaded");
+            PortableInfo.Text = AppPaths.IsInstalledCopy ? T("Settings_DataInstalled") : AppPaths.IsPortable ? T("Settings_DataPortable") : T("Settings_DataReadOnly");
+            AboutTitle.Text = $"{AppInfo.Name} {AppInfo.Version}";
             LogoThumb.Source = MainWindow.LoadBitmap(TxtLogo.Text);
+            if (!_working) SetupService.Inspect(_dependencies);
+
+            string newApp = UpdateService.NewAppVersion;
+            UpdateInfoText.Text = newApp != null ? T("Settings_UpdateAvailable", newApp)
+                : ConfigStore.Current.LastUpdateCheck.HasValue ? T("Settings_UpToDate", ConfigStore.Current.LastUpdateCheck.Value.ToString("g", culture)) : "";
+
+            bool installed = InstallService.IsInstalled;
+            bool envData = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("J365_INTUNEPSAPP_DATA"));
+            InstallInfo.Text = AppPaths.IsInstalledCopy ? T("Settings_InstallRunning", AppPaths.InstallDir)
+                : installed ? T("Settings_InstallOther", InstallService.InstalledVersion ?? "?") : T("Settings_InstallPortable");
+            BtnInstall.Visibility = !AppPaths.IsInstalledCopy && !envData ? Visibility.Visible : Visibility.Collapsed;
+            BtnInstall.Content = installed ? T("Settings_InstallUpdate") : T("Settings_Install");
+            BtnUninstall.Visibility = installed ? Visibility.Visible : Visibility.Collapsed;
+            ChkDesktopShortcut.IsChecked = InstallService.HasDesktopShortcut;
         }
+
+        // ------------------------------------------------------------------ application
+
+        private void UiLanguage_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (_loading || !IsLoaded) return;
+            string tag = TagOf(CmbUiLanguage);
+            if (tag.Length > 0 && tag != ConfigStore.Current.UiLanguage) MainWindow.Current.SetLanguage(tag);
+        }
+
+        private async void CheckUpdates_Click(object sender, RoutedEventArgs e)
+        {
+            UpdateInfoText.Text = T("Main_Checking");
+            await UpdateService.CheckAsync(true, CancellationToken.None);
+            UpdateInfo();
+            string v = UpdateService.NewAppVersion;
+            if (v != null && Ui.Confirm(T("Settings_UpdatePrompt", AppInfo.Name, v, AppInfo.Version), T("Notice_AppUpdateButton"), T("Common_Close")))
+                MainWindow.OpenUrl(AppInfo.ReleasesUrl);
+        }
+
+        private void Install_Click(object sender, RoutedEventArgs e)
+        {
+            if (!Ui.Confirm(T("Settings_InstallConfirm", AppPaths.InstallDir), T("Settings_Install"), T("Common_Cancel"))) return;
+            MainWindow.Current.InstallForUser(ChkDesktopShortcut.IsChecked == true);
+        }
+
+        private void Uninstall_Click(object sender, RoutedEventArgs e)
+        {
+            if (!Ui.Confirm(T("Install_ConfirmUninstall"), T("Install_Uninstall"), T("Common_Cancel"), danger: true)) return;
+            bool purge = Ui.Confirm(T("Install_ConfirmPurge"), T("Install_PurgeYes"), T("Install_PurgeNo"));
+            try
+            {
+                InstallService.Uninstall(purge);
+                if (AppPaths.IsInstalledCopy)
+                {
+                    Ui.Info(T("Install_Uninstalled"));
+                    Application.Current.Shutdown();
+                    return;
+                }
+                MainWindow.Current.Toast(T("Install_Uninstalled"), "ok");
+            }
+            catch (Exception ex) { Ui.Error(ex.Message); }
+            UpdateInfo();
+        }
+
+        private void DesktopShortcut_Click(object sender, RoutedEventArgs e)
+        {
+            try { InstallService.SetDesktopShortcut(ChkDesktopShortcut.IsChecked == true); }
+            catch (Exception ex) { Ui.Error(ex.Message); }
+            UpdateInfo();
+        }
+
+        // ------------------------------------------------------------------ company and defaults
 
         private void Logo_Changed(object sender, TextChangedEventArgs e) => LogoThumb.Source = MainWindow.LoadBitmap(TxtLogo.Text);
 
         private void Logo_Click(object sender, RoutedEventArgs e)
         {
-            var dlg = new OpenFileDialog { Filter = "Imagens (*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.ico)|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.ico" };
+            var dlg = new OpenFileDialog { Filter = T("Filter_Images") + "|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.ico" };
             if (dlg.ShowDialog(Window.GetWindow(this)) == true) TxtLogo.Text = dlg.FileName;
         }
 
         private void Save_Click(object sender, RoutedEventArgs e)
         {
+            string tenant = TxtTenant.Text.Trim(), client = TxtClient.Text.Trim();
+            if (tenant.Length > 0 && !IntunePublisher.IsTenant(tenant)) { Ui.Warn(T("Publish_InvalidTenant")); return; }
+            if (client.Length > 0 && !IntunePublisher.IsGuid(client)) { Ui.Warn(T("Publish_InvalidClient")); return; }
+            string accent = TxtAccent.Text.Trim();
+            if (accent.Length > 0 && !System.Text.RegularExpressions.Regex.IsMatch(accent, "^#?[0-9A-Fa-f]{6}$")) { Ui.Warn(T("Val_AccentColor")); return; }
+
             var c = ConfigStore.Current;
+            c.CheckForUpdates = ChkUpdates.IsChecked == true;
             c.CompanyName = TxtCompany.Text.Trim();
             c.Author = TxtAuthor.Text.Trim();
-            string logo = TxtLogo.Text.Trim();
-            if (!string.IsNullOrEmpty(logo) && File.Exists(logo))
+            string logo = TxtLogo.Text.Trim().Trim('"');
+            if (!string.IsNullOrEmpty(logo))
             {
-                string dest = Path.Combine(AppPaths.Branding, "logo-empresa" + Path.GetExtension(logo).ToLowerInvariant());
-                if (!string.Equals(Path.GetFullPath(logo), dest, StringComparison.OrdinalIgnoreCase)) File.Copy(logo, dest, true);
-                logo = dest;
+                if (!File.Exists(logo)) { Ui.Warn(T("Val_LogoMissing", logo)); return; }
+                try
+                {
+                    // The logo is copied next to the settings so it keeps working if the original file is moved.
+                    string dest = Path.Combine(AppPaths.Branding, "company-logo" + Path.GetExtension(logo).ToLowerInvariant());
+                    if (!string.Equals(Path.GetFullPath(logo), dest, StringComparison.OrdinalIgnoreCase)) File.Copy(logo, dest, true);
+                    logo = dest;
+                }
+                catch (Exception ex) { Ui.Error(ex.Message); return; }
             }
             c.LogoPath = logo;
-            c.AccentColor = TxtAccent.Text.Trim();
+            c.AccentColor = accent;
             c.DialogStyle = TagOf(CmbStyle);
             c.Language = TagOf(CmbLanguage);
             c.LogsInIntuneFolder = ChkImeLogs.IsChecked == true;
             c.DeployMode = TagOf(CmbMode);
-            c.DeferTimes = int.TryParse(TxtDefer.Text, out var d) ? d : 3;
-            c.CloseAppsCountdown = int.TryParse(TxtCountdown.Text, out var cd) ? cd : 300;
+            c.DeferTimes = int.TryParse(TxtDefer.Text, out var d) ? Math.Clamp(d, 1, 99) : 3;
+            c.CloseAppsCountdown = int.TryParse(TxtCountdown.Text, out var cd) ? Math.Clamp(cd, 0, 3000) : 300;
             c.AllowDefer = ChkDefer.IsChecked == true;
             c.BlockExecution = ChkBlock.IsChecked == true;
             c.CheckDiskSpace = ChkDisk.IsChecked == true;
@@ -100,65 +217,121 @@ namespace J365.IntunePSApp.Views
             c.CompletionMessage = TxtCompletion.Text.Trim();
             c.PreferredArch = TagOf(CmbArch);
             c.PreferredLocale = TagOf(CmbLocale);
-            c.OutputFolder = string.IsNullOrWhiteSpace(TxtOutput.Text) ? AppPaths.DefaultOutput : TxtOutput.Text.Trim();
+            c.OutputFolder = string.IsNullOrWhiteSpace(TxtOutput.Text) ? AppPaths.DefaultOutput : TxtOutput.Text.Trim().Trim('"');
             c.CatalogUrl = string.IsNullOrWhiteSpace(TxtCatalogUrl.Text) ? AppInfo.DefaultCatalogUrl : TxtCatalogUrl.Text.Trim();
-            c.CatalogUpdateDays = int.TryParse(TxtCatalogDays.Text, out var days) ? Math.Clamp(days, 1, 90) : 3;
+            c.CatalogUpdateDays = int.TryParse(TxtCatalogDays.Text, out var days) ? Math.Clamp(days, 1, 90) : 1;
+            c.IntuneTenantId = tenant;
+            c.IntuneClientId = client;
             ConfigStore.Save();
             Refresh();
-            MainWindow.Current.Toast("Configurações salvas. Valem para os próximos pacotes.", "ok");
+            MainWindow.Current.Toast(T("Settings_Saved"), "ok");
         }
+
+        // ------------------------------------------------------------------ folders
 
         private void Output_Click(object sender, RoutedEventArgs e)
         {
-            var dlg = new OpenFolderDialog { Title = "Pasta onde os pacotes serão criados" };
+            var dlg = new OpenFolderDialog { Title = T("Settings_Output") };
             if (dlg.ShowDialog(Window.GetWindow(this)) == true) TxtOutput.Text = dlg.FolderName;
         }
 
-        private void OpenData_Click(object sender, RoutedEventArgs e) => Process.Start("explorer.exe", $"\"{AppPaths.Data}\"");
+        private void OpenData_Click(object sender, RoutedEventArgs e) => Ui.OpenPath(AppPaths.Data);
+        private void OpenLogs_Click(object sender, RoutedEventArgs e) => Ui.OpenPath(AppPaths.Logs);
+        private void OpenTools_Click(object sender, RoutedEventArgs e) => Ui.OpenPath(AppPaths.Tools);
 
-        private async void CatalogUpdate_Click(object sender, RoutedEventArgs e)
+        // ------------------------------------------------------------------ database
+
+        private void ApplyCatalogUrl()
         {
             ConfigStore.Current.CatalogUrl = string.IsNullOrWhiteSpace(TxtCatalogUrl.Text) ? AppInfo.DefaultCatalogUrl : TxtCatalogUrl.Text.Trim();
             ConfigStore.Save();
-            await MainWindow.Current.UpdateCatalogAsync();
+        }
+
+        private async void CatalogUpdate_Click(object sender, RoutedEventArgs e)
+        {
+            ApplyCatalogUrl();
+            await MainWindow.Current.UpdateCatalogAsync(userRequested: true);
+            UpdateInfo();
+        }
+
+        private async void CatalogForce_Click(object sender, RoutedEventArgs e)
+        {
+            ApplyCatalogUrl();
+            await MainWindow.Current.UpdateCatalogAsync(userRequested: true, force: true);
             UpdateInfo();
         }
 
         private async void CatalogImport_Click(object sender, RoutedEventArgs e)
         {
-            var dlg = new OpenFileDialog { Filter = "Banco de dados (catalog.json.gz)|*.gz" };
+            var dlg = new OpenFileDialog { Filter = T("Filter_Catalog") + "|*.gz" };
             if (dlg.ShowDialog(Window.GetWindow(this)) != true) return;
             try
             {
                 await CatalogService.Instance.ImportAsync(dlg.FileName);
-                MainWindow.Current.Toast($"Banco de dados importado: {CatalogService.Instance.Apps.Count:N0} aplicativos.", "ok");
+                MainWindow.Current.Toast(T("Main_CatalogUpdated", CatalogService.Instance.Apps.Count.ToString("N0", Loc.Instance.Culture)), "ok");
             }
-            catch (Exception ex) { MainWindow.Current.Toast("Arquivo inválido: " + ex.Message, "error"); }
+            catch (Exception ex) { MainWindow.Current.Toast(T("Settings_CatalogInvalid", ex.Message), "error"); }
             UpdateInfo();
         }
 
-        private async void PsadtUpdate_Click(object sender, RoutedEventArgs e)
-        {
-            var main = MainWindow.Current;
-            main.ShowBusy("Atualizando o PSAppDeployToolkit", "Consultando o GitHub oficial...", false);
-            try { await System.Threading.Tasks.Task.Run(() => ToolsService.UpdatePsadtAsync(CancellationToken.None)); main.Toast($"PSAppDeployToolkit {ToolsService.PsadtVersion} pronto.", "ok"); }
-            catch (Exception ex) { main.Toast("Falha ao baixar o PSADT: " + ex.Message, "error"); }
-            finally { main.HideBusy(); main.UpdateToolsStatus(); UpdateInfo(); }
-        }
+        // ------------------------------------------------------------------ dependencies
 
-        private async void IwauUpdate_Click(object sender, RoutedEventArgs e)
+        private async Task RunDependenciesAsync(bool refresh)
         {
+            if (_working) return;
+            _working = true;
+            BtnRepair.IsEnabled = BtnRefreshTools.IsEnabled = false;
             var main = MainWindow.Current;
-            main.ShowBusy("Baixando o IntuneWinAppUtil.exe", "GitHub oficial da Microsoft...", false);
+            main.SetStatus(T("Settings_DependenciesWorking"), true);
             try
             {
-                var r = await System.Threading.Tasks.Task.Run(() => ToolsService.EnsureIntuneWinAppUtilAsync(CancellationToken.None));
-                main.Toast(r != null ? "IntuneWinAppUtil.exe pronto (assinatura Microsoft verificada)." : "Não foi possível baixar; o empacotador interno será usado.", r != null ? "ok" : "warn");
+                bool ok = await SetupService.RunAsync(_dependencies, refresh, CancellationToken.None);
+                main.Toast(ok ? T("Settings_DependenciesOk") : T("Setup_Failed"), ok ? "ok" : "warn");
+                if (refresh) await UpdateService.CheckAsync(true, CancellationToken.None);
             }
-            finally { main.HideBusy(); main.UpdateToolsStatus(); UpdateInfo(); }
+            catch (Exception ex) { main.Toast(ex.Message, "error"); }
+            finally
+            {
+                _working = false;
+                BtnRepair.IsEnabled = BtnRefreshTools.IsEnabled = true;
+                main.SetStatus(null);
+                main.UpdateToolsStatus();
+                main.UpdateCatalogStatus(refreshPage: false);
+                UpdateInfo();
+            }
         }
 
+        private async void Repair_Click(object sender, RoutedEventArgs e) => await RunDependenciesAsync(refresh: false);
+        private async void RefreshTools_Click(object sender, RoutedEventArgs e) => await RunDependenciesAsync(refresh: true);
+
+        /// <summary>Downloads the newest PSAppDeployToolkit 4.x (used by the notice on the home page).</summary>
+        public async Task UpdatePsadtAsync()
+        {
+            var main = MainWindow.Current;
+            main.ShowBusy(T("Settings_PsadtUpdating"), T("Settings_PsadtConsulting"), false);
+            try
+            {
+                var progress = new Progress<(long, long?)>(p => main.BusyProgressReport(p.Item1, p.Item2));
+                await ToolsService.UpdatePsadtAsync(CancellationToken.None, progress);
+                await UpdateService.CheckAsync(true, CancellationToken.None);
+                main.Toast(T("Log_PsadtReady", ToolsService.PsadtVersion), "ok");
+            }
+            catch (Exception ex) { main.HideBusy(); Ui.Warn(ex.Message); }
+            finally
+            {
+                main.HideBusy();
+                main.UpdateToolsStatus();
+                if (IsLoaded) UpdateInfo();
+                main.Home.Refresh();
+            }
+        }
+
+        // ------------------------------------------------------------------ links
+
+        private void PublishGuide_Click(object sender, RoutedEventArgs e) => MainWindow.OpenUrl(AppInfo.PublishDocsUrl);
         private void Blog_Click(object sender, RoutedEventArgs e) => MainWindow.OpenUrl(AppInfo.BlogUrl);
         private void Repo_Click(object sender, RoutedEventArgs e) => MainWindow.OpenUrl(AppInfo.RepoUrl);
+        private void LinkedIn_Click(object sender, RoutedEventArgs e) => MainWindow.OpenUrl(AppInfo.AuthorLinkedIn);
+        private void Psadt_Click(object sender, RoutedEventArgs e) => MainWindow.OpenUrl(AppInfo.PsadtUrl);
     }
 }

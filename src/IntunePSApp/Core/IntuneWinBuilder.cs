@@ -9,18 +9,21 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
+using static J365.IntunePSApp.Localization.Loc;
 
 namespace J365.IntunePSApp.Core
 {
     /// <summary>
-    /// Gera o .intunewin com o IntuneWinAppUtil.exe oficial ou com o empacotador interno, compativel com o formato:
-    ///   IntuneWinPackage/Contents/IntunePackage.intunewin -> [HMAC-SHA256 32b][IV 16b][AES-256-CBC(zip do conteudo)]
-    ///   IntuneWinPackage/Metadata/Detection.xml           -> chaves, digest SHA256 e arquivo de instalacao
+    /// Creates the .intunewin file with Microsoft's IntuneWinAppUtil.exe or with the built-in packager, which writes
+    /// the same format:
+    ///   IntuneWinPackage/Contents/IntunePackage.intunewin -> [HMAC-SHA256 32 bytes][IV 16 bytes][AES-256-CBC(zip of the content)]
+    ///   IntuneWinPackage/Metadata/Detection.xml           -> keys, SHA256 digest and setup file
     /// </summary>
     public static class IntuneWinBuilder
     {
         public const string SetupFile = "Invoke-AppDeployToolkit.exe";
 
+        /// <summary>Builds the package and returns the name of the tool that produced it.</summary>
         public static async Task<string> BuildAsync(string sourceFolder, string outputFile, bool forceNative, CancellationToken ct)
         {
             string exe = forceNative ? null : await ToolsService.EnsureIntuneWinAppUtilAsync(ct);
@@ -30,8 +33,8 @@ namespace J365.IntunePSApp.Core
                 Directory.CreateDirectory(tmpOut);
                 try
                 {
-                    Log.Info("Gerando .intunewin com o IntuneWinAppUtil.exe oficial da Microsoft...");
-                    var psi = new ProcessStartInfo(exe, $"-c \"{sourceFolder}\" -s \"{SetupFile}\" -o \"{tmpOut}\" -q")
+                    Log.Info(T("Log_IwauBuilding"));
+                    var psi = new ProcessStartInfo(exe, $"-c \"{sourceFolder.TrimEnd('\\')}\" -s \"{SetupFile}\" -o \"{tmpOut}\" -q")
                     {
                         UseShellExecute = false,
                         CreateNoWindow = true,
@@ -41,20 +44,21 @@ namespace J365.IntunePSApp.Core
                     using var p = Process.Start(psi);
                     var stdout = p.StandardOutput.ReadToEndAsync();
                     var stderr = p.StandardError.ReadToEndAsync();
-                    await p.WaitForExitAsync(ct);
+                    try { await p.WaitForExitAsync(ct); }
+                    catch (OperationCanceledException) { try { p.Kill(true); } catch { } throw; }
                     var produced = Directory.GetFiles(tmpOut, "*.intunewin").FirstOrDefault();
                     if (p.ExitCode == 0 && produced != null)
                     {
                         File.Move(produced, outputFile, true);
                         return "IntuneWinAppUtil.exe (Microsoft)";
                     }
-                    Log.Warn($"IntuneWinAppUtil.exe falhou (código {p.ExitCode}). Usando o empacotador interno. {(await stdout + await stderr).Trim()}");
+                    Log.Warn(T("Log_IwauFailed", p.ExitCode, (await stdout + await stderr).Trim()));
                 }
                 finally { try { Directory.Delete(tmpOut, true); } catch { } }
             }
-            Log.Info("Gerando .intunewin com o empacotador interno (formato compatível com o Intune)...");
+            Log.Info(T("Log_NativeBuilding"));
             await Task.Run(() => BuildNative(sourceFolder, SetupFile, outputFile), ct);
-            return "Empacotador interno";
+            return T("Tool_Native");
         }
 
         public static void BuildNative(string sourceFolder, string setupFile, string outputFile)
@@ -85,7 +89,7 @@ namespace J365.IntunePSApp.Core
                 {
                     aes.KeySize = 256; aes.Key = encKey; aes.IV = iv; aes.Mode = CipherMode.CBC; aes.Padding = PaddingMode.PKCS7;
                     using var outFs = new FileStream(encFile, FileMode.CreateNew, FileAccess.ReadWrite);
-                    outFs.Write(new byte[32], 0, 32);
+                    outFs.Write(new byte[32], 0, 32); // placeholder for the HMAC
                     outFs.Write(iv, 0, 16);
                     using (var enc = aes.CreateEncryptor())
                     using (var fin = File.OpenRead(plainZip))
@@ -112,7 +116,7 @@ namespace J365.IntunePSApp.Core
                     }
                     outFs.Flush();
                     outFs.Position = 32;
-                    using (var hmac = new HMACSHA256(macKey)) mac = hmac.ComputeHash(outFs);
+                    using (var hmac = new HMACSHA256(macKey)) mac = hmac.ComputeHash(outFs); // HMAC over IV + ciphertext
                     outFs.Position = 0;
                     outFs.Write(mac, 0, 32);
                 }
@@ -149,7 +153,7 @@ namespace J365.IntunePSApp.Core
             finally { try { Directory.Delete(work, true); } catch { } }
         }
 
-        /// <summary>Valida um .intunewin: confere HMAC, descriptografa, confere SHA256 e conta os arquivos.</summary>
+        /// <summary>Validates an .intunewin file: checks the HMAC, decrypts it, checks the SHA256 digest and counts the files.</summary>
         public static (bool Valid, int FileCount, string SetupFile) Validate(string path)
         {
             string work = Path.Combine(AppPaths.Temp, "_val_" + Guid.NewGuid().ToString("N"));
@@ -160,8 +164,8 @@ namespace J365.IntunePSApp.Core
                 XDocument x;
                 using (var z = ZipFile.OpenRead(path))
                 {
-                    var xe = z.GetEntry("IntuneWinPackage/Metadata/Detection.xml") ?? throw new InvalidDataException("Detection.xml ausente.");
-                    var ce = z.GetEntry("IntuneWinPackage/Contents/IntunePackage.intunewin") ?? throw new InvalidDataException("Conteúdo ausente.");
+                    var xe = z.GetEntry("IntuneWinPackage/Metadata/Detection.xml") ?? throw new InvalidDataException(T("Err_IntuneWinNoMetadata"));
+                    var ce = z.GetEntry("IntuneWinPackage/Contents/IntunePackage.intunewin") ?? throw new InvalidDataException(T("Err_IntuneWinNoContent"));
                     using (var s = xe.Open()) x = XDocument.Load(s);
                     ce.ExtractToFile(enc, true);
                 }

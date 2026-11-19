@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -6,6 +7,9 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
 using J365.IntunePSApp.Core;
+using J365.IntunePSApp.Localization;
+using J365.IntunePSApp.Views;
+using static J365.IntunePSApp.Localization.Loc;
 
 namespace J365.IntunePSApp
 {
@@ -21,24 +25,32 @@ namespace J365.IntunePSApp
 
         public static bool HasArg(string name) => Args.Any(a => string.Equals(a, name, StringComparison.OrdinalIgnoreCase));
 
+        /// <summary>Command-line switches that run without opening the main window.</summary>
+        private static readonly string[] CliSwitches = { "--help", "-h", "/?", "--version", "--build", "--setup", "--update-catalog", "--install", "--uninstall" };
+
         protected override void OnStartup(StartupEventArgs e)
         {
             Args = e.Args ?? Array.Empty<string>();
+            Loc.Instance.SetLanguage(Loc.Resolve(Arg("--lang") ?? ConfigStore.Current.UiLanguage));
+
             DispatcherUnhandledException += OnUiException;
-            AppDomain.CurrentDomain.UnhandledException += (s, ex) => Log.Error("Erro não tratado: " + ex.ExceptionObject);
-            TaskScheduler.UnobservedTaskException += (s, ex) => { Log.Error("Erro em tarefa: " + ex.Exception.GetBaseException().Message); ex.SetObserved(); };
+            AppDomain.CurrentDomain.UnhandledException += (s, ex) => Log.Error(T("Log_Unhandled", ex.ExceptionObject));
+            TaskScheduler.UnobservedTaskException += (s, ex) => { Log.Error(T("Log_TaskError", ex.Exception.GetBaseException().Message)); ex.SetObserved(); };
 
             base.OnStartup(e);
+            AppPaths.CleanTemp();
+            Log.Prune();
 
-            // Modo linha de comando: J365.IntunePSApp.exe --build <projeto.json | instalador.msi/.exe> [--out pasta] [--native]
-            if (HasArg("--build"))
+            if (CliSwitches.Any(HasArg))
             {
+                // Keep the application alive while dialogs of --install/--uninstall are open.
+                ShutdownMode = ShutdownMode.OnExplicitShutdown;
                 int code = RunCli();
                 Shutdown(code);
                 return;
             }
 
-            Log.Info($"{AppInfo.Name} {AppInfo.Version} iniciado. Dados: {AppPaths.Data}");
+            Log.Info(T("Log_Started", AppInfo.Name, AppInfo.Version, AppPaths.Data));
             var w = new MainWindow();
             MainWindow = w;
             if (HasArg("--snapshot"))
@@ -53,30 +65,91 @@ namespace J365.IntunePSApp
 
         private void OnUiException(object sender, DispatcherUnhandledExceptionEventArgs e)
         {
-            Log.Error("Erro na interface: " + e.Exception);
+            Log.Error(T("Log_UiError", e.Exception));
             e.Handled = true;
-            try
-            {
-                MessageBox.Show(MainWindow, "Ocorreu um erro inesperado, mas o aplicativo continua funcionando.\n\n" + e.Exception.GetBaseException().Message +
-                    $"\n\nDetalhes em: {AppPaths.Logs}", AppInfo.Name, MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
+            try { Ui.Warn(T("Err_Unexpected", e.Exception.GetBaseException().Message, AppPaths.Logs)); }
             catch { }
         }
 
-        // Executa fora do contexto da interface para evitar deadlock entre await e espera sincrona.
-        private static int RunCli() => Task.Run(RunCliCore).GetAwaiter().GetResult();
+        // ------------------------------------------------------------------ command line
 
-        private static int RunCliCore()
+        private int RunCli()
         {
             NativeMethods.AttachConsole(-1);
+            try
+            {
+                if (HasArg("--help") || HasArg("-h") || HasArg("/?")) { Console.WriteLine(); Console.WriteLine(T("Cli_Help", AppInfo.Name, AppInfo.Version)); return 0; }
+                if (HasArg("--version")) { Console.WriteLine(AppInfo.Version); return 0; }
+                if (HasArg("--install")) return CliInstall();
+                if (HasArg("--uninstall")) return CliUninstall();
+                // Network/build work runs off the UI thread: awaiting on the dispatcher while blocking it would deadlock.
+                return Task.Run(RunCliWork).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(T("Cli_Error", ex.Message));
+                return 1;
+            }
+        }
+
+        private static int CliInstall()
+        {
+            bool quiet = HasArg("--quiet");
+            try
+            {
+                string exe = InstallService.Install(HasArg("--desktop-shortcut"));
+                Console.WriteLine(T("Log_Installed", AppPaths.InstallDir));
+                if (!quiet) Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true });
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(T("Cli_Error", ex.Message));
+                if (!quiet) Ui.Error(ex.Message);
+                return 1;
+            }
+        }
+
+        private static int CliUninstall()
+        {
+            bool quiet = HasArg("--quiet");
+            bool purge = HasArg("--purge");
+            if (!quiet)
+            {
+                if (!Ui.Confirm(T("Install_ConfirmUninstall"), T("Install_Uninstall"), danger: true)) return 1602;
+                if (!purge) purge = Ui.Confirm(T("Install_ConfirmPurge"), T("Install_PurgeYes"), T("Install_PurgeNo"));
+            }
+            InstallService.Uninstall(purge);
+            Console.WriteLine(T("Install_Uninstalled"));
+            if (!quiet) Ui.Info(T("Install_Uninstalled"));
+            return 0;
+        }
+
+        private static int RunCliWork()
+        {
             Log.Entry += en => Console.WriteLine($"[{en.TimeLabel}] {en.Text}");
             try
             {
-                string input = Arg("--build");
-                if (string.IsNullOrWhiteSpace(input) || !File.Exists(input)) { Console.WriteLine("Uso: J365.IntunePSApp.exe --build <projeto.json|instalador> [--out pasta] [--native]"); return 2; }
                 CatalogService.Instance.LoadAsync().GetAwaiter().GetResult();
+
+                if (HasArg("--setup"))
+                {
+                    var items = SetupService.CreateItems();
+                    bool ok = SetupService.RunAsync(items, refresh: false, CancellationToken.None).GetAwaiter().GetResult();
+                    foreach (var i in items) Console.WriteLine($"  {i.StateLabel,-10} {i.Title}  {i.Detail}");
+                    return ok ? 0 : 1;
+                }
+                if (HasArg("--update-catalog"))
+                {
+                    CatalogService.Instance.UpdateAsync(ConfigStore.Current.CatalogUrl, null, CancellationToken.None, force: HasArg("--force")).GetAwaiter().GetResult();
+                    Console.WriteLine(T("Log_CatalogUpdated", CatalogService.Instance.Apps.Count));
+                    return 0;
+                }
+
+                string input = Arg("--build");
+                if (string.IsNullOrWhiteSpace(input) || !File.Exists(input)) { Console.WriteLine(T("Cli_BuildUsage")); return 2; }
                 PackageSettings s;
-                if (input.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) s = Json.Load<PackageSettings>(input);
+                if (input.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) s = PackageBuilder.LoadProject(input);
                 else
                 {
                     s = ConfigStore.Current.NewPackage();
@@ -88,15 +161,12 @@ namespace J365.IntunePSApp
                 if (!string.IsNullOrWhiteSpace(outDir)) s.OutputRoot = outDir;
                 var r = PackageBuilder.BuildAsync(s, HasArg("--native"), CancellationToken.None).GetAwaiter().GetResult();
                 Console.WriteLine();
-                Console.WriteLine("Pacote:     " + r.PackageFolder);
-                Console.WriteLine("intunewin:  " + r.IntuneWinFile);
-                Console.WriteLine("Deteccao:   " + r.DetectionScript);
-                Console.WriteLine("Instalacao: " + r.InstallCommand);
+                Console.WriteLine(T("Cli_Result", r.PackageFolder, r.IntuneWinFile, r.DetectionScript, r.InstallCommand, r.UninstallCommand));
                 return 0;
             }
             catch (Exception ex)
             {
-                Console.WriteLine("ERRO: " + ex.Message);
+                Console.WriteLine(T("Cli_Error", ex.Message));
                 return 1;
             }
         }

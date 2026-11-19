@@ -11,15 +11,20 @@
     <RootNamespace>J365.IntunePSApp</RootNamespace>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>1.0.0</Version>
+    <Version>2.0.0</Version>
+    <Authors>Sérgio Sant'Ana Junior</Authors>
     <Company>Jornada 365</Company>
     <Product>J365 IntunePSApp</Product>
-    <Description>Empacotador de aplicativos para o Microsoft Intune com PSAppDeployToolkit</Description>
-    <Copyright>Copyright (c) 2026 Jornada 365 - Licença MIT</Copyright>
+    <Description>Application packaging for Microsoft Intune, built on PSAppDeployToolkit</Description>
+    <Copyright>Copyright (c) 2026 Sérgio Sant'Ana Junior - Jornada 365 - MIT License</Copyright>
+    <PackageProjectUrl>https://github.com/sesantanajr/J365-IntunePSApp</PackageProjectUrl>
+    <NeutralLanguage>en</NeutralLanguage>
     <NoWarn>$(NoWarn);WPF0001;CA1416;SYSLIB0057</NoWarn>
-    <SatelliteResourceLanguages>pt-BR;en</SatelliteResourceLanguages>
+    <SatelliteResourceLanguages>en;pt-BR</SatelliteResourceLanguages>
     <DebugType>embedded</DebugType>
-    <!-- Publicacao portatil: dotnet publish -c Release -r win-x64 -->
+    <!-- Stack traces show repository-relative paths instead of the folder (and user name) of whoever built the binary. -->
+    <PathMap>$(MSBuildProjectDirectory)=src/IntunePSApp</PathMap>
+    <!-- Portable build: dotnet publish src/IntunePSApp -c Release -r win-x64 -->
     <SelfContained>false</SelfContained>
   </PropertyGroup>
 
@@ -34,7 +39,19 @@
   <ItemGroup>
     <Resource Include="Assets\*.png" />
     <Resource Include="Assets\app.ico" />
+    <!-- Interface texts: one flat JSON file per language (see docs/ARCHITECTURE.md > Localization).
+         WithCulture=false keeps them in the main assembly: ".en." / ".pt-BR." would otherwise send them to satellite assemblies. -->
+    <EmbeddedResource Include="Resources\Strings.en.json" LogicalName="Strings.en.json" WithCulture="false" />
+    <EmbeddedResource Include="Resources\Strings.pt-BR.json" LogicalName="Strings.pt-BR.json" WithCulture="false" />
+    <!-- Scripts copied to every generated package. -->
+    <EmbeddedResource Include="Resources\Publish-ToIntune.ps1" LogicalName="Publish-ToIntune.ps1" />
+    <EmbeddedResource Include="Resources\Sandbox-Test.ps1" LogicalName="Sandbox-Test.ps1" />
+    <!-- Curated knowledge shipped inside the executable (the online database carries a newer copy). -->
     <EmbeddedResource Include="..\..\catalog\curated.json" LogicalName="curated.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="IntunePSApp.Tests" />
   </ItemGroup>
 
 </Project>

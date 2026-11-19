@@ -7,15 +7,19 @@ using System.Reflection;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using static J365.IntunePSApp.Localization.Loc;
 
 namespace J365.IntunePSApp.Core
 {
     /// <summary>
-    /// Banco de dados de aplicativos: gerado diariamente a partir do repositorio publico microsoft/winget-pkgs
-    /// (GitHub Actions deste projeto) e enriquecido com a curadoria (catalog/curated.json).
+    /// Application database: generated daily from the public microsoft/winget-pkgs repository by this project's
+    /// GitHub Actions workflow and enriched with the curated knowledge in catalog/curated.json.
     /// </summary>
     public class CatalogService
     {
+        private const string CatalogFileName = "catalog.json.gz";
+        private const string MetaFileName = "catalog-meta.json";
+
         public static CatalogService Instance { get; } = new CatalogService();
 
         private Dictionary<string, (CatalogApp App, CatalogInstaller Inst)> _byHash = new(StringComparer.OrdinalIgnoreCase);
@@ -27,44 +31,79 @@ namespace J365.IntunePSApp.Core
         public DateTime? Generated { get; private set; }
         public string Commit { get; private set; }
         public bool IsLoaded => Apps.Count > 0;
-        public string CachePath => Path.Combine(AppPaths.CatalogDir, "catalog.json.gz");
+        public string CachePath => Path.Combine(AppPaths.CatalogDir, CatalogFileName);
         public event Action Changed;
 
         public async Task LoadAsync()
         {
             LoadCurated();
-            if (!File.Exists(CachePath)) { Changed?.Invoke(); return; }
-            try { await Task.Run(() => LoadFile(CachePath)); }
-            catch (Exception ex) { Log.Warn($"Banco de dados local inválido: {ex.Message}. Atualize o catálogo."); }
+            if (File.Exists(CachePath))
+            {
+                try { await Task.Run(() => LoadFile(CachePath)); }
+                catch (Exception ex) { Log.Warn(T("Log_CatalogInvalid", ex.Message)); }
+            }
             Changed?.Invoke();
         }
 
-        public bool NeedsUpdate(AppConfig cfg)
+        public bool NeedsUpdateCheck(AppConfig cfg)
         {
             if (!File.Exists(CachePath)) return true;
             var last = cfg.LastCatalogCheck ?? File.GetLastWriteTime(CachePath);
             return (DateTime.Now - last).TotalDays >= Math.Max(1, cfg.CatalogUpdateDays);
         }
 
-        /// <summary>Baixa a versao mais recente do banco de dados.</summary>
-        public async Task UpdateAsync(string url, IProgress<(long, long?)> progress, CancellationToken ct)
+        /// <summary>
+        /// Downloads the latest database. Unless forced, the tiny metadata file is checked first so the 3.5 MB
+        /// catalog is only downloaded when it really changed. Returns true when new data was installed.
+        /// </summary>
+        public async Task<bool> UpdateAsync(string url, IProgress<(long, long?)> progress, CancellationToken ct, bool force = false)
         {
+            if (!force && IsLoaded && Generated.HasValue)
+            {
+                var remote = await RemoteGeneratedAsync(url, ct);
+                if (remote.HasValue && remote.Value <= Generated.Value.ToUniversalTime().AddMinutes(1))
+                {
+                    MarkChecked();
+                    Log.Info(T("Log_CatalogUpToDate"));
+                    return false;
+                }
+            }
             string tmp = Path.Combine(AppPaths.CatalogDir, "catalog.download.gz");
-            Log.Step("Baixando o banco de dados de aplicativos...");
+            Log.Step(T("Log_CatalogDownloading"));
             await Http.DownloadAsync(url, tmp, progress, ct);
-            await Task.Run(() => LoadFile(tmp), ct); // valida antes de substituir
+            await Task.Run(() => LoadFile(tmp), ct); // validates before replacing the local copy
             File.Move(tmp, CachePath, true);
-            ConfigStore.Current.LastCatalogCheck = DateTime.Now;
-            ConfigStore.Save();
-            Log.Ok($"Banco de dados atualizado: {Apps.Count:N0} aplicativos.");
+            MarkChecked();
+            Log.Ok(T("Log_CatalogUpdated", Apps.Count));
             Changed?.Invoke();
+            return true;
         }
 
-        /// <summary>Importa um catalog.json.gz baixado manualmente (uso offline).</summary>
+        private static void MarkChecked()
+        {
+            ConfigStore.Current.LastCatalogCheck = DateTime.Now;
+            ConfigStore.Save();
+        }
+
+        private static async Task<DateTime?> RemoteGeneratedAsync(string url, CancellationToken ct)
+        {
+            if (string.IsNullOrEmpty(url) || !url.EndsWith(CatalogFileName, StringComparison.OrdinalIgnoreCase)) return null;
+            string json = await Http.TryGetStringAsync(url[..^CatalogFileName.Length] + MetaFileName, 20, ct);
+            if (json == null) return null;
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                return doc.RootElement.GetProperty("generated").GetDateTime().ToUniversalTime();
+            }
+            catch { return null; }
+        }
+
+        /// <summary>Imports a manually downloaded catalog.json.gz (offline use).</summary>
         public async Task ImportAsync(string file)
         {
             await Task.Run(() => LoadFile(file));
             File.Copy(file, CachePath, true);
+            MarkChecked();
             Changed?.Invoke();
         }
 
@@ -76,29 +115,46 @@ namespace J365.IntunePSApp.Core
             {
                 data = JsonSerializer.Deserialize<CatalogFile>(gz, Json.Catalog);
             }
-            if (data?.Apps == null || data.Apps.Count == 0) throw new InvalidDataException("Arquivo de catálogo vazio.");
+            if (data?.Apps == null || data.Apps.Count == 0) throw new InvalidDataException(T("Err_CatalogEmpty"));
             var byHash = new Dictionary<string, (CatalogApp, CatalogInstaller)>(StringComparer.OrdinalIgnoreCase);
             var byCode = new Dictionary<string, (CatalogApp, CatalogInstaller)>(StringComparer.OrdinalIgnoreCase);
             var byId = new Dictionary<string, CatalogApp>(StringComparer.OrdinalIgnoreCase);
+            var apps = new List<CatalogApp>(data.Apps.Count);
             foreach (var a in data.Apps)
             {
                 if (string.IsNullOrEmpty(a.Id)) continue;
+                a.Name ??= a.Id;
                 a.Installers ??= new List<CatalogInstaller>();
-                if (a.Extra == null && _curated.TryGetValue(a.Id, out var cur)) a.Extra = cur;
-                a.NameLower = (a.Name ?? "").ToLowerInvariant();
+                if (_curated.TryGetValue(a.Id, out var cur)) a.Extra = Merge(a.Extra, cur);
+                a.NameLower = a.Name.ToLowerInvariant();
                 a.SearchText = string.Join(" ", new[] { a.Name, a.Id, a.Publisher, a.Moniker, a.Tags == null ? null : string.Join(" ", a.Tags) }.Where(s => !string.IsNullOrEmpty(s))).ToLowerInvariant();
                 byId[a.Id] = a;
+                apps.Add(a);
                 foreach (var i in a.Installers)
                 {
                     if (!string.IsNullOrEmpty(i.Sha256)) byHash[i.Sha256] = (a, i);
-                    if (!string.IsNullOrEmpty(i.ProductCode) && i.ProductCode.StartsWith("{")) byCode[i.ProductCode] = (a, i);
-                    if (i.Arp != null) foreach (var e in i.Arp) if (!string.IsNullOrEmpty(e.ProductCode) && e.ProductCode.StartsWith("{")) byCode[e.ProductCode] = (a, i);
+                    if (IsGuid(i.ProductCode)) byCode[i.ProductCode] = (a, i);
+                    if (i.Arp != null) foreach (var e in i.Arp) if (IsGuid(e.ProductCode)) byCode[e.ProductCode] = (a, i);
                 }
             }
-            Apps = data.Apps.Where(a => !string.IsNullOrEmpty(a.Id)).ToList();
+            Apps = apps;
             _byHash = byHash; _byCode = byCode; _byId = byId;
             Generated = data.Generated;
             Commit = data.Commit;
+        }
+
+        private static bool IsGuid(string s) => !string.IsNullOrEmpty(s) && s.StartsWith("{");
+
+        /// <summary>The downloaded catalog wins; the curation embedded in the app fills whatever is missing.</summary>
+        private static CuratedEntry Merge(CuratedEntry fromCatalog, CuratedEntry embedded)
+        {
+            if (fromCatalog == null) return embedded;
+            fromCatalog.NotesEn ??= embedded.NotesEn;
+            fromCatalog.Notes ??= embedded.Notes;
+            fromCatalog.Processes ??= embedded.Processes;
+            fromCatalog.NamePattern ??= embedded.NamePattern;
+            fromCatalog.UninstallArgs ??= embedded.UninstallArgs;
+            return fromCatalog;
         }
 
         private void LoadCurated()
@@ -110,14 +166,38 @@ namespace J365.IntunePSApp.Core
                 var f = JsonSerializer.Deserialize<CuratedFile>(s, Json.Options);
                 if (f?.Apps != null) _curated = new Dictionary<string, CuratedEntry>(f.Apps, StringComparer.OrdinalIgnoreCase);
             }
-            catch (Exception ex) { Log.Warn($"Curadoria embutida inválida: {ex.Message}"); }
+            catch (Exception ex) { Log.Warn(T("Log_CuratedInvalid", ex.Message)); }
         }
 
-        public CatalogApp ById(string id) => id != null && _byId.TryGetValue(id, out var a) ? a : null;
+        public CatalogApp ById(string id) => !string.IsNullOrEmpty(id) && _byId.TryGetValue(id, out var a) ? a : null;
 
         public (CatalogApp App, CatalogInstaller Inst) FindByHash(string sha) => sha != null && _byHash.TryGetValue(sha, out var r) ? r : (null, null);
 
         public (CatalogApp App, CatalogInstaller Inst) FindByProductCode(string pc) => pc != null && _byCode.TryGetValue(pc, out var r) ? r : (null, null);
+
+        /// <summary>
+        /// Dependencies declared by the winget manifest for one installer (the ones common to every installer plus
+        /// its own, for example the x64 runtime), resolved against the catalog when possible.
+        /// </summary>
+        public List<DependencyInfo> DependenciesOf(CatalogApp app, CatalogInstaller installer)
+        {
+            var list = new List<DependencyInfo>();
+            if (app == null) return list;
+            var ids = (app.Dependencies ?? new List<string>()).Concat(installer?.Dependencies ?? new List<string>());
+            foreach (var id in ids.Distinct(StringComparer.OrdinalIgnoreCase))
+                list.Add(new DependencyInfo { Id = id, App = ById(id) });
+            return list;
+        }
+
+        /// <summary>Dependencies of the installer that best matches a package (architecture and MSI/EXE).</summary>
+        public List<DependencyInfo> DependenciesOf(string appId, string arch, string installerType)
+        {
+            var app = ById(appId);
+            if (app == null) return new List<DependencyInfo>();
+            bool? preferMsi = installerType == "MSI" ? true : installerType == "EXE" ? false : (bool?)null;
+            var installer = PickInstaller(app, string.IsNullOrEmpty(arch) ? ConfigStore.Current.PreferredArch : arch, ConfigStore.Current.PreferredLocale, preferMsi);
+            return DependenciesOf(app, installer);
+        }
 
         public List<CatalogApp> Search(string query, bool supportedOnly, int max = 400)
         {
@@ -125,9 +205,7 @@ namespace J365.IntunePSApp.Core
             if (supportedOnly) src = src.Where(a => a.IsSupported);
             var q = (query ?? "").Trim().ToLowerInvariant();
             if (q.Length == 0)
-            {
                 return src.Where(a => a.HasCuration).OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase).Take(max).ToList();
-            }
             var tokens = q.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             return src.Where(a => tokens.All(t => a.SearchText.Contains(t)))
                 .Select(a => (App: a, Score: Score(a, q)))
@@ -142,7 +220,7 @@ namespace J365.IntunePSApp.Core
             else if (a.NameLower.StartsWith(q)) s = 1;
             else if (a.Id.Equals(q, StringComparison.OrdinalIgnoreCase)) s = 1;
             else if (a.NameLower.Contains(q)) s = 2;
-            else if (a.Id.ToLowerInvariant().Contains(q)) s = 3;
+            else if (a.Id.Contains(q, StringComparison.OrdinalIgnoreCase)) s = 3;
             else s = 4;
             if (!a.HasCuration) s += 1;
             return s;
@@ -152,27 +230,30 @@ namespace J365.IntunePSApp.Core
         {
             var n = Names.CleanAppName(name ?? "").ToLowerInvariant();
             if (n.Length < 2) return new List<CatalogApp>();
-            var pub = (publisher ?? "").ToLowerInvariant();
+            string pub = (publisher ?? "").ToLowerInvariant().Split(' ').FirstOrDefault() ?? "";
             return Apps.Where(a => a.NameLower == n || a.NameLower.StartsWith(n + " ") || a.NameLower.StartsWith(n + " ("))
                 .OrderBy(a => a.NameLower == n ? 0 : 1)
-                .ThenBy(a => pub.Length > 0 && (a.Publisher ?? "").ToLowerInvariant().Contains(pub.Split(' ')[0]) ? 0 : 1)
+                .ThenBy(a => pub.Length > 0 && (a.Publisher ?? "").Contains(pub, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
                 .ThenBy(a => a.HasCuration ? 0 : 1)
                 .Take(max).ToList();
         }
 
-        /// <summary>Escolhe o melhor instalador: arquitetura preferida, escopo maquina, MSI quando houver, idioma preferido.</summary>
-        public static CatalogInstaller PickInstaller(CatalogApp app, string prefArch = "x64", string prefLocale = "pt-BR")
+        /// <summary>Best installer for Intune: preferred architecture, machine scope, MSI when available, preferred language.</summary>
+        public static CatalogInstaller PickInstaller(CatalogApp app, string prefArch = "x64", string prefLocale = "pt-BR", bool? preferMsi = null)
         {
             var list = (app?.Installers ?? new List<CatalogInstaller>()).Where(i => i.IsSupported).ToList();
             if (list.Count == 0) return null;
+            prefArch = string.IsNullOrEmpty(prefArch) ? "x64" : prefArch;
+            prefLocale = string.IsNullOrEmpty(prefLocale) ? "en-US" : prefLocale;
+            string lang = prefLocale.Split('-')[0];
             int ArchRank(CatalogInstaller i) => string.Equals(i.Arch, prefArch, StringComparison.OrdinalIgnoreCase) ? 0 : i.Arch == "neutral" || string.IsNullOrEmpty(i.Arch) ? 1 : i.Arch == "x86" ? 2 : 3;
             int ScopeRank(CatalogInstaller i) => i.Scope == "machine" ? 0 : string.IsNullOrEmpty(i.Scope) ? 1 : 2;
-            int LocRank(CatalogInstaller i) => string.Equals(i.Locale, prefLocale, StringComparison.OrdinalIgnoreCase) ? 0 : (i.Locale ?? "").StartsWith(prefLocale.Split('-')[0], StringComparison.OrdinalIgnoreCase) ? 1 : string.IsNullOrEmpty(i.Locale) ? 2 : string.Equals(i.Locale, "en-US", StringComparison.OrdinalIgnoreCase) ? 3 : 4;
-            int TypeRank(CatalogInstaller i) => i.IsMsi ? 0 : 1;
+            int LocRank(CatalogInstaller i) => string.Equals(i.Locale, prefLocale, StringComparison.OrdinalIgnoreCase) ? 0 : (i.Locale ?? "").StartsWith(lang, StringComparison.OrdinalIgnoreCase) ? 1 : string.IsNullOrEmpty(i.Locale) ? 2 : string.Equals(i.Locale, "en-US", StringComparison.OrdinalIgnoreCase) ? 3 : 4;
+            int TypeRank(CatalogInstaller i) => preferMsi == false ? (i.IsMsi ? 1 : 0) : (i.IsMsi ? 0 : 1);
             return list.OrderBy(ArchRank).ThenBy(ScopeRank).ThenBy(TypeRank).ThenBy(LocRank).First();
         }
 
-        /// <summary>Parametros silenciosos para um instalador do catalogo (padroes do winget quando nao informados).</summary>
+        /// <summary>Silent switches for a catalog installer (winget defaults when the manifest does not state them).</summary>
         public static string SilentArgsFor(CatalogInstaller i)
         {
             if (i == null) return "";
@@ -204,55 +285,85 @@ namespace J365.IntunePSApp.Core
             "inno" => "Inno Setup",
             "nullsoft" => "NSIS",
             "burn" => "WiX Burn",
-            "wix" => "Windows Installer (WiX)",
-            "msi" => "Windows Installer (MSI)",
+            "wix" => "MSI",
+            "msi" => "MSI",
             _ => null
         };
 
-        /// <summary>Aplica as informacoes do catalogo a uma analise de instalador.</summary>
+        /// <summary>Applies catalog knowledge to an installer analysis.</summary>
         public static void Apply(InstallerInfo info, CatalogApp app, CatalogInstaller inst, string match)
         {
             if (app == null) return;
             info.CatalogId = app.Id;
             info.CatalogMatch = match;
+            info.CatalogVersion = info.IsCatalogExact ? app.Version : null;
             info.AppName = Names.CleanAppName(app.Name);
             if (!string.IsNullOrEmpty(app.Publisher)) info.AppVendor = app.Publisher;
-            if (match == "hash" || match == "productcode" || match == "download")
-            {
-                if (!string.IsNullOrEmpty(app.Version)) info.AppVersion = info.Type == "MSI" && !string.IsNullOrEmpty(info.AppVersion) ? info.AppVersion : app.Version;
-            }
-            info.Description = app.Description;
+            // MSI packages keep their own ProductVersion, unless the database has the same version written in full
+            // ("2.8.0" instead of the trimmed "2.8").
+            if (info.IsCatalogExact && !string.IsNullOrEmpty(app.Version)
+                && (info.Type != "MSI" || string.IsNullOrEmpty(info.AppVersion) || VersionUtil.Compare(app.Version, info.AppVersion) == 0))
+                info.AppVersion = app.Version;
+            info.Description = app.LocalizedDescription;
             info.Homepage = app.Homepage;
+
             string arpName = null, arpVersion = null;
             if (inst != null)
             {
-                if (info.Type == "EXE") info.InstallArgs = SilentArgsFor(inst);
-                else info.InstallArgs = (inst.Custom ?? "").Trim();
+                info.InstallArgs = SilentArgsFor(inst);
                 var ua = UninstallArgsFor(inst);
                 if (!string.IsNullOrEmpty(ua)) info.UninstallExeArgs = ua;
-                var tech = TechnologyFor(inst);
-                if (info.Type == "EXE") info.Technology = tech ?? (info.Technology == "Desconhecido" ? "Instalador do fabricante" : info.Technology);
+                if (info.Type == "EXE") info.Technology = TechnologyFor(inst) ?? (info.Technology == InstallerAnalyzer.TechUnknown ? InstallerAnalyzer.TechVendor : info.Technology);
                 if (inst.Scope == "user") info.InstallBehavior = "User";
-                if (!string.IsNullOrEmpty(inst.Arch) && inst.Arch != "neutral") info.AppArch = inst.Arch == "x86" ? "x86" : inst.Arch;
-                var arp = inst.Arp?.FirstOrDefault(e => !string.IsNullOrEmpty(e.DisplayName));
-                arpName = arp?.DisplayName;
+                if (!string.IsNullOrEmpty(inst.Arch) && inst.Arch != "neutral") info.AppArch = inst.Arch;
+                arpName = inst.Arp?.FirstOrDefault(e => !string.IsNullOrEmpty(e.DisplayName))?.DisplayName;
                 arpVersion = inst.Arp?.FirstOrDefault(e => !string.IsNullOrEmpty(e.DisplayVersion))?.DisplayVersion;
             }
             info.UninstallPattern = Names.NamePattern(arpName ?? (string.IsNullOrEmpty(info.MsiProductName) ? app.Name : info.MsiProductName));
             info.DetectionVersion = arpVersion ?? info.AppVersion;
 
             var x = app.Extra;
-            if (x != null)
+            if (x == null) return;
+            if (x.Processes != null && x.Processes.Count > 0) info.Processes = new List<string>(x.Processes);
+            if (!string.IsNullOrEmpty(x.NamePattern)) info.UninstallPattern = x.NamePattern;
+            if (!string.IsNullOrEmpty(x.UninstallArgs)) info.UninstallExeArgs = x.UninstallArgs;
+            if (!string.IsNullOrEmpty(x.InstallArgs) && info.Type == "EXE") info.InstallArgs = x.InstallArgs;
+            if (!string.IsNullOrEmpty(x.DetectionFile)) { info.DetectionMethod = "File"; info.DetectionFilePath = x.DetectionFile; }
+            if (x.CheckVersion.HasValue) info.DetectionCheckVersion = x.CheckVersion.Value;
+            if (x.RemovePrevious.HasValue) info.RemovePrevious = x.RemovePrevious.Value;
+            if (!string.IsNullOrEmpty(x.LocalizedNotes)) info.Notes.Add(x.LocalizedNotes);
+        }
+
+        // ------------------------------------------------------------------ downloads
+
+        /// <summary>Folder + file name where an installer of the database is stored locally.</summary>
+        public static string LocalInstallerPath(CatalogApp app, CatalogInstaller inst)
+        {
+            string ext = inst.IsMsi ? ".msi" : ".exe";
+            string name = "";
+            try { name = Uri.UnescapeDataString(Path.GetFileName(new Uri(inst.Url).AbsolutePath)); } catch { }
+            name = string.Concat((name ?? "").Where(c => !Path.GetInvalidFileNameChars().Contains(c)));
+            if (string.IsNullOrWhiteSpace(name) || name.Length < 5 || !name.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
+                name = $"{Names.Safe(app.Name)}_{Names.Safe(app.Version)}_{inst.Arch}{ext}";
+            return Path.Combine(AppPaths.Downloads, Names.Safe(app.Id), Names.Safe(app.Version ?? "latest"), name);
+        }
+
+        /// <summary>
+        /// Downloads an installer from the vendor URL recorded in the database and verifies its SHA256.
+        /// A file already downloaded and still matching the hash is reused.
+        /// </summary>
+        public static async Task<string> DownloadInstallerAsync(CatalogApp app, CatalogInstaller inst, IProgress<(long, long?)> progress, CancellationToken ct)
+        {
+            string dest = LocalInstallerPath(app, inst);
+            bool cached = File.Exists(dest) && !string.IsNullOrEmpty(inst.Sha256)
+                && (await Task.Run(() => Hashing.Sha256File(dest), ct)).Equals(inst.Sha256, StringComparison.OrdinalIgnoreCase);
+            if (!cached)
             {
-                if (x.Processes != null && x.Processes.Count > 0) info.Processes = new List<string>(x.Processes);
-                if (!string.IsNullOrEmpty(x.NamePattern)) info.UninstallPattern = x.NamePattern;
-                if (!string.IsNullOrEmpty(x.UninstallArgs)) info.UninstallExeArgs = x.UninstallArgs;
-                if (!string.IsNullOrEmpty(x.InstallArgs) && info.Type == "EXE") info.InstallArgs = x.InstallArgs;
-                if (!string.IsNullOrEmpty(x.DetectionFile)) { info.DetectionMethod = "File"; info.DetectionFilePath = x.DetectionFile; }
-                if (x.CheckVersion.HasValue) info.DetectionCheckVersion = x.CheckVersion.Value;
-                if (x.RemovePrevious.HasValue) info.RemovePrevious = x.RemovePrevious.Value;
-                if (!string.IsNullOrEmpty(x.Notes)) info.Notes.Add(x.Notes);
+                Log.Step(T("Log_Downloading", inst.Url));
+                await Http.DownloadAsync(inst.Url, dest, progress, ct, inst.Sha256);
+                Log.Ok(T("Log_DownloadVerified", Path.GetFileName(dest)));
             }
+            return dest;
         }
     }
 }

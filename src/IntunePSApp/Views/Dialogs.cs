@@ -1,36 +1,153 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using J365.IntunePSApp.Core;
+using static J365.IntunePSApp.Localization.Loc;
 
 namespace J365.IntunePSApp.Views
 {
-    /// <summary>Base visual das janelas de dialogo (tema e fontes do aplicativo).</summary>
+    public enum MessageKind { Info, Warning, Error, Question }
+
+    /// <summary>Message boxes in the application's own style and language (the Windows ones follow the OS language).</summary>
+    public static class Ui
+    {
+        private static Window Owner
+        {
+            get
+            {
+                var w = Application.Current?.MainWindow;
+                return w != null && w.IsLoaded && w.IsVisible && w.Left > -10000 ? w : null;
+            }
+        }
+
+        public static void Info(string text) => Show(text, MessageKind.Info);
+        public static void Warn(string text) => Show(text, MessageKind.Warning);
+        public static void Error(string text) => Show(text, MessageKind.Error);
+
+        /// <summary>Yes/No question. Returns true when the primary button was chosen.</summary>
+        public static bool Confirm(string text, string yes = null, string no = null, bool danger = false)
+            => Show(text, danger ? MessageKind.Warning : MessageKind.Question, yes ?? T("Common_Yes"), no ?? T("Common_No"));
+
+        private static bool Show(string text, MessageKind kind, string primary = null, string secondary = null)
+        {
+            var d = new MessageDialog(text, kind, primary ?? T("Common_Ok"), secondary);
+            SetOwner(d);
+            return d.ShowDialog() == true;
+        }
+
+        public static void SetOwner(Window dialog)
+        {
+            var owner = Owner;
+            if (owner != null && owner != dialog) dialog.Owner = owner;
+            else { dialog.WindowStartupLocation = WindowStartupLocation.CenterScreen; dialog.ShowInTaskbar = true; }
+        }
+
+        public static Brush Brush(string key) => (Brush)Application.Current.FindResource(key);
+        public static Brush Hex(string color) => (Brush)new BrushConverter().ConvertFromString(color);
+        public static FontFamily Font(string key) => (FontFamily)Application.Current.FindResource(key);
+        public static Style Style(string key) => (Style)Application.Current.FindResource(key);
+
+        public static void CopyText(string text)
+        {
+            try { Clipboard.SetText(text ?? ""); } catch { }
+        }
+
+        public static void OpenPath(string path)
+        {
+            try { if (!string.IsNullOrEmpty(path)) Process.Start(new ProcessStartInfo(path) { UseShellExecute = true }); } catch { }
+        }
+
+        /// <summary>Opens Explorer with the file selected.</summary>
+        public static void RevealFile(string file)
+        {
+            try { if (File.Exists(file)) Process.Start("explorer.exe", $"/select,\"{file}\""); } catch { }
+        }
+    }
+
+    /// <summary>Shows only the file or folder name of a full path (the full path stays available for tooltips).</summary>
+    public sealed class PathNameConverter : System.Windows.Data.IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+            => value is string s ? Path.GetFileName(s.TrimEnd('\\')) : value;
+
+        public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture) => throw new NotSupportedException();
+    }
+
+    /// <summary>Common look of the dialog windows (application theme and fonts).</summary>
     public class DialogWindow : Window
     {
         public DialogWindow()
         {
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
-            Background = (Brush)Application.Current.FindResource("PageBg");
-            FontFamily = (FontFamily)Application.Current.FindResource("UiFont");
+            Background = Ui.Brush("PageBg");
+            FontFamily = Ui.Font("UiFont");
             FontSize = 13.5;
             UseLayoutRounding = true;
             ShowInTaskbar = false;
             ResizeMode = ResizeMode.CanResize;
+            TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
             try { Icon = new System.Windows.Media.Imaging.BitmapImage(new Uri("pack://application:,,,/Assets/app.ico")); } catch { }
         }
 
-        protected Style S(string key) => (Style)Application.Current.FindResource(key);
+        protected Style S(string key) => Ui.Style(key);
 
         protected Button MakeButton(string text, string style, RoutedEventHandler click, double left = 8)
         {
             var b = new Button { Content = text, Style = S(style), Margin = new Thickness(left, 0, 0, 0), MinWidth = 96 };
             b.Click += click;
             return b;
+        }
+
+        protected TextBlock Label(string text) => new TextBlock { Text = text, Style = S("Label") };
+        protected TextBlock Hint(string text) => new TextBlock { Text = text, Style = S("Hint") };
+    }
+
+    public class MessageDialog : DialogWindow
+    {
+        public MessageDialog(string text, MessageKind kind, string primary, string secondary)
+        {
+            Title = AppInfo.Name;
+            Width = 500;
+            SizeToContent = SizeToContent.Height;
+            MaxHeight = 680;
+            ResizeMode = ResizeMode.NoResize;
+
+            var (glyph, color, soft) = kind switch
+            {
+                MessageKind.Warning => ("", "#B45309", "#FEF4E2"),
+                MessageKind.Error => ("", "#DC2626", "#FDECEC"),
+                MessageKind.Question => ("", "#0A5CA8", "#E8F1FB"),
+                _ => ("", "#0A5CA8", "#E8F1FB")
+            };
+
+            var root = new DockPanel { Margin = new Thickness(24, 22, 24, 20) };
+            var bar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 22, 0, 0) };
+            DockPanel.SetDock(bar, Dock.Bottom);
+            if (!string.IsNullOrEmpty(secondary)) bar.Children.Add(MakeButton(secondary, "SecondaryButton", (s, e) => DialogResult = false));
+            var ok = MakeButton(primary, "PrimaryButton", (s, e) => DialogResult = true);
+            ok.IsDefault = true;
+            bar.Children.Add(ok);
+            root.Children.Add(bar);
+
+            var icon = new Border { Width = 44, Height = 44, CornerRadius = new CornerRadius(22), Background = Ui.Hex(soft), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 0, 16, 0) };
+            icon.Child = new TextBlock { Text = glyph, FontFamily = Ui.Font("IconFont"), FontSize = 20, Foreground = Ui.Hex(color), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            DockPanel.SetDock(icon, Dock.Left);
+            root.Children.Add(icon);
+
+            var body = new TextBox
+            {
+                Text = text ?? "", IsReadOnly = true, BorderThickness = new Thickness(0), Background = Brushes.Transparent, TextWrapping = TextWrapping.Wrap,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Foreground = Ui.Brush("Ink"), Padding = new Thickness(0), MinHeight = 44,
+                VerticalContentAlignment = VerticalAlignment.Center, FocusVisualStyle = null, IsTabStop = false
+            };
+            root.Children.Add(body);
+            Content = root;
+            PreviewKeyDown += (s, e) => { if (e.Key == System.Windows.Input.Key.Escape) DialogResult = false; };
         }
     }
 
@@ -43,11 +160,11 @@ namespace J365.IntunePSApp.Views
             var dock = new DockPanel { Margin = new Thickness(18) };
             var bar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0) };
             DockPanel.SetDock(bar, Dock.Bottom);
-            bar.Children.Add(MakeButton("Copiar tudo", "SecondaryButton", (s, e) => { try { Clipboard.SetText(text); } catch { } }));
-            bar.Children.Add(MakeButton("Fechar", "PrimaryButton", (s, e) => Close()));
+            bar.Children.Add(MakeButton(T("Dlg_CopyAll"), "SecondaryButton", (s, e) => Ui.CopyText(text)));
+            bar.Children.Add(MakeButton(T("Common_Close"), "PrimaryButton", (s, e) => Close()));
             var tb = new TextBox
             {
-                Text = text, IsReadOnly = true, FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"), FontSize = 12.5,
+                Text = text, IsReadOnly = true, FontFamily = Ui.Font("MonoFont"), FontSize = 12.5,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
                 TextWrapping = TextWrapping.NoWrap, AcceptsReturn = true, VerticalContentAlignment = VerticalAlignment.Top, Padding = new Thickness(10)
             };
@@ -64,17 +181,17 @@ namespace J365.IntunePSApp.Views
 
         public ProcessPickerWindow()
         {
-            Title = "Escolher aplicativos em execução";
+            Title = T("Proc_Title");
             Width = 600; Height = 640;
             var dock = new DockPanel { Margin = new Thickness(20) };
             var head = new StackPanel();
             DockPanel.SetDock(head, Dock.Top);
-            head.Children.Add(new TextBlock { Text = "Aplicativos em execução", Style = (Style)Application.Current.FindResource("H2") });
-            head.Children.Add(new TextBlock { Text = "Abra o aplicativo que será instalado, depois clique nos itens para marcar e confirme.", Style = (Style)Application.Current.FindResource("MutedText"), Margin = new Thickness(0, 4, 0, 12) });
+            head.Children.Add(new TextBlock { Text = T("Proc_Heading"), Style = S("H2") });
+            head.Children.Add(new TextBlock { Text = T("Proc_Hint"), Style = S("MutedText"), Margin = new Thickness(0, 4, 0, 12) });
             var bar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0) };
             DockPanel.SetDock(bar, Dock.Bottom);
-            bar.Children.Add(MakeButton("Cancelar", "SecondaryButton", (s, e) => { DialogResult = false; }));
-            bar.Children.Add(MakeButton("Adicionar selecionados", "PrimaryButton", (s, e) =>
+            bar.Children.Add(MakeButton(T("Common_Cancel"), "SecondaryButton", (s, e) => { DialogResult = false; }));
+            bar.Children.Add(MakeButton(T("Proc_AddSelected"), "PrimaryButton", (s, e) =>
             {
                 Selected.AddRange(_list.SelectedItems.Cast<ListBoxItem>().Select(i => (string)i.Tag));
                 DialogResult = true;
@@ -89,7 +206,7 @@ namespace J365.IntunePSApp.Views
             {
                 var sp = new StackPanel { Orientation = Orientation.Horizontal };
                 sp.Children.Add(new TextBlock { Text = p.Name, FontWeight = FontWeights.SemiBold, Width = 200 });
-                sp.Children.Add(new TextBlock { Text = p.Title, Foreground = (Brush)Application.Current.FindResource("Muted"), TextTrimming = TextTrimming.CharacterEllipsis, Width = 300 });
+                sp.Children.Add(new TextBlock { Text = p.Title, Foreground = Ui.Brush("Muted"), TextTrimming = TextTrimming.CharacterEllipsis, Width = 300 });
                 _list.Items.Add(new ListBoxItem { Content = sp, Tag = p.Name });
             }
             dock.Children.Add(head);
@@ -99,9 +216,12 @@ namespace J365.IntunePSApp.Views
         }
     }
 
-    /// <summary>Adicionar/editar uma acao sem script.</summary>
+    /// <summary>Adds or edits a ready-made action (no scripting).</summary>
     public class ActionEditorWindow : DialogWindow
     {
+        /// <summary>Fields whose value is the name of an extra file of the package.</summary>
+        private static readonly HashSet<string> PackageFileFields = new HashSet<string> { "InstallDependency.Source", "CopyFile.Source", "CopyToUserProfiles.Source", "ImportRegFile.Source" };
+
         private readonly ListBox _types;
         private readonly StackPanel _form;
         private readonly ComboBox _phase;
@@ -110,20 +230,18 @@ namespace J365.IntunePSApp.Views
         private readonly string _appName;
         private readonly List<string> _extraFiles;
         private ActionDef _def;
-        private readonly PackageAction _existing;
 
         public PackageAction Result { get; private set; }
 
-        public ActionEditorWindow(PackageAction existing, string type, string appName, List<string> extraFiles)
+        public ActionEditorWindow(PackageAction existing, string type, string appName, List<string> extraFileNames)
         {
-            _existing = existing;
             _appName = appName;
-            _extraFiles = extraFiles ?? new List<string>();
-            Title = existing == null ? "Adicionar ação" : "Editar ação";
-            Width = 940; Height = 640; MinWidth = 820; MinHeight = 520;
+            _extraFiles = extraFileNames ?? new List<string>();
+            Title = existing == null ? T("ActionDlg_TitleAdd") : T("ActionDlg_TitleEdit");
+            Width = 960; Height = 660; MinWidth = 840; MinHeight = 540;
 
             var root = new Grid { Margin = new Thickness(20) };
-            root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(300) });
+            root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(310) });
             root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(18) });
             root.ColumnDefinitions.Add(new ColumnDefinition());
             root.RowDefinitions.Add(new RowDefinition());
@@ -136,11 +254,11 @@ namespace J365.IntunePSApp.Views
                 var g = new Grid();
                 g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 g.ColumnDefinitions.Add(new ColumnDefinition());
-                var ico = new Border { Width = 32, Height = 32, CornerRadius = new CornerRadius(8), Background = (Brush)Application.Current.FindResource("BrandSoft") };
-                ico.Child = new TextBlock { Text = d.Glyph, FontFamily = (FontFamily)Application.Current.FindResource("IconFont"), Foreground = (Brush)Application.Current.FindResource("Brand"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+                var ico = new Border { Width = 32, Height = 32, CornerRadius = new CornerRadius(8), Background = Ui.Brush("BrandSoft") };
+                ico.Child = new TextBlock { Text = d.Glyph, FontFamily = Ui.Font("IconFont"), Foreground = Ui.Brush("Brand"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
                 var txt = new StackPanel { Margin = new Thickness(10, 0, 0, 0) };
                 txt.Children.Add(new TextBlock { Text = d.Label, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
-                txt.Children.Add(new TextBlock { Text = d.Category, FontSize = 11.5, Foreground = (Brush)Application.Current.FindResource("Muted") });
+                txt.Children.Add(new TextBlock { Text = d.CategoryLabel, FontSize = 11.5, Foreground = Ui.Brush("Muted") });
                 Grid.SetColumn(txt, 1);
                 g.Children.Add(ico);
                 g.Children.Add(txt);
@@ -155,11 +273,11 @@ namespace J365.IntunePSApp.Views
             var right = new StackPanel();
             _form = new StackPanel();
             right.Children.Add(_form);
-            right.Children.Add(new TextBlock { Text = "Quando executar", Style = S("Label") });
+            right.Children.Add(Label(T("ActionDlg_When")));
             _phase = new ComboBox();
             foreach (var p in ActionCatalog.Phases) _phase.Items.Add(new ComboBoxItem { Content = ActionCatalog.PhaseLabel(p), Tag = p });
             right.Children.Add(_phase);
-            _continue = new CheckBox { Style = S("Switch"), Content = "Continuar a instalação se esta ação falhar (recomendado)", IsChecked = true, Margin = new Thickness(0, 16, 0, 0) };
+            _continue = new CheckBox { Style = S("Switch"), Content = T("ActionDlg_Continue"), IsChecked = true, Margin = new Thickness(0, 16, 0, 0) };
             right.Children.Add(_continue);
             scroll.Content = right;
             card.Child = scroll;
@@ -167,14 +285,14 @@ namespace J365.IntunePSApp.Views
 
             var bar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 14, 0, 0) };
             Grid.SetRow(bar, 1); Grid.SetColumnSpan(bar, 3);
-            bar.Children.Add(MakeButton("Cancelar", "SecondaryButton", (s, e) => DialogResult = false));
-            bar.Children.Add(MakeButton(existing == null ? "Adicionar" : "Salvar", "PrimaryButton", (s, e) => Save()));
+            bar.Children.Add(MakeButton(T("Common_Cancel"), "SecondaryButton", (s, e) => DialogResult = false));
+            bar.Children.Add(MakeButton(existing == null ? T("Common_Add") : T("Common_Save"), "PrimaryButton", (s, e) => Save()));
             root.Children.Add(bar);
             Content = root;
 
             string initial = existing?.Type ?? type ?? ActionCatalog.All[0].Type;
             foreach (ListBoxItem li in _types.Items)
-                if (((ActionDef)li.Tag).Type == initial) { _types.SelectedItem = li; break; }
+                if (((ActionDef)li.Tag).Type == initial) { _types.SelectedItem = li; li.BringIntoView(); break; }
             if (existing != null) BuildForm(ActionCatalog.Get(existing.Type), existing);
         }
 
@@ -190,6 +308,7 @@ namespace J365.IntunePSApp.Views
             {
                 string val = values?.P(f.Key);
                 if (string.IsNullOrEmpty(val)) val = DefaultFor(def, f);
+                bool packageFile = PackageFileFields.Contains(def.Type + "." + f.Key);
                 FrameworkElement input;
                 switch (f.Kind)
                 {
@@ -198,15 +317,25 @@ namespace J365.IntunePSApp.Views
                         _form.Children.Add(input);
                         break;
                     case "choice":
-                        _form.Children.Add(new TextBlock { Text = f.Label, Style = S("Label") });
+                        _form.Children.Add(Label(f.Label));
                         var cb = new ComboBox();
-                        foreach (var o in f.Options) cb.Items.Add(o);
-                        cb.SelectedItem = f.Options.Contains(val) ? val : f.Options.FirstOrDefault();
+                        foreach (var o in f.Options) cb.Items.Add(new ComboBoxItem { Content = f.OptionLabel(o), Tag = o });
+                        cb.SelectedItem = cb.Items.Cast<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == val) ?? cb.Items[0];
                         input = cb;
                         _form.Children.Add(cb);
                         break;
                     default:
-                        _form.Children.Add(new TextBlock { Text = f.Label + (f.Required ? " *" : ""), Style = S("Label") });
+                        _form.Children.Add(Label(f.Label + (f.Required ? " *" : "")));
+                        if (packageFile && _extraFiles.Count > 0)
+                        {
+                            // Pick one of the extra files, or type a sub-path / wildcard.
+                            var pick = new ComboBox { IsEditable = true, Text = val ?? "" };
+                            foreach (var name in _extraFiles) pick.Items.Add(name);
+                            pick.Text = val ?? "";
+                            input = pick;
+                            _form.Children.Add(pick);
+                            break;
+                        }
                         var tb = new TextBox { Text = val ?? "" };
                         if (f.Kind == "multiline" || f.Kind == "code")
                         {
@@ -216,27 +345,26 @@ namespace J365.IntunePSApp.Views
                             tb.VerticalContentAlignment = VerticalAlignment.Top;
                             tb.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
                             tb.HorizontalScrollBarVisibility = ScrollBarVisibility.Auto;
-                            if (f.Kind == "code") { tb.FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"); tb.AcceptsTab = true; }
+                            if (f.Kind == "code") { tb.FontFamily = Ui.Font("MonoFont"); tb.AcceptsTab = true; }
                         }
                         input = tb;
                         _form.Children.Add(tb);
                         break;
                 }
-                if (!string.IsNullOrEmpty(f.Hint)) _form.Children.Add(new TextBlock { Text = f.Hint, Style = S("Hint") });
-                if (f.Key == "Source" && def.Type.StartsWith("Copy") && _extraFiles.Count > 0)
-                    _form.Children.Add(new TextBlock { Text = "Arquivos extras do pacote: " + string.Join(", ", _extraFiles), Style = S("Hint") });
+                if (!string.IsNullOrEmpty(f.Hint)) _form.Children.Add(Hint(f.Hint));
+                if (packageFile && _extraFiles.Count == 0) _form.Children.Add(Hint(T("ActionDlg_NoExtraFiles")));
                 _inputs[f.Key] = input;
             }
             string phase = values?.Phase ?? def.DefaultPhase;
             foreach (ComboBoxItem it in _phase.Items) if ((string)it.Tag == phase) _phase.SelectedItem = it;
             if (_phase.SelectedItem == null) _phase.SelectedIndex = 1;
-            _continue.IsChecked = values?.ContinueOnError ?? true;
+            _continue.IsChecked = values?.ContinueOnError ?? def.Type != "InstallDependency";
         }
 
         private string DefaultFor(ActionDef def, ActionField f)
         {
-            if (def.Type == "RemoveDesktopShortcut" && f.Key == "Name" && !string.IsNullOrEmpty(_appName)) return _appName + "*";
-            if (def.Type == "CopyFile" && f.Key == "Source" && _extraFiles.Count == 1) return _extraFiles[0];
+            if (f.Key == "Name" && (def.Type == "RemoveDesktopShortcut" || def.Type == "RemoveStartMenuShortcut") && !string.IsNullOrEmpty(_appName)) return _appName + "*";
+            if (f.Key == "Source" && PackageFileFields.Contains(def.Type + ".Source") && _extraFiles.Count == 1) return _extraFiles[0];
             return f.Default ?? "";
         }
 
@@ -254,15 +382,108 @@ namespace J365.IntunePSApp.Views
                 a.Params[kv.Key] = kv.Value switch
                 {
                     CheckBox c => c.IsChecked == true ? "true" : "false",
-                    ComboBox c => c.SelectedItem as string ?? "",
+                    ComboBox c when c.IsEditable => (c.Text ?? "").Trim(),
+                    ComboBox c => (c.SelectedItem as ComboBoxItem)?.Tag as string ?? "",
                     TextBox t => t.Text,
                     _ => ""
                 };
             }
             var errs = ActionCatalog.Validate(a);
-            if (errs.Count > 0) { MessageBox.Show(this, string.Join("\n", errs), Title, MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+            if (errs.Count > 0) { Ui.Warn(string.Join("\n", errs)); return; }
             Result = a;
             DialogResult = true;
+        }
+    }
+
+    /// <summary>"Publish to Intune (preview)": collects the tenant and app registration and starts Publish-ToIntune.ps1.</summary>
+    public class PublishDialog : DialogWindow
+    {
+        private readonly TextBox _tenant, _client, _command;
+        private readonly CheckBox _deviceCode;
+        private readonly string _script;
+
+        public PublishDialog(string publishScript, string appTitle)
+        {
+            _script = publishScript;
+            Title = T("Publish_Title");
+            Width = 680;
+            SizeToContent = SizeToContent.Height;
+            ResizeMode = ResizeMode.NoResize;
+            var cfg = ConfigStore.Current;
+
+            var root = new StackPanel { Margin = new Thickness(24, 20, 24, 20) };
+            root.Children.Add(new TextBlock { Text = T("Publish_Heading", appTitle), Style = S("H2"), TextWrapping = TextWrapping.Wrap });
+            root.Children.Add(new TextBlock { Text = T("Publish_Intro"), Style = S("MutedText"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 2) });
+
+            root.Children.Add(Label(T("Publish_Tenant")));
+            _tenant = new TextBox { Text = cfg.IntuneTenantId ?? "" };
+            root.Children.Add(_tenant);
+            root.Children.Add(Hint(T("Publish_TenantHint")));
+
+            root.Children.Add(Label(T("Publish_Client")));
+            _client = new TextBox { Text = cfg.IntuneClientId ?? "" };
+            root.Children.Add(_client);
+            root.Children.Add(Hint(T("Publish_ClientHint")));
+
+            _deviceCode = new CheckBox { Style = S("Switch"), Content = T("Publish_DeviceCode"), Margin = new Thickness(0, 16, 0, 0) };
+            root.Children.Add(_deviceCode);
+
+            root.Children.Add(Label(T("Publish_Command")));
+            _command = new TextBox { IsReadOnly = true, FontFamily = Ui.Font("MonoFont"), FontSize = 12, TextWrapping = TextWrapping.Wrap, MinHeight = 58, VerticalContentAlignment = VerticalAlignment.Top };
+            root.Children.Add(_command);
+
+            var bar = new DockPanel { Margin = new Thickness(0, 22, 0, 0), LastChildFill = false };
+            var guide = MakeButton(T("Publish_Guide"), "GhostButton", (s, e) => Ui.OpenPath(AppInfo.PublishDocsUrl), 0);
+            DockPanel.SetDock(guide, Dock.Left);
+            bar.Children.Add(guide);
+            var run = MakeButton(T("Publish_Run"), "PrimaryButton", (s, e) => Run());
+            DockPanel.SetDock(run, Dock.Right);
+            bar.Children.Add(run);
+            var copy = MakeButton(T("Publish_CopyCommand"), "SecondaryButton", (s, e) => { if (Validate(false)) Ui.CopyText(_command.Text); });
+            DockPanel.SetDock(copy, Dock.Right);
+            bar.Children.Add(copy);
+            var cancel = MakeButton(T("Common_Cancel"), "SecondaryButton", (s, e) => DialogResult = false);
+            DockPanel.SetDock(cancel, Dock.Right);
+            bar.Children.Add(cancel);
+            root.Children.Add(bar);
+            Content = root;
+
+            _tenant.TextChanged += (s, e) => UpdateCommand();
+            _client.TextChanged += (s, e) => UpdateCommand();
+            _deviceCode.Checked += (s, e) => UpdateCommand();
+            _deviceCode.Unchecked += (s, e) => UpdateCommand();
+            UpdateCommand();
+        }
+
+        private void UpdateCommand()
+        {
+            string tenant = string.IsNullOrWhiteSpace(_tenant.Text) ? "<tenant>" : _tenant.Text.Trim();
+            string client = string.IsNullOrWhiteSpace(_client.Text) ? "<client-id>" : _client.Text.Trim();
+            _command.Text = IntunePublisher.CommandLine(_script, tenant, client, _deviceCode.IsChecked == true);
+        }
+
+        private bool Validate(bool save)
+        {
+            if (!IntunePublisher.IsTenant(_tenant.Text)) { Ui.Warn(T("Publish_InvalidTenant")); return false; }
+            if (!IntunePublisher.IsGuid(_client.Text)) { Ui.Warn(T("Publish_InvalidClient")); return false; }
+            if (save)
+            {
+                ConfigStore.Current.IntuneTenantId = _tenant.Text.Trim();
+                ConfigStore.Current.IntuneClientId = _client.Text.Trim();
+                ConfigStore.Save();
+            }
+            return true;
+        }
+
+        private void Run()
+        {
+            if (!Validate(true)) return;
+            try
+            {
+                IntunePublisher.Launch(_script, _tenant.Text, _client.Text, _deviceCode.IsChecked == true);
+                DialogResult = true;
+            }
+            catch (Exception ex) { Ui.Error(ex.Message); }
         }
     }
 }

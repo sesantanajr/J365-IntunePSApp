@@ -1,24 +1,41 @@
-## J365 IntunePSApp
+## J365 IntunePSApp 2.0
 
-Empacote qualquer aplicativo para o **Microsoft Intune** com **PSAppDeployToolkit 4**, sem escrever scripts.
+Package any Windows application for Microsoft Intune in minutes, with no scripting. Built on [PSAppDeployToolkit](https://psappdeploytoolkit.com). Created by [Sérgio Sant'Ana Junior](https://www.linkedin.com/in/sergiosantanacloud/) - [Jornada 365](https://jornada365.cloud).
+
+### Highlights
+
+- **English and Portuguese** interface, switchable at any time.
+- **Automatic first-run setup**: the application downloads and verifies its own dependencies.
+- **Dependencies**: Visual C++ Redistributable, .NET Desktop Runtime and others are downloaded, shipped and installed first with one click.
+- **Package update tracking**: see which packages have a newer version and update them keeping every customisation.
+- **Test in Windows Sandbox** and **Publish to Intune (preview)**.
+- 4 new actions (20 in total), optional per-user installation, smarter database updates, many fixes.
+
+Full list: [CHANGELOG.md](https://github.com/sesantanajr/J365-IntunePSApp/blob/main/CHANGELOG.md).
 
 ### Download
 
-Baixe `J365-IntunePSApp-<versão>-win-x64.zip`, extraia em qualquer pasta e abra `J365.IntunePSApp.exe`. É um **executável único e portátil**: não precisa instalar nem ter o .NET.
+| File | For |
+|---|---|
+| `J365-IntunePSApp-<version>-win-x64.zip` | **The application.** Extract and run `J365.IntunePSApp.exe`. Windows 10/11 x64, nothing to install. |
+| `J365-IntunePSApp-<version>-source.zip` | **Source package** of this exact release, to audit, build or fork. |
+| `SHA256SUMS.txt` | Checksums of both files. |
 
-### Novidades desta versão
+Verify: `Get-FileHash <file> -Algorithm SHA256` and `gh attestation verify <file> --repo sesantanajr/J365-IntunePSApp`.
 
-- Catálogo com **mais de 16 mil aplicativos** (winget + curadoria Jornada 365), atualizado diariamente.
-- **Baixar e empacotar** direto do catálogo, com verificação de SHA256.
-- Reconhecimento automático de instaladores pelo hash, pelo código MSI ou pelo nome, e detecção da tecnologia do `.exe` (NSIS, Inno Setup, WiX Burn...).
-- Identidade visual da empresa: logo, nome, cor, estilo e idioma, com prévia ao vivo.
-- Experiência do usuário: fechar apps, adiar, bloquear o app durante a instalação, mensagens personalizadas, reinicialização.
-- **Ações sem script**: atalhos, arquivos, registro, serviços, tarefas agendadas, variáveis de ambiente, programas e PowerShell.
-- Remoção de versões anteriores (MSI e EXE) e script de detecção do Intune.
-- `.intunewin` gerado pelo IntuneWinAppUtil oficial ou pelo empacotador interno compatível, sempre validado.
-- Guia `INSTRUCOES_INTUNE.html` com todos os campos do portal.
-- Linha de comando: `J365.IntunePSApp.exe --build <instalador|projeto.json>`.
+The executable is not code-signed: Windows SmartScreen may ask for confirmation (*More info > Run anyway*), and computers with Smart App Control turned on may block it. Upgrading from 1.x: replace the executable; your settings, packages and projects keep working.
 
-Confira a integridade do download pelo arquivo `SHA256SUMS.txt`.
+---
 
-Feito pelo [Jornada 365](https://jornada365.cloud) · Licença MIT
+## J365 IntunePSApp 2.0 (Português)
+
+Empacote qualquer aplicativo Windows para o Microsoft Intune em minutos, sem escrever scripts. Baseado no [PSAppDeployToolkit](https://psappdeploytoolkit.com). Criado por [Sérgio Sant'Ana Junior](https://www.linkedin.com/in/sergiosantanacloud/) - [Jornada 365](https://jornada365.cloud).
+
+- Interface em **inglês e português**, com troca a qualquer momento.
+- **Preparação automática na primeira execução**: o aplicativo baixa e verifica as próprias dependências.
+- **Dependências** (Visual C++ Redistributable, .NET Desktop Runtime...) baixadas, incluídas no pacote e instaladas antes, com um clique.
+- **Acompanhamento de versões**: veja quais pacotes têm versão nova e atualize mantendo todas as personalizações.
+- **Teste no Windows Sandbox** e **Publicar no Intune (prévia)**.
+- 4 ações novas (20 no total), instalação opcional por usuário, atualização mais inteligente do banco de dados e muitas correções.
+
+Baixe o `...-win-x64.zip`, extraia e execute o `J365.IntunePSApp.exe`. O `...-source.zip` é o pacote de código-fonte desta versão, para auditar, compilar ou fazer um fork. O executável não tem assinatura de código: o SmartScreen pode pedir confirmação (*Mais informações > Executar assim mesmo*). Vindo da 1.x: basta substituir o executável; configurações, pacotes e projetos continuam funcionando.

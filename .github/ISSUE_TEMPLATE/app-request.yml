@@ -1,0 +1,24 @@
+name: Application data / Dados de aplicativo
+description: Suggest or fix the curated data of an application (processes, uninstall, detection). / Sugira ou corrija a curadoria de um aplicativo.
+title: "[App] "
+labels: [ "catalog" ]
+body:
+  - type: input
+    id: app
+    attributes:
+      label: Application and winget ID / Aplicativo e ID do winget
+      placeholder: "Notepad++ (Notepad++.Notepad++)"
+    validations:
+      required: true
+  - type: textarea
+    id: data
+    attributes:
+      label: What should change? / O que precisa ser ajustado?
+      description: "Processes to close, name in Installed apps, uninstall switches, detection, notes... / Processos a fechar, nome em Aplicativos instalados, parâmetros de desinstalação, detecção, observações..."
+    validations:
+      required: true
+  - type: textarea
+    id: test
+    attributes:
+      label: How did you test it? / Como você testou?
+      description: "App version, Windows, context (System/User), relevant lines of the PSAppDeployToolkit log."

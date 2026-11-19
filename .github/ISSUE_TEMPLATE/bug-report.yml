@@ -1,0 +1,32 @@
+name: Bug report / Relatar um problema
+description: Something did not work as expected. / Algo não funcionou como esperado.
+title: "[Bug] "
+labels: [ "bug" ]
+body:
+  - type: markdown
+    attributes:
+      value: "English or Portuguese are both welcome. / Pode escrever em português ou inglês."
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened? / O que aconteceu?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce / Como reproduzir
+      placeholder: "1. Opened the catalog... 2. Picked the app... 3. Clicked Generate..."
+  - type: input
+    id: version
+    attributes:
+      label: J365 IntunePSApp version and Windows version / Versão do aplicativo e do Windows
+      placeholder: "2.0.0 - Windows 11 24H2 - portable / installed"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: "Content of build.log and/or the PSAppDeployToolkit log. Remove sensitive data first. / Conteúdo do build.log e/ou do log do PSAppDeployToolkit. Remova dados sensíveis antes."
+      render: text

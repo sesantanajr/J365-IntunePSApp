@@ -4,27 +4,64 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.Win32;
+using static J365.IntunePSApp.Localization.Loc;
 
 namespace J365.IntunePSApp.Core
 {
-    /// <summary>Analisa instaladores .msi/.exe: metadados, tecnologia, parametros silenciosos e correspondencia no banco de dados.</summary>
+    /// <summary>Analyses .msi/.exe installers: metadata, installer technology, silent switches and catalog match.</summary>
     public static class InstallerAnalyzer
     {
-        private static readonly Dictionary<string, (string Install, string Uninstall, string Note)> TechDefaults = new()
+        public const string TechUnknown = "Unknown";
+        public const string TechVendor = "Vendor";
+        public const string TechMsi = "MSI";
+
+        /// <summary>Default silent switches per installer technology.</summary>
+        private static readonly Dictionary<string, (string Install, string Uninstall)> TechDefaults = new()
         {
-            ["NSIS"] = ("/S", "/S", "Instalador NSIS: parâmetro /S (silencioso)."),
-            ["Inno Setup"] = ("/SP- /VERYSILENT /SUPPRESSMSGBOXES /NORESTART", "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART", "Instalador Inno Setup: /VERYSILENT /SUPPRESSMSGBOXES /NORESTART."),
-            ["WiX Burn"] = ("/quiet /norestart", "", "Instalador WiX Burn (bundle): /quiet /norestart. A desinstalação usa a string silenciosa registrada pelo bundle."),
-            ["InstallShield"] = ("/s /v\"/qn REBOOT=ReallySuppress\"", "", "Instalador InstallShield: confira os parâmetros com o fabricante (variam entre versões)."),
-            ["Advanced Installer"] = ("/exenoui /qn /norestart", "", "Instalador Advanced Installer: /exenoui /qn."),
-            ["Squirrel"] = ("--silent", "", "Instalador Squirrel instala POR USUÁRIO: use o contexto Usuário no Intune ou procure a versão MSI/empresarial."),
-            ["Desconhecido"] = ("", "", "Tecnologia não identificada: informe os parâmetros de instalação silenciosa (site do fabricante ou \"instalador.exe /?\")."),
+            ["NSIS"] = ("/S", "/S"),
+            ["Inno Setup"] = ("/SP- /VERYSILENT /SUPPRESSMSGBOXES /NORESTART", "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART"),
+            ["WiX Burn"] = ("/quiet /norestart", ""),
+            ["InstallShield"] = ("/s /v\"/qn REBOOT=ReallySuppress\"", ""),
+            ["Advanced Installer"] = ("/exenoui /qn /norestart", ""),
+            ["Squirrel"] = ("--silent", ""),
+            [TechUnknown] = ("", ""),
+        };
+
+        /// <summary>Signatures found in the installer stub, checked in order (first match wins).</summary>
+        private static readonly (string Tech, string[] Markers)[] TechSignatures =
+        {
+            ("Inno Setup", new[] { "Inno Setup", "InnoSetupLdrWindow" }),
+            ("NSIS", new[] { "Nullsoft", "NSIS Error", "NullsoftInst" }),
+            ("InstallShield", new[] { "InstallShield" }),
+            ("Advanced Installer", new[] { "Advanced Installer", "Caphyon" }),
+            ("Squirrel", new[] { "SquirrelSetup", "Squirrel.Windows", "Squirrel installer" }),
+        };
+
+        public static string TechnologyLabel(string tech) => tech switch
+        {
+            TechUnknown => T("Tech_Unknown"),
+            TechVendor => T("Tech_Vendor"),
+            TechMsi => "Windows Installer (MSI)",
+            null or "" => "",
+            _ => tech
+        };
+
+        private static string TechNote(string tech) => tech switch
+        {
+            "NSIS" => T("Tech_Note_NSIS"),
+            "Inno Setup" => T("Tech_Note_Inno"),
+            "WiX Burn" => T("Tech_Note_Burn"),
+            "InstallShield" => T("Tech_Note_InstallShield"),
+            "Advanced Installer" => T("Tech_Note_AdvancedInstaller"),
+            "Squirrel" => T("Tech_Note_Squirrel"),
+            _ => T("Tech_Note_Unknown")
         };
 
         public static InstallerInfo Analyze(string path)
         {
-            if (!File.Exists(path)) throw new FileNotFoundException("Arquivo não encontrado.", path);
+            if (!File.Exists(path)) throw new FileNotFoundException(T("Err_FileNotFound", path), path);
             var fi = new FileInfo(path);
             string ext = fi.Extension.ToLowerInvariant();
             var info = new InstallerInfo
@@ -34,14 +71,15 @@ namespace J365.IntunePSApp.Core
                 SizeMB = Math.Round(fi.Length / 1024d / 1024d, 1)
             };
 
-            if (Signature.IsValid(fi.FullName)) info.Signer = Signature.Signer(fi.FullName).Name ?? "(assinado)";
+            if (Signature.IsValid(fi.FullName)) info.Signer = Signature.Signer(fi.FullName).Name ?? T("Analysis_Signed");
 
+            string unknownNote = null;
             switch (ext)
             {
                 case ".msi":
                     {
                         info.Type = "MSI";
-                        info.Technology = "Windows Installer (MSI)";
+                        info.Technology = TechMsi;
                         var (p, template) = MsiReader.Read(fi.FullName);
                         p.TryGetValue("ProductName", out var pn);
                         p.TryGetValue("Manufacturer", out var mf);
@@ -59,7 +97,9 @@ namespace J365.IntunePSApp.Core
                         else if (template.Contains("Arm64", StringComparison.OrdinalIgnoreCase)) info.AppArch = "arm64";
                         else if (template.Contains("Intel")) info.AppArch = "x86";
                         info.UninstallPattern = Names.NamePattern(pn);
-                        info.Notes.Add("MSI: instalação silenciosa automática (/qn REBOOT=ReallySuppress). Use os parâmetros apenas para propriedades extras (ex.: ALLUSERS=1).");
+                        info.Notes.Add(T("Analysis_MsiSilent"));
+                        var transforms = Directory.GetFiles(fi.DirectoryName, "*.mst").Select(Path.GetFileName).ToList();
+                        if (transforms.Count > 0) info.Notes.Add(T("Analysis_MstFound", string.Join(", ", transforms), transforms[0]));
                         break;
                     }
                 case ".exe":
@@ -72,99 +112,119 @@ namespace J365.IntunePSApp.Core
                         info.AppVendor = vi.CompanyName ?? "";
                         info.AppVersion = Names.CleanVersion(FirstNonEmpty(vi.ProductVersion, vi.FileVersion));
                         if (string.IsNullOrEmpty(info.AppVersion)) info.AppVersion = Names.CleanVersion(Path.GetFileNameWithoutExtension(fi.Name));
-                        string fn = fi.Name.ToLowerInvariant();
-                        if (fn.Contains("arm64")) info.AppArch = "arm64";
-                        else if (fn.Contains("x64") || fn.Contains("amd64") || fn.Contains("win64") || fn.Contains("64bit") || fn.Contains("64-bit")) info.AppArch = "x64";
-                        else if (fn.Contains("x86") || fn.Contains("win32") || fn.Contains("32bit") || fn.Contains("32-bit")) info.AppArch = "x86";
-                        else { var pe = PeArchitecture(fi.FullName); if (pe != "x86") info.AppArch = pe; }
+                        info.AppArch = ArchitectureFromName(fi.Name) ?? (PeArchitecture(fi.FullName) is string pe && pe != "x86" ? pe : "");
                         var td = TechDefaults[info.Technology];
                         info.InstallArgs = td.Install;
                         info.UninstallExeArgs = td.Uninstall;
-                        info.Notes.Add(td.Note);
+                        string note = TechNote(info.Technology);
+                        if (info.Technology == TechUnknown) unknownNote = note;
+                        info.Notes.Add(note);
                         info.UninstallPattern = Names.NamePattern(info.AppName);
                         if (info.Technology == "Squirrel") info.InstallBehavior = "User";
                         break;
                     }
                 default:
-                    throw new NotSupportedException($"Tipo de arquivo não suportado: '{ext}'. Selecione um instalador .msi ou .exe.");
+                    throw new NotSupportedException(T("Err_UnsupportedFile", ext));
             }
             info.DetectionVersion = info.AppVersion;
 
-            // Correspondencia no banco de dados: hash exato > codigo do produto MSI > nome.
+            // Catalog match: identical hash > MSI product code > name.
             var catalog = CatalogService.Instance;
             if (catalog.IsLoaded)
             {
                 try { info.Sha256 = Hashing.Sha256File(fi.FullName); } catch { }
                 var (app, inst) = catalog.FindByHash(info.Sha256);
                 string match = app != null ? "hash" : null;
-                if (app == null && !string.IsNullOrEmpty(info.ProductCode)) { (app, inst) = catalog.FindByProductCode(info.ProductCode); if (app != null) match = "productcode"; }
+                if (app == null && !string.IsNullOrEmpty(info.ProductCode))
+                {
+                    (app, inst) = catalog.FindByProductCode(info.ProductCode);
+                    if (app != null) match = "productcode";
+                }
                 if (app != null)
                 {
-                    string before = info.Technology;
                     CatalogService.Apply(info, app, inst, match);
-                    if (before == "Desconhecido") info.Notes.RemoveAll(n => n == TechDefaults["Desconhecido"].Note);
-                    info.Notes.Insert(0, match == "hash"
-                        ? $"Instalador reconhecido no banco de dados (hash idêntico): {app.Name} [{app.Id}]. Parâmetros validados pela comunidade winget."
-                        : $"Aplicativo reconhecido pelo código do produto MSI: {app.Name} [{app.Id}].");
+                    if (unknownNote != null) info.Notes.Remove(unknownNote);
+                    info.Notes.Insert(0, match == "hash" ? T("Analysis_MatchHash", app.Name, app.Id) : T("Analysis_MatchProductCode", app.Name, app.Id));
                 }
                 else
                 {
                     var similar = catalog.FindByName(info.AppName, info.AppVendor, 1).FirstOrDefault();
-                    if (similar != null)
-                    {
-                        info.CatalogId = similar.Id;
-                        info.CatalogMatch = "nome";
-                        if (similar.Extra?.Processes != null && info.Processes.Count == 0) info.Processes = new List<string>(similar.Extra.Processes);
-                        if (!string.IsNullOrEmpty(similar.Extra?.NamePattern)) info.UninstallPattern = similar.Extra.NamePattern;
-                        if (!string.IsNullOrEmpty(similar.Extra?.UninstallArgs) && info.Type == "EXE") info.UninstallExeArgs = similar.Extra.UninstallArgs;
-                        if (info.Technology == "Desconhecido")
-                        {
-                            var ci = CatalogService.PickInstaller(similar, info.AppArch == "" ? "x64" : info.AppArch);
-                            if (ci != null && !ci.IsMsi && info.Type == "EXE")
-                            {
-                                info.InstallArgs = CatalogService.SilentArgsFor(ci);
-                                info.Technology = CatalogService.TechnologyFor(ci) ?? "Instalador do fabricante";
-                                info.Notes.RemoveAll(n => n == TechDefaults["Desconhecido"].Note);
-                            }
-                        }
-                        info.Notes.Insert(0, $"Correspondência provável no banco de dados: {similar.Name} [{similar.Id}]. Confira os parâmetros sugeridos.");
-                        if (!string.IsNullOrEmpty(similar.Extra?.Notes)) info.Notes.Add(similar.Extra.Notes);
-                    }
+                    if (similar != null) ApplySimilar(info, similar, unknownNote);
                 }
             }
 
-            info.Notes.Add(string.IsNullOrEmpty(info.Signer)
-                ? "Atenção: o instalador não possui assinatura digital válida. Confirme que ele veio do site oficial do fabricante."
-                : $"Assinatura digital válida: {info.Signer}.");
+            info.Notes.Add(string.IsNullOrEmpty(info.Signer) ? T("Analysis_NotSigned") : T("Analysis_SignedBy", info.Signer));
             return info;
+        }
+
+        /// <summary>A catalog entry with the same name: only fills what the file itself could not tell.</summary>
+        private static void ApplySimilar(InstallerInfo info, CatalogApp similar, string unknownNote)
+        {
+            info.CatalogId = similar.Id;
+            info.CatalogMatch = "name";
+            var x = similar.Extra;
+            if (x?.Processes != null && info.Processes.Count == 0) info.Processes = new List<string>(x.Processes);
+            if (!string.IsNullOrEmpty(x?.NamePattern)) info.UninstallPattern = x.NamePattern;
+            if (!string.IsNullOrEmpty(x?.UninstallArgs) && info.Type == "EXE") info.UninstallExeArgs = x.UninstallArgs;
+            if (info.Technology == TechUnknown && info.Type == "EXE")
+            {
+                var ci = CatalogService.PickInstaller(similar, string.IsNullOrEmpty(info.AppArch) ? "x64" : info.AppArch, preferMsi: false);
+                if (ci != null && !ci.IsMsi)
+                {
+                    info.InstallArgs = CatalogService.SilentArgsFor(ci);
+                    info.Technology = CatalogService.TechnologyFor(ci) ?? TechVendor;
+                    if (unknownNote != null) info.Notes.Remove(unknownNote);
+                }
+            }
+            if (string.IsNullOrEmpty(info.Description)) info.Description = similar.LocalizedDescription;
+            if (string.IsNullOrEmpty(info.Homepage)) info.Homepage = similar.Homepage;
+            info.Notes.Insert(0, T("Analysis_MatchName", similar.Name, similar.Id));
+            if (!string.IsNullOrEmpty(x?.LocalizedNotes)) info.Notes.Add(x.LocalizedNotes);
         }
 
         private static string FirstNonEmpty(params string[] values) => values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v))?.Trim() ?? "";
 
+        private static string ArchitectureFromName(string fileName)
+        {
+            string fn = fileName.ToLowerInvariant();
+            if (fn.Contains("arm64")) return "arm64";
+            if (Regex.IsMatch(fn, @"x64|amd64|win64|64-?bit|x86_64")) return "x64";
+            if (Regex.IsMatch(fn, @"x86|win32|32-?bit|ia32")) return "x86";
+            return null;
+        }
+
+        /// <summary>
+        /// Identifies the installer framework by scanning the first 16 MB of the file for known ASCII/UTF-16 markers
+        /// (vectorised byte search, no string conversion of the binary).
+        /// </summary>
         public static string DetectTechnology(string path, FileVersionInfo vi)
         {
-            int max = 16 * 1024 * 1024;
             byte[] buf;
+            int read = 0;
             using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
             {
-                int len = (int)Math.Min(fs.Length, max);
+                int len = (int)Math.Min(fs.Length, 16 * 1024 * 1024);
                 buf = new byte[len];
-                int read = 0, n;
+                int n;
                 while (read < len && (n = fs.Read(buf, read, len - read)) > 0) read += n;
             }
-            string ascii = Encoding.ASCII.GetString(buf);
-            string uni = Encoding.Unicode.GetString(buf, 0, buf.Length - (buf.Length % 2));
-            string meta = $"{vi.Comments} | {vi.FileDescription} | {vi.ProductName} | {vi.LegalCopyright}";
-            bool Has(params string[] needles) => needles.Any(t => ascii.Contains(t, StringComparison.Ordinal) || uni.Contains(t, StringComparison.Ordinal) || meta.Contains(t, StringComparison.Ordinal));
+            string meta = $"{vi?.Comments} | {vi?.FileDescription} | {vi?.ProductName} | {vi?.LegalCopyright}";
 
-            if (ascii.Contains(".wixburn", StringComparison.Ordinal)) return "WiX Burn";
-            if (Has("Inno Setup", "InnoSetupLdrWindow")) return "Inno Setup";
-            if (Has("Nullsoft", "NSIS Error", "NullsoftInst")) return "NSIS";
-            if (Has("InstallShield")) return "InstallShield";
-            if (Has("Advanced Installer", "Caphyon")) return "Advanced Installer";
-            if (Has("SquirrelSetup", "Squirrel.Windows", "Squirrel installer")) return "Squirrel";
-            return "Desconhecido";
+            if (ContainsBytes(buf, read, Encoding.ASCII.GetBytes(".wixburn"))) return "WiX Burn";
+            foreach (var (tech, markers) in TechSignatures)
+            {
+                foreach (var marker in markers)
+                {
+                    if (meta.Contains(marker, StringComparison.Ordinal)
+                        || ContainsBytes(buf, read, Encoding.ASCII.GetBytes(marker))
+                        || ContainsBytes(buf, read, Encoding.Unicode.GetBytes(marker)))
+                        return tech;
+                }
+            }
+            return TechUnknown;
         }
+
+        private static bool ContainsBytes(byte[] data, int length, byte[] pattern) => data.AsSpan(0, length).IndexOf(pattern) >= 0;
 
         public static string PeArchitecture(string path)
         {
@@ -181,15 +241,15 @@ namespace J365.IntunePSApp.Core
             catch { return ""; }
         }
 
-        /// <summary>Programas instalados neste computador cujo nome corresponde ao padrao (curinga).</summary>
+        /// <summary>Programs installed on this computer whose display name matches the wildcard pattern.</summary>
         public static List<InstalledProgram> FindInstalled(string pattern)
         {
             var result = new List<InstalledProgram>();
-            var targets = new (RegistryHive Hive, RegistryView View, string Scope)[]
+            var targets = new (RegistryHive Hive, RegistryView View, string ScopeKey)[]
             {
-                (RegistryHive.LocalMachine, RegistryView.Registry64, "Computador (64 bits)"),
-                (RegistryHive.LocalMachine, RegistryView.Registry32, "Computador (32 bits)"),
-                (RegistryHive.CurrentUser, RegistryView.Default, "Usuário atual")
+                (RegistryHive.LocalMachine, RegistryView.Registry64, "Installed_ScopeMachine64"),
+                (RegistryHive.LocalMachine, RegistryView.Registry32, "Installed_ScopeMachine32"),
+                (RegistryHive.CurrentUser, RegistryView.Default, "Installed_ScopeUser")
             };
             var rx = WildcardToRegex(pattern);
             foreach (var t in targets)
@@ -211,7 +271,7 @@ namespace J365.IntunePSApp.Core
                             Publisher = k.GetValue("Publisher") as string ?? "",
                             Type = Convert.ToString(k.GetValue("WindowsInstaller")) == "1" ? "MSI" : "EXE",
                             QuietUninstall = !string.IsNullOrWhiteSpace(k.GetValue("QuietUninstallString") as string),
-                            Scope = t.Scope,
+                            Scope = T(t.ScopeKey),
                             KeyName = sub
                         });
                     }
@@ -221,9 +281,9 @@ namespace J365.IntunePSApp.Core
             return result.GroupBy(r => r.Name + "|" + r.Version + "|" + r.KeyName).Select(g => g.First()).OrderBy(r => r.Name).ToList();
         }
 
-        public static System.Text.RegularExpressions.Regex WildcardToRegex(string pattern)
+        /// <summary>Same semantics as PowerShell's -like: * and ? wildcards, `[ and `] as literal brackets.</summary>
+        public static Regex WildcardToRegex(string pattern)
         {
-            // Semelhante ao -like do PowerShell: * ? e `[ como escape.
             var sb = new StringBuilder("^");
             string p = (pattern ?? "").Replace("`[", "\u0001").Replace("`]", "\u0002");
             foreach (char c in p)
@@ -234,19 +294,20 @@ namespace J365.IntunePSApp.Core
                     case '?': sb.Append('.'); break;
                     case '\u0001': sb.Append("\\["); break;
                     case '\u0002': sb.Append("\\]"); break;
-                    default: sb.Append(System.Text.RegularExpressions.Regex.Escape(c.ToString())); break;
+                    default: sb.Append(Regex.Escape(c.ToString())); break;
                 }
             }
             sb.Append('$');
-            return new System.Text.RegularExpressions.Regex(sb.ToString(), System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            return new Regex(sb.ToString(), RegexOptions.IgnoreCase);
         }
 
-        /// <summary>Converte a analise em configuracoes de pacote (mantendo os padroes da empresa).</summary>
+        /// <summary>Copies an analysis into package settings (company defaults already in <paramref name="s"/> are kept).</summary>
         public static void ApplyTo(PackageSettings s, InstallerInfo info)
         {
             s.InstallerPath = info.Path;
             s.InstallerType = info.Type;
-            s.CatalogId = info.CatalogMatch == "nome" ? "" : info.CatalogId ?? "";
+            s.CatalogId = info.IsCatalogExact ? info.CatalogId ?? "" : "";
+            s.CatalogVersion = info.IsCatalogExact ? info.CatalogVersion ?? "" : "";
             s.AppName = info.AppName ?? "";
             s.AppVendor = info.AppVendor ?? "";
             s.AppVersion = info.AppVersion ?? "";
@@ -265,6 +326,23 @@ namespace J365.IntunePSApp.Core
             s.Description = info.Description ?? "";
             s.Homepage = info.Homepage ?? "";
             if (info.RemovePrevious.HasValue) s.RemovePreviousVersions = info.RemovePrevious.Value;
+        }
+
+        /// <summary>
+        /// Replaces only the installer-specific fields of an existing project (new version of the same app),
+        /// keeping every customisation: messages, actions, branding, processes and detection method.
+        /// </summary>
+        public static void ApplyNewVersion(PackageSettings s, InstallerInfo info)
+        {
+            s.InstallerPath = info.Path;
+            s.InstallerType = info.Type;
+            if (info.IsCatalogExact) { s.CatalogId = info.CatalogId ?? s.CatalogId; s.CatalogVersion = info.CatalogVersion ?? ""; }
+            else s.CatalogVersion = "";
+            s.AppVersion = info.AppVersion ?? s.AppVersion;
+            if (!string.IsNullOrEmpty(info.AppArch)) s.AppArch = info.AppArch;
+            if (!string.IsNullOrEmpty(info.ProductCode)) s.MsiProductCode = info.ProductCode;
+            if (string.IsNullOrWhiteSpace(s.InstallArgs)) s.InstallArgs = info.InstallArgs ?? "";
+            s.DetectionVersion = string.IsNullOrEmpty(info.DetectionVersion) ? info.AppVersion : info.DetectionVersion;
         }
     }
 }

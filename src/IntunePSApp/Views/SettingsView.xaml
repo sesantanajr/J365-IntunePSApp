@@ -1,162 +1,258 @@
 <UserControl x:Class="J365.IntunePSApp.Views.SettingsView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-  <ScrollViewer VerticalScrollBarVisibility="Auto">
-    <StackPanel Margin="28,6,28,28" MaxWidth="980" HorizontalAlignment="Left">
-      <TextBlock Text="Configurações" Style="{StaticResource PageTitle}"/>
-      <TextBlock Text="Padrões usados em todos os novos pacotes, banco de dados e ferramentas." Style="{StaticResource MutedText}" FontSize="13.5" Margin="0,4,0,18"/>
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:l="clr-namespace:J365.IntunePSApp.Localization">
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+    </Grid.RowDefinitions>
+    <!-- The first column takes the available width up to the reading width of the cards. -->
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="1000*" MaxWidth="1036"/>
+      <ColumnDefinition Width="*"/>
+    </Grid.ColumnDefinitions>
 
-      <!-- Empresa -->
-      <Border Style="{StaticResource Card}" Margin="0,0,0,16">
-        <StackPanel>
-          <TextBlock Text="Identidade da empresa" Style="{StaticResource H2}"/>
-          <TextBlock Text="Aparece nas janelas do PSAppDeployToolkit em todos os pacotes." Style="{StaticResource MutedText}"/>
-          <Grid>
-            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/></Grid.ColumnDefinitions>
-            <StackPanel><TextBlock Text="Nome da empresa" Style="{StaticResource Label}"/><TextBox x:Name="TxtCompany"/></StackPanel>
-            <StackPanel Grid.Column="2"><TextBlock Text="Autor dos pacotes" Style="{StaticResource Label}"/><TextBox x:Name="TxtAuthor"/></StackPanel>
-          </Grid>
-          <TextBlock Text="Logo" Style="{StaticResource Label}"/>
-          <Grid>
-            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-            <Border Width="40" Height="40" CornerRadius="8" BorderBrush="{StaticResource Line}" BorderThickness="1" Margin="0,0,10,0" Background="{StaticResource Subtle}">
-              <Image x:Name="LogoThumb" Margin="4"/>
+    <!-- Header (does not scroll, so Save is always at hand) -->
+    <DockPanel Margin="28,6,28,14">
+      <Button DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" VerticalAlignment="Center" Click="Save_Click">
+        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE74E;" Style="{StaticResource Icon}" Foreground="White" Margin="0,0,8,0"/><TextBlock Text="{l:T Settings_Save}"/></StackPanel>
+      </Button>
+      <StackPanel>
+        <TextBlock Text="{l:T Settings_Title}" Style="{StaticResource PageTitle}"/>
+        <TextBlock Text="{l:T Settings_Subtitle}" Style="{StaticResource MutedText}" FontSize="13.5" Margin="0,4,0,0"/>
+      </StackPanel>
+    </DockPanel>
+
+    <ScrollViewer Grid.Row="1" Grid.ColumnSpan="2" VerticalScrollBarVisibility="Auto">
+      <StackPanel Margin="28,0,28,28" MaxWidth="980" HorizontalAlignment="Left">
+
+        <!-- Application -->
+        <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+          <StackPanel>
+            <TextBlock Text="{l:T Settings_App}" Style="{StaticResource H2}"/>
+            <Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="300"/><ColumnDefinition Width="24"/><ColumnDefinition/></Grid.ColumnDefinitions>
+              <StackPanel>
+                <TextBlock Text="{l:T Settings_UiLanguage}" Style="{StaticResource Label}"/>
+                <ComboBox x:Name="CmbUiLanguage" SelectionChanged="UiLanguage_Changed">
+                  <ComboBoxItem Tag="auto" Content="{l:T Settings_UiLanguageAuto}"/>
+                  <ComboBoxItem Tag="en" Content="English"/>
+                  <ComboBoxItem Tag="pt-BR" Content="Português (Brasil)"/>
+                </ComboBox>
+                <TextBlock Text="{l:T Settings_UiLanguageHint}" Style="{StaticResource Hint}"/>
+              </StackPanel>
+              <StackPanel Grid.Column="2">
+                <TextBlock Text="{l:T Settings_Updates}" Style="{StaticResource Label}"/>
+                <CheckBox x:Name="ChkUpdates" Style="{StaticResource Switch}" Content="{l:T Settings_CheckUpdates}" Margin="0,4,0,0"/>
+                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                  <Button Style="{StaticResource SecondaryButton}" Content="{l:T Settings_CheckNow}" Click="CheckUpdates_Click"/>
+                  <TextBlock x:Name="UpdateInfoText" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="12,0,0,0" TextWrapping="Wrap" MaxWidth="380"/>
+                </StackPanel>
+              </StackPanel>
+            </Grid>
+
+            <Border Background="{StaticResource Subtle}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="10" Padding="14,12" Margin="0,18,0,0">
+              <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
+                  <Button x:Name="BtnInstall" Style="{StaticResource SecondaryButton}" Content="{l:T Settings_Install}" Click="Install_Click"/>
+                  <Button x:Name="BtnUninstall" Style="{StaticResource SecondaryButton}" Content="{l:T Install_Uninstall}" Click="Uninstall_Click" Margin="8,0,0,0"/>
+                </StackPanel>
+                <StackPanel>
+                  <TextBlock Text="{l:T Settings_Installation}" Style="{StaticResource H3}"/>
+                  <TextBlock x:Name="InstallInfo" Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
+                  <CheckBox x:Name="ChkDesktopShortcut" Style="{StaticResource Switch}" Content="{l:T Settings_DesktopShortcut}" Margin="0,10,0,0" Click="DesktopShortcut_Click"/>
+                </StackPanel>
+              </DockPanel>
             </Border>
-            <TextBox x:Name="TxtLogo" Grid.Column="1" TextChanged="Logo_Changed"/>
-            <Button Grid.Column="2" Style="{StaticResource SecondaryButton}" Content="Procurar..." Margin="8,0,0,0" Click="Logo_Click"/>
-          </Grid>
-          <Grid>
-            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/></Grid.ColumnDefinitions>
-            <StackPanel><TextBlock Text="Cor de destaque" Style="{StaticResource Label}"/><TextBox x:Name="TxtAccent" FontFamily="{StaticResource MonoFont}"/></StackPanel>
-            <StackPanel Grid.Column="2"><TextBlock Text="Estilo das janelas" Style="{StaticResource Label}"/>
-              <ComboBox x:Name="CmbStyle"><ComboBoxItem Tag="Fluent" Content="Moderno (Fluent)"/><ComboBoxItem Tag="Classic" Content="Clássico"/></ComboBox>
-            </StackPanel>
-            <StackPanel Grid.Column="4"><TextBlock Text="Idioma das janelas" Style="{StaticResource Label}"/>
-              <ComboBox x:Name="CmbLanguage"><ComboBoxItem Tag="Auto" Content="Automático"/><ComboBoxItem Tag="pt-BR" Content="Português (Brasil)"/><ComboBoxItem Tag="en" Content="English"/><ComboBoxItem Tag="es" Content="Español"/></ComboBox>
-            </StackPanel>
-          </Grid>
-          <CheckBox x:Name="ChkImeLogs" Style="{StaticResource Switch}" Content="Gravar os logs do PSADT na pasta do Intune Management Extension" Margin="0,16,0,0"/>
-        </StackPanel>
-      </Border>
-
-      <!-- Padroes -->
-      <Border Style="{StaticResource Card}" Margin="0,0,0,16">
-        <StackPanel>
-          <TextBlock Text="Padrões de experiência" Style="{StaticResource H2}"/>
-          <Grid>
-            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition Width="160"/><ColumnDefinition Width="16"/><ColumnDefinition Width="200"/></Grid.ColumnDefinitions>
-            <StackPanel><TextBlock Text="Modo de exibição" Style="{StaticResource Label}"/>
-              <ComboBox x:Name="CmbMode"><ComboBoxItem Tag="Auto" Content="Automático (recomendado)"/><ComboBoxItem Tag="Silent" Content="Silencioso"/><ComboBoxItem Tag="Interactive" Content="Interativo"/></ComboBox>
-            </StackPanel>
-            <StackPanel Grid.Column="2"><TextBlock Text="Adiamentos" Style="{StaticResource Label}"/><TextBox x:Name="TxtDefer"/></StackPanel>
-            <StackPanel Grid.Column="4"><TextBlock Text="Fechar apps após (s)" Style="{StaticResource Label}"/><TextBox x:Name="TxtCountdown"/></StackPanel>
-          </Grid>
-          <CheckBox x:Name="ChkDefer" Style="{StaticResource Switch}" Content="Permitir adiar a instalação" Margin="0,16,0,0"/>
-          <CheckBox x:Name="ChkBlock" Style="{StaticResource Switch}" Content="Impedir abrir o aplicativo durante a instalação"/>
-          <CheckBox x:Name="ChkDisk" Style="{StaticResource Switch}" Content="Verificar espaço em disco"/>
-          <CheckBox x:Name="ChkRemovePrev" Style="{StaticResource Switch}" Content="Remover versões anteriores antes de instalar"/>
-          <TextBlock Text="Mensagem de boas-vindas padrão" Style="{StaticResource Label}"/>
-          <TextBox x:Name="TxtWelcome" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60" VerticalContentAlignment="Top"/>
-          <TextBlock Text="Mensagem de conclusão padrão" Style="{StaticResource Label}"/>
-          <TextBox x:Name="TxtCompletion" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="50" VerticalContentAlignment="Top"/>
-          <Grid Margin="0,4,0,0">
-            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/></Grid.ColumnDefinitions>
-            <StackPanel><TextBlock Text="Arquitetura preferida no catálogo" Style="{StaticResource Label}"/>
-              <ComboBox x:Name="CmbArch"><ComboBoxItem Tag="x64" Content="64 bits (x64)"/><ComboBoxItem Tag="x86" Content="32 bits (x86)"/><ComboBoxItem Tag="arm64" Content="ARM64"/></ComboBox>
-            </StackPanel>
-            <StackPanel Grid.Column="2"><TextBlock Text="Idioma preferido dos instaladores" Style="{StaticResource Label}"/>
-              <ComboBox x:Name="CmbLocale"><ComboBoxItem Tag="pt-BR" Content="Português (Brasil)"/><ComboBoxItem Tag="en-US" Content="Inglês (EUA)"/><ComboBoxItem Tag="es-ES" Content="Espanhol"/></ComboBox>
-            </StackPanel>
-          </Grid>
-          <StackPanel Orientation="Horizontal" Margin="0,20,0,0">
-            <Button Style="{StaticResource PrimaryButton}" Click="Save_Click">
-              <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE74E;" Style="{StaticResource Icon}" Foreground="White" Margin="0,0,8,0"/><TextBlock Text="Salvar configurações"/></StackPanel>
-            </Button>
           </StackPanel>
-        </StackPanel>
-      </Border>
+        </Border>
 
-      <!-- Pastas -->
-      <Border Style="{StaticResource Card}" Margin="0,0,0,16">
-        <StackPanel>
-          <TextBlock Text="Pastas" Style="{StaticResource H2}"/>
-          <TextBlock Text="Pasta onde os pacotes são criados" Style="{StaticResource Label}"/>
-          <Grid>
-            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-            <TextBox x:Name="TxtOutput"/>
-            <Button Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="Escolher..." Margin="8,0,0,0" Click="Output_Click"/>
-          </Grid>
-          <TextBlock Text="Dados do aplicativo" Style="{StaticResource Label}"/>
-          <Grid>
-            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-            <TextBox x:Name="TxtData" IsReadOnly="True"/>
-            <Button Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="Abrir" Margin="8,0,0,0" Click="OpenData_Click"/>
-          </Grid>
-          <TextBlock x:Name="PortableInfo" Style="{StaticResource Hint}"/>
-        </StackPanel>
-      </Border>
-
-      <!-- Banco de dados -->
-      <Border Style="{StaticResource Card}" Margin="0,0,0,16">
-        <StackPanel>
-          <TextBlock Text="Banco de dados de aplicativos" Style="{StaticResource H2}"/>
-          <TextBlock x:Name="CatalogInfo" Style="{StaticResource Body}" Margin="0,6,0,0"/>
-          <TextBlock Text="Endereço de atualização" Style="{StaticResource Label}"/>
-          <TextBox x:Name="TxtCatalogUrl" FontFamily="{StaticResource MonoFont}"/>
-          <TextBlock Style="{StaticResource Hint}" Text="Gerado diariamente pelo GitHub Actions deste projeto a partir do repositório público microsoft/winget-pkgs (licença MIT), com curadoria do Jornada 365."/>
-          <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
-            <TextBlock Text="Verificar atualizações a cada" VerticalAlignment="Center"/>
-            <TextBox x:Name="TxtCatalogDays" Width="60" Margin="10,0,8,0" HorizontalContentAlignment="Center"/>
-            <TextBlock Text="dia(s)" VerticalAlignment="Center"/>
+        <!-- Company -->
+        <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+          <StackPanel>
+            <TextBlock Text="{l:T Settings_Company}" Style="{StaticResource H2}"/>
+            <TextBlock Text="{l:T Settings_CompanyHint}" Style="{StaticResource MutedText}"/>
+            <Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/></Grid.ColumnDefinitions>
+              <StackPanel><TextBlock Text="{l:T Settings_CompanyName}" Style="{StaticResource Label}"/><TextBox x:Name="TxtCompany"/></StackPanel>
+              <StackPanel Grid.Column="2"><TextBlock Text="{l:T Settings_Author}" Style="{StaticResource Label}"/><TextBox x:Name="TxtAuthor"/></StackPanel>
+            </Grid>
+            <TextBlock Text="{l:T Settings_Logo}" Style="{StaticResource Label}"/>
+            <Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+              <Border Width="40" Height="40" CornerRadius="8" BorderBrush="{StaticResource Line}" BorderThickness="1" Margin="0,0,10,0" Background="{StaticResource Subtle}">
+                <Image x:Name="LogoThumb" Margin="4"/>
+              </Border>
+              <TextBox x:Name="TxtLogo" Grid.Column="1" TextChanged="Logo_Changed"/>
+              <Button Grid.Column="2" Style="{StaticResource SecondaryButton}" Content="{l:T Common_Browse}" Margin="8,0,0,0" Click="Logo_Click"/>
+            </Grid>
+            <Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/></Grid.ColumnDefinitions>
+              <StackPanel><TextBlock Text="{l:T Settings_Accent}" Style="{StaticResource Label}"/><TextBox x:Name="TxtAccent" FontFamily="{StaticResource MonoFont}"/></StackPanel>
+              <StackPanel Grid.Column="2"><TextBlock Text="{l:T Settings_DialogStyle}" Style="{StaticResource Label}"/>
+                <ComboBox x:Name="CmbStyle"><ComboBoxItem Tag="Fluent" Content="{l:T Opt_StyleFluent}"/><ComboBoxItem Tag="Classic" Content="{l:T Opt_StyleClassic}"/></ComboBox>
+              </StackPanel>
+              <StackPanel Grid.Column="4"><TextBlock Text="{l:T Settings_DialogLanguage}" Style="{StaticResource Label}"/>
+                <ComboBox x:Name="CmbLanguage"><ComboBoxItem Tag="Auto" Content="{l:T Opt_LangAuto}"/><ComboBoxItem Tag="pt-BR" Content="Português (Brasil)"/><ComboBoxItem Tag="en" Content="English"/><ComboBoxItem Tag="es" Content="Español"/></ComboBox>
+              </StackPanel>
+            </Grid>
+            <CheckBox x:Name="ChkImeLogs" Style="{StaticResource Switch}" Content="{l:T Settings_ImeLogs}" Margin="0,16,0,0"/>
           </StackPanel>
-          <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
-            <Button Style="{StaticResource SecondaryButton}" Click="CatalogUpdate_Click">
-              <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE72C;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock Text="Atualizar agora"/></StackPanel>
-            </Button>
-            <Button Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Click="CatalogImport_Click">
-              <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8B5;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock Text="Importar arquivo (offline)..."/></StackPanel>
-            </Button>
+        </Border>
+
+        <!-- Defaults -->
+        <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+          <StackPanel>
+            <TextBlock Text="{l:T Settings_Defaults}" Style="{StaticResource H2}"/>
+            <TextBlock Text="{l:T Settings_DefaultsHint}" Style="{StaticResource MutedText}"/>
+            <Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition Width="160"/><ColumnDefinition Width="16"/><ColumnDefinition Width="220"/></Grid.ColumnDefinitions>
+              <StackPanel><TextBlock Text="{l:T Settings_Mode}" Style="{StaticResource Label}"/>
+                <ComboBox x:Name="CmbMode"><ComboBoxItem Tag="Auto" Content="{l:T Opt_ModeAuto}"/><ComboBoxItem Tag="Silent" Content="{l:T Opt_ModeSilent}"/><ComboBoxItem Tag="Interactive" Content="{l:T Opt_ModeInteractive}"/></ComboBox>
+              </StackPanel>
+              <StackPanel Grid.Column="2"><TextBlock Text="{l:T Settings_Deferrals}" Style="{StaticResource Label}"/><TextBox x:Name="TxtDefer"/></StackPanel>
+              <StackPanel Grid.Column="4"><TextBlock Text="{l:T Settings_Countdown}" Style="{StaticResource Label}"/><TextBox x:Name="TxtCountdown"/></StackPanel>
+            </Grid>
+            <CheckBox x:Name="ChkDefer" Style="{StaticResource Switch}" Content="{l:T Opt_AllowDefer}" Margin="0,16,0,0"/>
+            <CheckBox x:Name="ChkBlock" Style="{StaticResource Switch}" Content="{l:T Opt_BlockExecution}"/>
+            <CheckBox x:Name="ChkDisk" Style="{StaticResource Switch}" Content="{l:T Opt_CheckDisk}"/>
+            <CheckBox x:Name="ChkRemovePrev" Style="{StaticResource Switch}" Content="{l:T Opt_RemovePrevious}"/>
+            <TextBlock Text="{l:T Settings_Welcome}" Style="{StaticResource Label}"/>
+            <TextBox x:Name="TxtWelcome" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60" VerticalContentAlignment="Top"/>
+            <TextBlock Text="{l:T Settings_Completion}" Style="{StaticResource Label}"/>
+            <TextBox x:Name="TxtCompletion" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="50" VerticalContentAlignment="Top"/>
+            <Grid Margin="0,4,0,0">
+              <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/></Grid.ColumnDefinitions>
+              <StackPanel><TextBlock Text="{l:T Settings_PrefArch}" Style="{StaticResource Label}"/>
+                <ComboBox x:Name="CmbArch"><ComboBoxItem Tag="x64" Content="{l:T Opt_ArchX64}"/><ComboBoxItem Tag="x86" Content="{l:T Opt_ArchX86}"/><ComboBoxItem Tag="arm64" Content="ARM64"/></ComboBox>
+              </StackPanel>
+              <StackPanel Grid.Column="2"><TextBlock Text="{l:T Settings_PrefLocale}" Style="{StaticResource Label}"/>
+                <ComboBox x:Name="CmbLocale"><ComboBoxItem Tag="pt-BR" Content="Português (Brasil)"/><ComboBoxItem Tag="en-US" Content="English (United States)"/><ComboBoxItem Tag="es-ES" Content="Español"/></ComboBox>
+              </StackPanel>
+            </Grid>
           </StackPanel>
-        </StackPanel>
-      </Border>
+        </Border>
 
-      <!-- Ferramentas -->
-      <Border Style="{StaticResource Card}" Margin="0,0,0,16">
-        <StackPanel>
-          <TextBlock Text="Ferramentas" Style="{StaticResource H2}"/>
-          <Grid Margin="0,12,0,0">
-            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-            <Grid.RowDefinitions><RowDefinition/><RowDefinition Height="12"/><RowDefinition/></Grid.RowDefinitions>
-            <StackPanel>
-              <TextBlock Text="PSAppDeployToolkit (template v4)" Style="{StaticResource H3}"/>
-              <TextBlock x:Name="PsadtInfo" Style="{StaticResource MutedText}"/>
-            </StackPanel>
-            <Button Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="Baixar / atualizar" Click="PsadtUpdate_Click"/>
-            <StackPanel Grid.Row="2">
-              <TextBlock Text="Microsoft Win32 Content Prep Tool (IntuneWinAppUtil.exe)" Style="{StaticResource H3}"/>
-              <TextBlock x:Name="IwauInfo" Style="{StaticResource MutedText}"/>
-            </StackPanel>
-            <Button Grid.Row="2" Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="Baixar" Click="IwauUpdate_Click"/>
-          </Grid>
-        </StackPanel>
-      </Border>
+        <!-- Folders -->
+        <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+          <StackPanel>
+            <TextBlock Text="{l:T Settings_Folders}" Style="{StaticResource H2}"/>
+            <TextBlock Text="{l:T Settings_Output}" Style="{StaticResource Label}"/>
+            <Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+              <TextBox x:Name="TxtOutput"/>
+              <Button Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="{l:T Common_Browse}" Margin="8,0,0,0" Click="Output_Click"/>
+            </Grid>
+            <TextBlock Text="{l:T Settings_Data}" Style="{StaticResource Label}"/>
+            <Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+              <TextBox x:Name="TxtData" IsReadOnly="True"/>
+              <Button Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="{l:T Common_Open}" Margin="8,0,0,0" Click="OpenData_Click"/>
+              <Button Grid.Column="2" Style="{StaticResource SecondaryButton}" Content="{l:T Settings_OpenLogs}" Margin="8,0,0,0" Click="OpenLogs_Click"/>
+            </Grid>
+            <TextBlock x:Name="PortableInfo" Style="{StaticResource Hint}"/>
+          </StackPanel>
+        </Border>
 
-      <!-- Sobre -->
-      <Border CornerRadius="12" Background="{StaticResource HeroBrush}" Padding="24,20">
-        <Grid>
-          <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/></Grid.ColumnDefinitions>
-          <Image Source="/Assets/j365-cloud.png" Width="96" Margin="0,0,20,0" VerticalAlignment="Top"/>
-          <StackPanel Grid.Column="1">
-            <TextBlock x:Name="AboutTitle" Foreground="White" FontFamily="{StaticResource DisplayFont}" FontSize="20" FontWeight="SemiBold"/>
-            <TextBlock Foreground="#C9DBF0" TextWrapping="Wrap" Margin="0,6,0,0"
-                       Text="Projeto de código aberto (licença MIT) do Jornada 365. Usa o PSAppDeployToolkit (LGPL-3.0), o Microsoft Win32 Content Prep Tool (licença Microsoft, baixado do GitHub oficial) e dados do repositório winget-pkgs (MIT)."/>
-            <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
-              <Button Style="{StaticResource HeroButton}" Padding="14,7" FontSize="13" Click="Blog_Click" Content="jornada365.cloud"/>
-              <Button Style="{StaticResource HeroOutlineButton}" Padding="14,7" FontSize="13" Margin="8,0,0,0" Click="Repo_Click" Content="Código no GitHub"/>
+        <!-- Database -->
+        <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+          <StackPanel>
+            <TextBlock Text="{l:T Settings_Database}" Style="{StaticResource H2}"/>
+            <TextBlock x:Name="CatalogInfo" Style="{StaticResource Body}" Margin="0,6,0,0"/>
+            <TextBlock Text="{l:T Settings_CatalogUrl}" Style="{StaticResource Label}"/>
+            <TextBox x:Name="TxtCatalogUrl" FontFamily="{StaticResource MonoFont}"/>
+            <TextBlock Style="{StaticResource Hint}" Text="{l:T Settings_CatalogHint}"/>
+            <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+              <TextBlock Text="{l:T Settings_CatalogEvery}" VerticalAlignment="Center"/>
+              <TextBox x:Name="TxtCatalogDays" Width="60" Margin="10,0,8,0" HorizontalContentAlignment="Center"/>
+              <TextBlock Text="{l:T Settings_CatalogDays}" VerticalAlignment="Center"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+              <Button Style="{StaticResource SecondaryButton}" Click="CatalogUpdate_Click">
+                <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE72C;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock Text="{l:T Main_CheckUpdates}"/></StackPanel>
+              </Button>
+              <Button Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Click="CatalogForce_Click" Content="{l:T Settings_CatalogForce}"/>
+              <Button Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Click="CatalogImport_Click">
+                <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8B5;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock Text="{l:T Settings_CatalogImport}"/></StackPanel>
+              </Button>
             </StackPanel>
           </StackPanel>
-        </Grid>
-      </Border>
-    </StackPanel>
-  </ScrollViewer>
+        </Border>
+
+        <!-- Dependencies -->
+        <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+          <StackPanel>
+            <TextBlock Text="{l:T Settings_Dependencies}" Style="{StaticResource H2}"/>
+            <TextBlock Text="{l:T Settings_DependenciesHint}" Style="{StaticResource MutedText}" Margin="0,0,0,12"/>
+            <ItemsControl x:Name="DependencyList" Focusable="False">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="0,10">
+                    <Grid>
+                      <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                      <TextBlock Text="{Binding Glyph}" Style="{StaticResource Icon}" Foreground="{Binding Color}" FontSize="17" Margin="2,2,14,0" VerticalAlignment="Top"/>
+                      <StackPanel Grid.Column="1">
+                        <TextBlock Text="{Binding Title}" Style="{StaticResource H3}"/>
+                        <TextBlock Text="{Binding Description}" Style="{StaticResource MutedText}" FontSize="12.5"/>
+                        <TextBlock Text="{Binding Detail}" Foreground="{Binding Color}" FontSize="12.5" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                        <ProgressBar Height="4" Margin="0,6,0,0" Minimum="0" Maximum="100" Value="{Binding Progress, Mode=OneWay}" IsIndeterminate="{Binding IsIndeterminate, Mode=OneWay}"
+                                     Visibility="{Binding IsWorking, Converter={StaticResource BoolToVis}}"/>
+                      </StackPanel>
+                      <TextBlock Grid.Column="2" Text="{Binding StateLabel}" Foreground="{Binding Color}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Top" Margin="14,2,0,0"/>
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+              <Button x:Name="BtnRepair" Style="{StaticResource SecondaryButton}" Click="Repair_Click">
+                <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE90F;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock Text="{l:T Settings_Repair}"/></StackPanel>
+              </Button>
+              <Button x:Name="BtnRefreshTools" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Click="RefreshTools_Click" Content="{l:T Settings_UpdateAll}"/>
+              <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OpenTools_Click" Content="{l:T Settings_OpenTools}"/>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <!-- Intune publishing (preview) -->
+        <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+          <StackPanel>
+            <TextBlock Text="{l:T Settings_Intune}" Style="{StaticResource H2}"/>
+            <TextBlock Text="{l:T Settings_IntuneHint}" Style="{StaticResource MutedText}"/>
+            <Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/></Grid.ColumnDefinitions>
+              <StackPanel><TextBlock Text="{l:T Publish_Tenant}" Style="{StaticResource Label}"/><TextBox x:Name="TxtTenant" FontFamily="{StaticResource MonoFont}"/></StackPanel>
+              <StackPanel Grid.Column="2"><TextBlock Text="{l:T Publish_Client}" Style="{StaticResource Label}"/><TextBox x:Name="TxtClient" FontFamily="{StaticResource MonoFont}"/></StackPanel>
+            </Grid>
+            <Button Style="{StaticResource GhostButton}" HorizontalAlignment="Left" Padding="4,6" Margin="0,8,0,0" Click="PublishGuide_Click" Content="{l:T Settings_IntuneGuide}"/>
+          </StackPanel>
+        </Border>
+
+        <!-- About -->
+        <Border CornerRadius="12" Background="{StaticResource HeroBrush}" Padding="24,22">
+          <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/></Grid.ColumnDefinitions>
+            <Image Source="/Assets/j365-cloud.png" Width="96" Margin="0,0,22,0" VerticalAlignment="Top"/>
+            <StackPanel Grid.Column="1">
+              <TextBlock x:Name="AboutTitle" Foreground="White" FontFamily="{StaticResource DisplayFont}" FontSize="20" FontWeight="SemiBold"/>
+              <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                <TextBlock Text="{l:T Credits_CreatedBy}" Foreground="#C9DBF0" VerticalAlignment="Center"/>
+                <TextBlock x:Name="AboutAuthor" Foreground="White" FontWeight="SemiBold" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                <TextBlock Text="·  Jornada 365" Foreground="#C9DBF0" Margin="8,0,0,0" VerticalAlignment="Center"/>
+              </StackPanel>
+              <TextBlock Text="{l:T About_BasedOn}" Foreground="White" TextWrapping="Wrap" Margin="0,12,0,0"/>
+              <TextBlock Text="{l:T About_Licences}" Foreground="#C9DBF0" TextWrapping="Wrap" Margin="0,6,0,0" FontSize="12.5"/>
+              <WrapPanel Margin="0,16,0,0">
+                <Button Style="{StaticResource HeroButton}" Padding="14,7" FontSize="13" Margin="0,0,8,6" Click="LinkedIn_Click" Content="LinkedIn"/>
+                <Button Style="{StaticResource HeroOutlineButton}" Padding="14,7" FontSize="13" Margin="0,0,8,6" Click="Blog_Click" Content="jornada365.cloud"/>
+                <Button Style="{StaticResource HeroOutlineButton}" Padding="14,7" FontSize="13" Margin="0,0,8,6" Click="Repo_Click" Content="{l:T About_Source}"/>
+                <Button Style="{StaticResource HeroOutlineButton}" Padding="14,7" FontSize="13" Margin="0,0,8,6" Click="Psadt_Click" Content="PSAppDeployToolkit"/>
+              </WrapPanel>
+            </StackPanel>
+          </Grid>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
 </UserControl>

@@ -2,6 +2,7 @@
 bin/
 obj/
 publish/
+dist/
 out/
 *.user
 *.suo
@@ -10,10 +11,10 @@ out/
 *.DotSettings.user
 TestResults/
 
-## Dados locais do aplicativo (modo portátil)
+## Local application data (portable mode)
 IntunePSApp-Data/
 
-## Sistema
+## System
 Thumbs.db
 Desktop.ini
 .DS_Store

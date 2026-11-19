@@ -1,9 +1,15 @@
 // J365 IntunePSApp - Catalog Builder
-// Gera o banco de dados de aplicativos (catalog.json.gz) a partir do repositorio publico
-// microsoft/winget-pkgs (licenca MIT), mantendo apenas a versao mais recente de cada pacote.
+// Builds the application database (catalog.json.gz) from the public repository microsoft/winget-pkgs
+// (MIT licence), keeping only the newest version of each package and merging catalog/curated.json.
+// The repository is streamed as a tarball: nothing is cloned and nothing is written to disk but the result.
 //
-// Uso:
-//   dotnet run --project tools/CatalogBuilder -c Release -- --out out [--curated catalog/curated.json] [--source <url|arquivo.tar.gz>]
+// Usage:
+//   dotnet run --project tools/CatalogBuilder -c Release -- --out out [--curated catalog/curated.json] [--source <url|file.tar.gz>]
+//
+// Catalog schema 2 (compact keys, see the classes at the end of this file):
+//   d   = short description (default locale, usually English)      dpt = Portuguese description, when the manifest has one
+//   dep = package dependencies declared by the manifest (winget ids): on the application when they apply to every
+//         installer, on one installer when they are specific to it (for example the x64 or the arm64 runtime)
 
 using System;
 using System.Collections.Generic;
@@ -34,14 +40,14 @@ public static class Program
         Directory.CreateDirectory(outDir);
         var sw = Stopwatch.StartNew();
 
-        Console.WriteLine($"Fonte: {source}");
+        Console.WriteLine($"Source: {source}");
         var best = new Dictionary<string, VersionDir>(StringComparer.OrdinalIgnoreCase);
         string commit = null;
         long entries = 0, dirs = 0;
 
         using (var http = new HttpClient { Timeout = TimeSpan.FromMinutes(60) })
         {
-            http.DefaultRequestHeaders.UserAgent.ParseAdd("J365-IntunePSApp-CatalogBuilder/1.0");
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("J365-IntunePSApp-CatalogBuilder/2.0");
             Stream input = source.StartsWith("http", StringComparison.OrdinalIgnoreCase)
                 ? await http.GetStreamAsync(source)
                 : File.OpenRead(source);
@@ -56,7 +62,7 @@ public static class Program
                 if (currentDir == null || files.Count == 0) return;
                 dirs++;
                 var segs = currentDir.Split('/');
-                if (segs.Length < 3) return; // letra/.../versao
+                if (segs.Length < 3) return; // letter/publisher/.../version
                 string version = segs[^1];
                 string id = string.Join('.', segs.Skip(1).Take(segs.Length - 2));
                 if (!best.TryGetValue(id, out var cur) || VersionCompare(version, cur.Version) > 0)
@@ -91,18 +97,18 @@ public static class Program
                 if (e.DataStream == null) continue;
                 using var sr = new StreamReader(e.DataStream, Encoding.UTF8);
                 files[rel[(slash + 1)..]] = sr.ReadToEnd();
-                if (entries % 50000 == 0) Console.WriteLine($"  {entries:N0} entradas lidas, {best.Count:N0} pacotes ({sw.Elapsed:mm\\:ss})");
+                if (entries % 50000 == 0) Console.WriteLine($"  {entries:N0} entries read, {best.Count:N0} packages ({sw.Elapsed:mm\\:ss})");
             }
             Flush();
         }
-        Console.WriteLine($"Leitura concluida: {entries:N0} entradas, {dirs:N0} versoes, {best.Count:N0} pacotes ({sw.Elapsed:mm\\:ss}).");
+        Console.WriteLine($"Read finished: {entries:N0} entries, {dirs:N0} versions, {best.Count:N0} packages ({sw.Elapsed:mm\\:ss}).");
 
         Dictionary<string, CuratedEntry> curated = new(StringComparer.OrdinalIgnoreCase);
         if (!string.IsNullOrEmpty(curatedPath) && File.Exists(curatedPath))
         {
             var cf = JsonSerializer.Deserialize<CuratedFile>(File.ReadAllText(curatedPath), new JsonSerializerOptions { PropertyNameCaseInsensitive = true, ReadCommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
             if (cf?.Apps != null) foreach (var kv in cf.Apps) curated[kv.Key] = kv.Value;
-            Console.WriteLine($"Curadoria: {curated.Count} aplicativos com informacoes extras.");
+            Console.WriteLine($"Curated list: {curated.Count} applications with extra knowledge.");
         }
 
         var deserializer = new DeserializerBuilder().IgnoreUnmatchedProperties().Build();
@@ -120,14 +126,14 @@ public static class Program
             catch (Exception ex)
             {
                 errors++;
-                if (errors <= 20) Console.WriteLine($"  [aviso] {vd.Id} {vd.Version}: {ex.Message}");
+                if (errors <= 20) Console.WriteLine($"  [warning] {vd.Id} {vd.Version}: {ex.Message}");
             }
         }
         apps.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
 
         var catalog = new CatalogFile
         {
-            Schema = 1,
+            Schema = 2,
             Generated = DateTime.UtcNow,
             Source = "microsoft/winget-pkgs",
             Commit = commit,
@@ -146,9 +152,11 @@ public static class Program
         {
             await JsonSerializer.SerializeAsync(gzOut, catalog, opts);
         }
-        var meta = new { schema = 1, generated = catalog.Generated, count = catalog.Count, source = catalog.Source, commit, sizeBytes = new FileInfo(gzPath).Length };
+        var meta = new { schema = 2, generated = catalog.Generated, count = catalog.Count, source = catalog.Source, commit, sizeBytes = new FileInfo(gzPath).Length };
         File.WriteAllText(Path.Combine(outDir, "catalog-meta.json"), JsonSerializer.Serialize(meta, new JsonSerializerOptions { WriteIndented = true }));
-        Console.WriteLine($"Catalogo: {apps.Count:N0} aplicativos, {errors} erros, {new FileInfo(gzPath).Length / 1024.0 / 1024.0:N1} MB compactado ({sw.Elapsed:mm\\:ss}).");
+        int withDeps = apps.Count(a => a.Dependencies != null || a.Installers.Any(i => i.Dependencies != null && i.Dependencies.Count > 0)), withPt = apps.Count(a => a.DescriptionPt != null);
+        Console.WriteLine($"Catalog: {apps.Count:N0} applications ({withDeps:N0} with dependencies, {withPt:N0} with a Portuguese description), {errors} errors, {new FileInfo(gzPath).Length / 1024.0 / 1024.0:N1} MB compressed ({sw.Elapsed:mm\\:ss}).");
+        if (apps.Count < 1000) { Console.WriteLine("ERROR: the catalog is suspiciously small; refusing to publish it."); return 1; }
         return 0;
     }
 
@@ -158,7 +166,7 @@ public static class Program
         return i >= 0 && i + 1 < args.Length ? args[i + 1] : null;
     }
 
-    // ------------------------------------------------------------------ versoes
+    // ------------------------------------------------------------------ versions
 
     public static int VersionCompare(string a, string b)
     {
@@ -218,11 +226,15 @@ public static class Program
             Version = S(installerDoc, "PackageVersion") ?? vd.Version,
             Name = S(defaultLocale, "PackageName") ?? vd.Id,
             Publisher = S(defaultLocale, "Publisher"),
-            Description = Trim(S(ptLocale, "ShortDescription") ?? S(defaultLocale, "ShortDescription"), 260),
+            Description = Trim(S(defaultLocale, "ShortDescription") ?? S(ptLocale, "ShortDescription"), 260),
+            DescriptionPt = Trim(S(ptLocale, "ShortDescription"), 260),
             Homepage = S(defaultLocale, "PackageUrl") ?? S(defaultLocale, "PublisherUrl"),
             License = Trim(S(defaultLocale, "License"), 60),
             Moniker = S(defaultLocale, "Moniker"),
         };
+        if (app.DescriptionPt == app.Description) app.DescriptionPt = null;
+        var dependencies = new List<string>();
+        AddDependencies(installerDoc, dependencies);
         var tags = L(defaultLocale, "Tags").Select(t => t?.ToString()).Where(t => !string.IsNullOrWhiteSpace(t)).Take(10).ToList();
         if (tags.Count > 0) app.Tags = tags;
 
@@ -256,6 +268,10 @@ public static class Program
             var codes = (Get("InstallerSuccessCodes") as List<object>)?.Select(o => long.TryParse(o?.ToString(), out var c) ? c : (long?)null).Where(c => c.HasValue).Select(c => c.Value).ToList();
             if (codes != null && codes.Count > 0) inst.SuccessCodes = codes;
 
+            var ownDependencies = new List<string>();
+            AddDependencies(item, ownDependencies);
+            ownDependencies.RemoveAll(d => dependencies.Contains(d, StringComparer.OrdinalIgnoreCase));
+            if (ownDependencies.Count > 0) inst.Dependencies = ownDependencies;
             var arp = new List<ArpEntry>();
             foreach (var a in ((Get("AppsAndFeaturesEntries") as List<object>) ?? new List<object>()).OfType<Dictionary<object, object>>())
             {
@@ -274,7 +290,25 @@ public static class Program
         }
         if (installers.Count == 0) return null;
         app.Installers = installers;
+        dependencies.RemoveAll(d => string.Equals(d, app.Id, StringComparison.OrdinalIgnoreCase));
+        foreach (var i in installers)
+        {
+            i.Dependencies?.RemoveAll(d => string.Equals(d, app.Id, StringComparison.OrdinalIgnoreCase));
+            if (i.Dependencies != null && i.Dependencies.Count == 0) i.Dependencies = null;
+        }
+        if (dependencies.Count > 0) app.Dependencies = dependencies;
         return app;
+    }
+
+    /// <summary>Collects Dependencies.PackageDependencies[].PackageIdentifier of the manifest root or of one installer.</summary>
+    private static void AddDependencies(Dictionary<object, object> node, List<string> target)
+    {
+        if (node == null || !node.TryGetValue("Dependencies", out var d) || d is not Dictionary<object, object> deps) return;
+        foreach (var p in L(deps, "PackageDependencies").OfType<Dictionary<object, object>>())
+        {
+            string id = S(p, "PackageIdentifier");
+            if (id != null && !target.Contains(id, StringComparer.OrdinalIgnoreCase)) target.Add(id);
+        }
     }
 
     private static string S(Dictionary<object, object> d, string key)
@@ -319,10 +353,12 @@ public class CatalogApp
     [JsonPropertyName("p")] public string Publisher { get; set; }
     [JsonPropertyName("v")] public string Version { get; set; }
     [JsonPropertyName("d")] public string Description { get; set; }
+    [JsonPropertyName("dpt")] public string DescriptionPt { get; set; }
     [JsonPropertyName("hp")] public string Homepage { get; set; }
     [JsonPropertyName("lic")] public string License { get; set; }
     [JsonPropertyName("m")] public string Moniker { get; set; }
     [JsonPropertyName("tg")] public List<string> Tags { get; set; }
+    [JsonPropertyName("dep")] public List<string> Dependencies { get; set; }
     [JsonPropertyName("i")] public List<CatalogInstaller> Installers { get; set; }
     [JsonPropertyName("x")] public CuratedEntry Extra { get; set; }
 }
@@ -342,6 +378,7 @@ public class CatalogInstaller
     [JsonPropertyName("cu")] public string Custom { get; set; }
     [JsonPropertyName("el")] public string Elevation { get; set; }
     [JsonPropertyName("sc")] public List<long> SuccessCodes { get; set; }
+    [JsonPropertyName("dep")] public List<string> Dependencies { get; set; }
     [JsonPropertyName("arp")] public List<ArpEntry> Arp { get; set; }
 }
 
@@ -369,4 +406,5 @@ public class CuratedEntry
     [JsonPropertyName("checkVersion")] public bool? CheckVersion { get; set; }
     [JsonPropertyName("removePrevious")] public bool? RemovePrevious { get; set; }
     [JsonPropertyName("notes")] public string Notes { get; set; }
+    [JsonPropertyName("notesEn")] public string NotesEn { get; set; }
 }

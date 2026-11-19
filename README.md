@@ -1,169 +1,348 @@
 <p align="center">
-  <img src="docs/assets/capa.png" alt="J365 IntunePSApp — empacote qualquer aplicativo para o Microsoft Intune com PSAppDeployToolkit" width="100%">
+  <img src="docs/assets/cover-en.png" alt="J365 IntunePSApp - package any application for Microsoft Intune" width="100%">
 </p>
 
 <h1 align="center">J365 IntunePSApp</h1>
 
 <p align="center">
-  <b>Empacote qualquer aplicativo para o Microsoft Intune com PSAppDeployToolkit, sem escrever scripts.</b><br>
-  Aplicativo portátil para Windows, de código aberto, criado pelo <a href="https://jornada365.cloud">Jornada 365</a>.
+  <b>Package any Windows application for Microsoft Intune in minutes. No scripting.</b><br>
+  Built on <a href="https://psappdeploytoolkit.com">PSAppDeployToolkit</a> · Portable · Open source (MIT)
 </p>
 
 <p align="center">
-  <a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/latest"><img alt="Download" src="https://img.shields.io/github/v/release/sesantanajr/J365-IntunePSApp?label=download&color=0A5CA8&style=for-the-badge"></a>
-  <a href="LICENSE"><img alt="Licença MIT" src="https://img.shields.io/badge/licen%C3%A7a-MIT-16A34A?style=for-the-badge"></a>
-  <img alt="Windows 10/11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0B1A33?style=for-the-badge&logo=windows">
-  <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-512BD4?style=for-the-badge&logo=dotnet">
-  <img alt="PSAppDeployToolkit 4" src="https://img.shields.io/badge/PSAppDeployToolkit-4-2BB5F0?style=for-the-badge">
+  <a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/sesantanajr/J365-IntunePSApp?label=release&color=0A5CA8"></a>
+  <a href="https://github.com/sesantanajr/J365-IntunePSApp/actions/workflows/build.yml"><img alt="Build" src="https://github.com/sesantanajr/J365-IntunePSApp/actions/workflows/build.yml/badge.svg"></a>
+  <a href="https://github.com/sesantanajr/J365-IntunePSApp/actions/workflows/catalog.yml"><img alt="Application database" src="https://github.com/sesantanajr/J365-IntunePSApp/actions/workflows/catalog.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="MIT licence" src="https://img.shields.io/badge/licence-MIT-0A5CA8"></a>
 </p>
+
+<p align="center">
+  <b>English</b> · <a href="#-português">Português</a>
+</p>
+
+> **Created by [Sérgio Sant'Ana Junior](https://www.linkedin.com/in/sergiosantanacloud/)** · [Jornada 365](https://jornada365.cloud)
+>
+> This project is **based on [PSAppDeployToolkit](https://psappdeploytoolkit.com)**, the open-source deployment framework: every package it generates is a standard PSAppDeployToolkit v4 package. J365 IntunePSApp is the friendly front end that writes the package for you.
 
 ---
 
-## O que é
+## What it does
 
-O **J365 IntunePSApp** pega o instalador de um aplicativo (`.msi` ou `.exe`) e gera um pacote **Win32 para o Microsoft Intune** baseado no [PSAppDeployToolkit 4](https://psappdeploytoolkit.com). O pacote vem com:
+You pick an application (from a database of 16,000+ apps, or your own `.msi` / `.exe`), answer a few questions, and get everything Intune needs:
 
-- instalação silenciosa, com parâmetros validados;
-- a identidade visual da sua empresa;
-- mensagens para o usuário, fechamento de aplicativos e adiamento;
-- remoção de versões anteriores;
-- ações personalizadas (registro, atalhos, serviços, arquivos e outras);
-- um **script de detecção**;
-- o arquivo **`.intunewin`** pronto para envio;
-- um guia com **todos os campos do Intune** já preenchidos.
+- the **`.intunewin`** file, ready to upload;
+- the **install and uninstall command lines**;
+- a **detection script**;
+- an **instructions page** with every field of the Intune wizard ready to copy;
+- the complete **PSAppDeployToolkit package**, so you can keep editing it by hand if you want.
 
-O banco de dados integrado tem **mais de 16 mil aplicativos**. Ele é gerado diariamente a partir do repositório público do [winget](https://github.com/microsoft/winget-pkgs) e enriquecido pela curadoria do Jornada 365. Com ele, você busca um app, clica em **Baixar e empacotar** e recebe o pacote pronto. O download vem do link oficial do fabricante e é conferido pelo hash SHA256.
+Anyone can use it: there is nothing to install, no script to write and no PowerShell knowledge required.
 
-<p align="center">
-  <img src="docs/screenshots/catalogo.png" alt="Catálogo de aplicativos" width="49%">
-  <img src="docs/screenshots/experiencia.png" alt="Experiência do usuário com prévia ao vivo" width="49%">
-</p>
+## Download
 
-## Destaques
+1. Download **`J365-IntunePSApp-<version>-win-x64.zip`** from the [latest release](https://github.com/sesantanajr/J365-IntunePSApp/releases/latest).
+2. Extract it anywhere (a USB stick works) and run **`J365.IntunePSApp.exe`**.
+3. On the first run the application **prepares itself**: it downloads and verifies the application database, the PSAppDeployToolkit template and Microsoft's IntuneWinAppUtil. Nothing is installed on Windows.
+
+<p align="center"><img src="docs/screenshots/en/setup.png" alt="Automatic first-run setup" width="88%"></p>
+
+**Requirements:** Windows 10 or 11 (x64). No .NET to install (it is inside the executable). Internet access on the first run.
+
+> **Windows protection prompts.** The executable is not code-signed (this is a free community project). Windows SmartScreen may show *"Windows protected your PC"*: check the file first (see [Verify the download](#verify-the-download)), then choose *More info > Run anyway*. On computers with **Smart App Control** turned on, Windows can block unsigned applications it does not know yet and offers no exception; in that case use another computer or a virtual machine.
+
+## Features
 
 | | |
 |---|---|
-| 🗂️ **Banco de dados com mais de 16 mil apps** | Parâmetros silenciosos, links oficiais, SHA256, códigos de produto e nomes em "Aplicativos instalados". Atualizado todos os dias pelo GitHub Actions. |
-| 🔎 **Reconhecimento automático** | O app identifica o instalador pelo hash, pelo código do produto MSI ou pelo nome. A tecnologia do `.exe` também é detectada: NSIS, Inno Setup, WiX Burn, InstallShield, Advanced Installer ou Squirrel. |
-| 🎨 **Identidade da empresa** | Logo, nome, cor de destaque, estilo Fluent ou Clássico e idioma das janelas do PSADT, com prévia ao vivo. |
-| 💬 **Experiência do usuário** | Modo Automático, Silencioso ou Interativo; fechamento de apps com contagem regressiva; adiamento; bloqueio do app durante a instalação; mensagens personalizadas; pedido de reinicialização. |
-| ⚙️ **Ações sem script** | Remover ou criar atalhos, copiar arquivos (inclusive para todos os perfis), definir ou remover registro, parar ou desativar serviços, desativar tarefas agendadas, variáveis de ambiente, executar programas ou PowerShell, mensagens e espera. |
-| ♻️ **Versões anteriores** | Remove qualquer versão instalada (MSI e EXE) antes de instalar. O botão *Ver correspondências neste PC* mostra o que seria removido. |
-| ✅ **Detecção** | Gera o script de detecção por nome do programa, código do produto ou arquivo, com versão mínima e teste neste computador. |
-| 📦 **`.intunewin`** | Gerado pelo `IntuneWinAppUtil.exe` oficial da Microsoft, com assinatura verificada. Sem internet, um empacotador interno compatível gera o arquivo. Depois de pronto, o arquivo é validado (HMAC e SHA256). |
-| 💼 **Portátil** | Um único `.exe`, sem instalação e sem precisar do .NET. Configurações, banco de dados e ferramentas ficam numa pasta ao lado do executável. |
-| 🧾 **Guia do Intune** | `INSTRUCOES_INTUNE.html` com cada campo do portal (comandos, códigos de retorno, requisitos e detecção) e botões de copiar. |
+| **Application database** | 16,000+ applications with silent switches, official download URLs, SHA256 hashes and uninstall data. Rebuilt **every day** from the public [winget-pkgs](https://github.com/microsoft/winget-pkgs) repository, plus curated knowledge (processes to close, detection tips). Only a tiny metadata file is downloaded when nothing changed. |
+| **Any installer** | Drop an `.msi` or `.exe`. The technology is identified (MSI, Inno Setup, NSIS, WiX Burn, InstallShield, Advanced Installer, Squirrel) and the silent switches are suggested. The file is matched against the database by hash, product code or name. |
+| **User experience** | Close running applications (with countdown), let the user defer, block the app during the installation, custom welcome / progress / completion messages, restart prompt, silent or interactive mode. Live preview of the dialog. |
+| **Company branding** | Your logo, company name and accent colour in every dialog. Save once, reuse in every package. |
+| **Ready-made actions** | 20 actions, no scripting: install a **dependency**, uninstall another app, shortcuts, files and folders, copy to every user profile, registry values, import `.reg`, services, scheduled tasks, environment variables, run a program, show a message... and a PowerShell box for everything else. |
+| **Dependencies** | When the winget manifest declares dependencies (Visual C++ Redistributable, .NET Desktop Runtime...), one click downloads the right installer, ships it inside the package and installs it first. |
+| **Previous versions** | Removes any version already installed (MSI and EXE) before installing the new one. |
+| **Detection** | Generated detection script: by program name and minimum version, by product code, or by file. Test it on your computer with one click. |
+| **Keeping packages current** | *My packages* shows which packages have a **newer version in the database**. *Update* downloads the new installer and keeps every customisation. |
+| **Test before publishing** | **Windows Sandbox**: one click installs the package in a disposable Windows and runs the detection rule. Or test on the local computer. |
+| **Publish to Intune (preview)** | A generated `Publish-ToIntune.ps1` creates the app in your tenant with your own sign-in, without assignments. See [docs/INTUNE-PUBLISH.md](docs/INTUNE-PUBLISH.md). |
+| **English and Portuguese** | Switch the language at any time (sidebar or Settings). The generated instructions follow the same language. |
+| **Portable or installed** | Runs from any folder. Optionally installs for your user (Start menu, *Installed apps*) without administrator rights, and uninstalls cleanly. |
+| **Command line** | `--build`, `--setup`, `--update-catalog`, `--install`... for automation. |
 
-## Download e uso
+## How it works
 
-1. Baixe `J365-IntunePSApp-<versão>-win-x64.zip` em **[Releases](https://github.com/sesantanajr/J365-IntunePSApp/releases/latest)** e extraia em qualquer pasta (ou pendrive).
-2. Abra `J365.IntunePSApp.exe`.
-3. Escolha um app no **Catálogo** e clique em **Baixar e empacotar**, ou arraste o seu instalador na tela **Novo pacote**.
-4. Revise as etapas: Aplicativo, Experiência, Ações, Desinstalação, Detecção e Visual.
-5. Clique em **Gerar pacote** e envie o `.intunewin` ao Intune seguindo o guia gerado.
+**1. Choose the application** - search the catalog or drop your installer.
 
-> Na primeira geração, o app baixa o PSAppDeployToolkit (GitHub oficial) e o IntuneWinAppUtil (GitHub da Microsoft) e verifica a assinatura digital de ambos.
+<p align="center"><img src="docs/screenshots/en/catalog.png" alt="App catalog" width="88%"></p>
 
-<details>
-<summary><b>Ver mais telas</b></summary>
+**2. Customise** - experience, actions, dependencies, uninstall, detection and branding. Everything is filled in with sensible defaults.
 
-| Início | Instalador analisado |
+<p align="center"><img src="docs/screenshots/en/experience.png" alt="User experience with live preview" width="88%"></p>
+<p align="center"><img src="docs/screenshots/en/actions.png" alt="Dependencies and ready-made actions" width="88%"></p>
+
+**3. Generate and send to Intune** - the package is validated (script syntax, `.intunewin` integrity) and you get the commands, the detection script and the instructions.
+
+<p align="center"><img src="docs/screenshots/en/generated.png" alt="Package ready for Intune" width="88%"></p>
+
+**Later** - the application tells you when a packaged app has a new version.
+
+<p align="center"><img src="docs/screenshots/en/packages.png" alt="My packages with update notice" width="88%"></p>
+
+## What is generated
+
+```
+<Output>\<App>_<Version>\
+├── Package\                     PSAppDeployToolkit package (Invoke-AppDeployToolkit.exe/.ps1, Files, SupportFiles, Config, Assets...)
+├── Intune\
+│   ├── <App>_<Version>.intunewin    upload this file to Intune
+│   ├── Detection_<App>_<Version>.ps1
+│   ├── Intune-Instructions.html     every field of the Intune wizard, ready to copy (+ .txt)
+│   ├── intune-app.json              the same information, machine-readable
+│   ├── Publish-ToIntune.ps1         optional publishing script (preview)
+│   └── AppIcon.png
+├── Sandbox\Sandbox-Test.ps1     test script used by "Test in Sandbox"
+├── project.json                 reopen, change and generate again
+└── build.log
+```
+
+In Intune (*Apps > Windows > Add > Windows app (Win32)*):
+
+| Field | Value |
 |---|---|
-| ![Início](docs/screenshots/inicio.png) | ![Instalador](docs/screenshots/instalador.png) |
-| **Ações sem script** | **Identidade visual** |
-| ![Ações](docs/screenshots/acoes.png) | ![Visual](docs/screenshots/visual.png) |
-| **Pacote gerado** | **Configurações** |
-| ![Gerado](docs/screenshots/gerado.png) | ![Configurações](docs/screenshots/configuracoes.png) |
+| Install command | `Invoke-AppDeployToolkit.exe -DeploymentType Install` |
+| Uninstall command | `Invoke-AppDeployToolkit.exe -DeploymentType Uninstall` |
+| Install behavior | System (or User, when you choose so) |
+| Detection rules | Use a custom detection script: `Detection_<App>_<Version>.ps1` |
 
-</details>
+## Command line
+
+```text
+J365.IntunePSApp.exe [file]                                   open a project (project.json) or analyse an installer
+J365.IntunePSApp.exe --build <project.json|installer> [--out <folder>] [--native]
+J365.IntunePSApp.exe --setup                                  download and verify the dependencies
+J365.IntunePSApp.exe --update-catalog [--force]               update the application database
+J365.IntunePSApp.exe --install [--desktop-shortcut] [--quiet] install for the current user
+J365.IntunePSApp.exe --uninstall [--purge] [--quiet]          remove the installation
+    --lang <en|pt-BR>    --version    --help
+```
+
+## Verify the download
+
+Every release is built by GitHub Actions from the tagged commit and carries checksums and a signed build provenance attestation.
+
+```powershell
+# 1. Checksum: compare with SHA256SUMS.txt of the release
+Get-FileHash .\J365-IntunePSApp-2.0.0-win-x64.zip -Algorithm SHA256
+
+# 2. Provenance: proves the file was built by this repository's workflow (GitHub CLI)
+gh attestation verify .\J365-IntunePSApp-2.0.0-win-x64.zip --repo sesantanajr/J365-IntunePSApp
+```
+
+What the application itself verifies: the database installers (SHA256 from the winget manifest), the PSAppDeployToolkit module (Authenticode signature), IntuneWinAppUtil (Microsoft signature, otherwise discarded) and every `.intunewin` it creates (HMAC and SHA256). See [SECURITY.md](SECURITY.md).
+
+## Source package, building and forking
+
+The project is open source so you can **audit it, build it yourself, fork it or base another project on it**.
+
+- **Source package:** every release includes `J365-IntunePSApp-<version>-source.zip`, the exact source of that release.
+- **Build:** `dotnet publish src/IntunePSApp -c Release -r win-x64` with the .NET 10 SDK. Details in [docs/BUILDING.md](docs/BUILDING.md).
+- **Fork / rebrand / translate:** [docs/FORKING.md](docs/FORKING.md) lists the few places to change (name, links, logo, database URL) and how to add a language.
+- **How it is organised:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+- **Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md). The quickest way to help is improving [`catalog/curated.json`](catalog/curated.json).
+
+## What was tested (and what was not)
+
+- **Automated:** 125 unit tests run on every push (generated scripts are parsed by Windows PowerShell 5.1, `.intunewin` round trip, both languages, project migration, validations).
+- **End to end, by the author:** packages built from the interface and from the command line in both languages; a generated package executed for real with a test installer (install, repair, uninstall, 22 actions including dependency and `.reg` import); first-run setup on an empty folder; per-user install and uninstall; database generation.
+- **Not verified by the author yet:** *Publish to Intune* against a real tenant (the script was reviewed against the IntuneWin32App module and its validation mode was run; that is why it is labelled **preview**) and the Windows Sandbox launch itself (the test script was run outside the sandbox). Feedback is welcome in the [issues](https://github.com/sesantanajr/J365-IntunePSApp/issues).
+
+As with any packaging tool: **always test a package with a pilot group before a broad deployment.**
+
+## Roadmap
+
+Dark theme · self-update · more languages (the texts are two JSON files) · ARM64 build · code signing · Intune assignments and supersedence in the publishing script.
+
+## Credits
+
+- **[PSAppDeployToolkit](https://psappdeploytoolkit.com)** (LGPL-3.0) - the deployment framework this project is based on. Thank you to the PSAppDeployToolkit team and community.
+- **[winget-pkgs](https://github.com/microsoft/winget-pkgs)** (MIT) - source of the application database.
+- **[Microsoft Win32 Content Prep Tool](https://github.com/microsoft/Microsoft-Win32-Content-Prep-Tool)** - downloaded from Microsoft at run time, never redistributed.
+- **[IntuneWin32App](https://github.com/MSEndpointMgr/IntuneWin32App)** (MIT) - community module used by the optional publishing script.
+
+Not affiliated with Microsoft or with the PSAppDeployToolkit team. See [NOTICE.md](NOTICE.md) and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+## Licence
+
+[MIT](LICENSE) © 2026 Sérgio Sant'Ana Junior - Jornada 365.
+
+<br>
+
+---
+
+<p align="center">
+  <img src="docs/assets/cover-pt.png" alt="J365 IntunePSApp - empacote qualquer aplicativo para o Microsoft Intune" width="100%">
+</p>
+
+# 🇧🇷 Português
+
+<p align="center">
+  <b>Empacote qualquer aplicativo Windows para o Microsoft Intune em minutos. Sem escrever scripts.</b><br>
+  Baseado no <a href="https://psappdeploytoolkit.com">PSAppDeployToolkit</a> · Portátil · Código aberto (MIT)
+</p>
+
+<p align="center">
+  <a href="#j365-intunepsapp">English</a> · <b>Português</b>
+</p>
+
+> **Criado por [Sérgio Sant'Ana Junior](https://www.linkedin.com/in/sergiosantanacloud/)** · [Jornada 365](https://jornada365.cloud)
+>
+> Este projeto foi **criado com base no [PSAppDeployToolkit](https://psappdeploytoolkit.com)**, o framework de implantação de código aberto: todo pacote gerado é um pacote padrão do PSAppDeployToolkit v4. O J365 IntunePSApp é a interface amigável que escreve o pacote para você.
+
+## O que ele faz
+
+Você escolhe um aplicativo (em um banco de dados com mais de 16.000 apps, ou o seu próprio `.msi` / `.exe`), responde a algumas perguntas e recebe tudo o que o Intune precisa:
+
+- o arquivo **`.intunewin`**, pronto para enviar;
+- os **comandos de instalação e desinstalação**;
+- um **script de detecção**;
+- uma **página de instruções** com todos os campos do assistente do Intune prontos para copiar;
+- o **pacote PSAppDeployToolkit** completo, para continuar editando manualmente se quiser.
+
+Qualquer pessoa consegue usar: não há nada para instalar, nenhum script para escrever e não é preciso conhecer PowerShell.
+
+## Download
+
+1. Baixe **`J365-IntunePSApp-<versão>-win-x64.zip`** na [última versão](https://github.com/sesantanajr/J365-IntunePSApp/releases/latest).
+2. Extraia em qualquer pasta (funciona em pendrive) e execute **`J365.IntunePSApp.exe`**.
+3. Na primeira execução o aplicativo **se prepara sozinho**: baixa e verifica o banco de dados de aplicativos, o template do PSAppDeployToolkit e o IntuneWinAppUtil da Microsoft. Nada é instalado no Windows.
+
+<p align="center"><img src="docs/screenshots/pt-BR/setup.png" alt="Preparação automática na primeira execução" width="88%"></p>
+
+**Requisitos:** Windows 10 ou 11 (x64). Não precisa instalar o .NET (ele está dentro do executável). Acesso à internet na primeira execução.
+
+> **Avisos de proteção do Windows.** O executável não tem assinatura digital (é um projeto gratuito da comunidade). O Windows SmartScreen pode mostrar *"O Windows protegeu o computador"*: confira o arquivo antes (veja [Verifique o download](#verifique-o-download)) e escolha *Mais informações > Executar assim mesmo*. Em computadores com o **Controle Inteligente de Aplicativos** (Smart App Control) ativado, o Windows pode bloquear aplicativos sem assinatura que ainda não conhece e não oferece exceção; nesse caso use outro computador ou uma máquina virtual.
+
+## Recursos
+
+| | |
+|---|---|
+| **Banco de dados de aplicativos** | Mais de 16.000 aplicativos com parâmetros silenciosos, links oficiais de download, hashes SHA256 e dados de desinstalação. Recriado **todos os dias** a partir do repositório público [winget-pkgs](https://github.com/microsoft/winget-pkgs), com curadoria (processos a fechar, dicas de detecção). Quando nada mudou, só um pequeno arquivo de metadados é baixado. |
+| **Qualquer instalador** | Arraste um `.msi` ou `.exe`. A tecnologia é identificada (MSI, Inno Setup, NSIS, WiX Burn, InstallShield, Advanced Installer, Squirrel) e os parâmetros silenciosos são sugeridos. O arquivo é comparado com o banco de dados por hash, código do produto ou nome. |
+| **Experiência do usuário** | Fechar aplicativos abertos (com contagem), permitir adiar, impedir abrir o app durante a instalação, mensagens personalizadas de boas-vindas / progresso / conclusão, pedido de reinicialização, modo silencioso ou interativo. Prévia da janela em tempo real. |
+| **Identidade da empresa** | Seu logo, nome da empresa e cor de destaque em todas as janelas. Salve uma vez e reutilize em todos os pacotes. |
+| **Ações prontas** | 20 ações, sem script: instalar uma **dependência**, desinstalar outro app, atalhos, arquivos e pastas, copiar para o perfil de cada usuário, valores de registro, importar `.reg`, serviços, tarefas agendadas, variáveis de ambiente, executar um programa, mostrar mensagem... e uma caixa de PowerShell para todo o resto. |
+| **Dependências** | Quando o manifesto do winget declara dependências (Visual C++ Redistributable, .NET Desktop Runtime...), um clique baixa o instalador certo, envia dentro do pacote e instala antes. |
+| **Versões anteriores** | Remove qualquer versão já instalada (MSI e EXE) antes de instalar a nova. |
+| **Detecção** | Script de detecção gerado: pelo nome do programa e versão mínima, pelo código do produto ou por arquivo. Teste no seu computador com um clique. |
+| **Pacotes sempre atuais** | *Meus pacotes* mostra quais pacotes têm **versão mais nova no banco de dados**. *Atualizar* baixa o novo instalador e mantém todas as personalizações. |
+| **Teste antes de publicar** | **Windows Sandbox**: um clique instala o pacote em um Windows descartável e executa a regra de detecção. Ou teste no computador local. |
+| **Publicar no Intune (prévia)** | Um `Publish-ToIntune.ps1` gerado cria o aplicativo no seu locatário com o seu próprio login, sem atribuições. Veja [docs/INTUNE-PUBLISH.md](docs/INTUNE-PUBLISH.md). |
+| **Inglês e português** | Troque o idioma a qualquer momento (barra lateral ou Configurações). As instruções geradas seguem o mesmo idioma. |
+| **Portátil ou instalado** | Roda de qualquer pasta. Se quiser, instala para o seu usuário (Menu Iniciar, *Aplicativos instalados*) sem precisar de administrador, e desinstala sem deixar resíduos. |
+| **Linha de comando** | `--build`, `--setup`, `--update-catalog`, `--install`... para automação. |
+
+## Como funciona
+
+**1. Escolha o aplicativo** - busque no catálogo ou arraste o seu instalador.
+
+<p align="center"><img src="docs/screenshots/pt-BR/catalog.png" alt="Catálogo de aplicativos" width="88%"></p>
+
+**2. Personalize** - experiência, ações, dependências, desinstalação, detecção e visual. Tudo já vem preenchido com padrões sensatos.
+
+<p align="center"><img src="docs/screenshots/pt-BR/experience.png" alt="Experiência do usuário com prévia" width="88%"></p>
+<p align="center"><img src="docs/screenshots/pt-BR/actions.png" alt="Dependências e ações prontas" width="88%"></p>
+
+**3. Gere e envie ao Intune** - o pacote é validado (sintaxe dos scripts, integridade do `.intunewin`) e você recebe os comandos, o script de detecção e as instruções.
+
+<p align="center"><img src="docs/screenshots/pt-BR/generated.png" alt="Pacote pronto para o Intune" width="88%"></p>
+
+**Depois** - o aplicativo avisa quando um app empacotado tem versão nova.
+
+<p align="center"><img src="docs/screenshots/pt-BR/packages.png" alt="Meus pacotes com aviso de atualização" width="88%"></p>
 
 ## O que é gerado
 
 ```
-Pacotes\7-Zip_26.06\
-├── Pacote_PSADT\                     pasta-fonte do PSAppDeployToolkit (dá para testar localmente)
-│   ├── Invoke-AppDeployToolkit.exe
-│   ├── Invoke-AppDeployToolkit.ps1    gerado: instalar · desinstalar · reparar · ações
-│   ├── Files\                         instalador
-│   ├── SupportFiles\                  arquivos extras (licenças, configurações...)
-│   ├── Assets\  Config\  Strings\     logo, cor, idioma e mensagens da empresa
+<Saída>\<App>_<Versão>\
+├── Package\                     pacote PSAppDeployToolkit (Invoke-AppDeployToolkit.exe/.ps1, Files, SupportFiles, Config, Assets...)
 ├── Intune\
-│   ├── 7-Zip_26.06.intunewin          envie ao Intune
-│   ├── Deteccao_7-Zip_26.06.ps1       regra de detecção (script personalizado)
-│   ├── Icone_App.png                  ícone para o Portal da Empresa
-│   └── INSTRUCOES_INTUNE.html / .txt  todos os campos do Intune
-├── projeto.json                       reabra para gerar a próxima versão em segundos
-└── geracao.log
+│   ├── <App>_<Versão>.intunewin     envie este arquivo ao Intune
+│   ├── Detection_<App>_<Versão>.ps1
+│   ├── Intune-Instructions.html     todos os campos do assistente do Intune, prontos para copiar (+ .txt)
+│   ├── intune-app.json              as mesmas informações, para automação
+│   ├── Publish-ToIntune.ps1         script opcional de publicação (prévia)
+│   └── AppIcon.png
+├── Sandbox\Sandbox-Test.ps1     script de teste usado por "Testar no Sandbox"
+├── project.json                 reabra, altere e gere novamente
+└── build.log
 ```
 
-**Configuração no Intune (resumo):**
+No Intune (*Aplicativos > Windows > Adicionar > Aplicativo do Windows (Win32)*):
 
 | Campo | Valor |
 |---|---|
 | Comando de instalação | `Invoke-AppDeployToolkit.exe -DeploymentType Install` |
 | Comando de desinstalação | `Invoke-AppDeployToolkit.exe -DeploymentType Uninstall` |
-| Comportamento de instalação | Sistema |
-| Reinicialização | Determinar o comportamento com base nos códigos de retorno |
-| Detecção | Script personalizado `Deteccao_*.ps1` (32 bits: Não · assinatura: Não) |
-
-A partir do PSADT 4.1, as janelas aparecem para o usuário mesmo com a instalação rodando como Sistema, sem precisar do ServiceUI. No modo **Automático**:
-
-- as janelas só aparecem quando há alguém conectado;
-- se houver aplicativos configurados para fechar, elas só aparecem quando algum deles estiver aberto;
-- durante o Autopilot, a instalação é silenciosa.
-
-## Banco de dados de aplicativos
-
-- **Fonte:** [`microsoft/winget-pkgs`](https://github.com/microsoft/winget-pkgs) (licença MIT). Entra apenas a versão mais recente de cada pacote.
-- **Gerador:** [`tools/CatalogBuilder`](tools/CatalogBuilder). Ele lê o tarball do repositório em streaming e gera `catalog.json.gz` (cerca de 3,5 MB, mais de 16 mil apps) em menos de um minuto.
-- **Atualização:** o workflow [`catalog.yml`](.github/workflows/catalog.yml) roda **todos os dias** e publica o arquivo na release [`catalog`](https://github.com/sesantanajr/J365-IntunePSApp/releases/tag/catalog). O app baixa a nova versão automaticamente.
-- **Curadoria:** [`catalog/curated.json`](catalog/curated.json) acrescenta o que o winget não tem: processos a fechar, nome em "Aplicativos instalados", parâmetros de desinstalação, detecção recomendada e observações. **Contribuições são bem-vindas.**
+| Comportamento de instalação | Sistema (ou Usuário, se você escolher) |
+| Regras de detecção | Usar um script de detecção personalizado: `Detection_<App>_<Versão>.ps1` |
 
 ## Linha de comando
 
-O mesmo executável gera pacotes sem interface, o que é útil para automação e pipelines:
-
-```powershell
-.\J365.IntunePSApp.exe --build "C:\Instaladores\7z2606-x64.exe" --out "D:\Pacotes"
-.\J365.IntunePSApp.exe --build "D:\Pacotes\7-Zip_26.06\projeto.json"
+```text
+J365.IntunePSApp.exe [arquivo]                                abre um projeto (project.json) ou analisa um instalador
+J365.IntunePSApp.exe --build <project.json|instalador> [--out <pasta>] [--native]
+J365.IntunePSApp.exe --setup                                  baixa e verifica as dependências
+J365.IntunePSApp.exe --update-catalog [--force]               atualiza o banco de dados de aplicativos
+J365.IntunePSApp.exe --install [--desktop-shortcut] [--quiet] instala para o usuário atual
+J365.IntunePSApp.exe --uninstall [--purge] [--quiet]          remove a instalação
+    --lang <en|pt-BR>    --version    --help
 ```
 
-## Compilar a partir do código
+## Verifique o download
 
-Requisito: [.NET SDK 10](https://dotnet.microsoft.com/download).
+Cada versão é compilada pelo GitHub Actions a partir do commit marcado e traz os checksums e um atestado assinado de procedência da compilação.
 
 ```powershell
-git clone https://github.com/sesantanajr/J365-IntunePSApp.git
-cd J365-IntunePSApp
-dotnet run --project src/IntunePSApp
-# Versão portátil (um único .exe):
-dotnet publish src/IntunePSApp -c Release -r win-x64 -o publish
-# Banco de dados local:
-dotnet run --project tools/CatalogBuilder -c Release -- --out out --curated catalog/curated.json
+# 1. Checksum: compare com o SHA256SUMS.txt da versão
+Get-FileHash .\J365-IntunePSApp-2.0.0-win-x64.zip -Algorithm SHA256
+
+# 2. Procedência: prova que o arquivo foi compilado pelo workflow deste repositório (GitHub CLI)
+gh attestation verify .\J365-IntunePSApp-2.0.0-win-x64.zip --repo sesantanajr/J365-IntunePSApp
 ```
 
-| Pasta | Conteúdo |
-|---|---|
-| `src/IntunePSApp/Core` | motor: análise de instaladores (MSI e PE), banco de dados, geração do PSADT, ações, detecção, `.intunewin` |
-| `src/IntunePSApp/Views` | interface WPF (tema Fluent do .NET 10 com a identidade do Jornada 365) |
-| `tools/CatalogBuilder` | gerador do banco de dados a partir do winget-pkgs |
-| `catalog/curated.json` | curadoria (processos, desinstalação, detecção, observações) |
-| `.github/workflows` | build e release do `.exe` portátil e atualização diária do banco |
+O que o próprio aplicativo verifica: os instaladores do banco de dados (SHA256 do manifesto do winget), o módulo do PSAppDeployToolkit (assinatura Authenticode), o IntuneWinAppUtil (assinatura da Microsoft, senão é descartado) e cada `.intunewin` criado (HMAC e SHA256). Veja [SECURITY.md](SECURITY.md).
 
-## Contribuindo
+## Pacote de código-fonte, compilação e fork
 
-Pull requests são bem-vindos, principalmente com **curadoria de aplicativos** e testes com instaladores reais. Veja o [CONTRIBUTING.md](CONTRIBUTING.md).
+O projeto é de código aberto para que você possa **auditar, compilar, fazer um fork ou criar outro projeto com base nele**.
 
-## Licença e créditos
+- **Pacote de código-fonte:** cada versão inclui `J365-IntunePSApp-<versão>-source.zip`, o código exato daquela versão.
+- **Compilar:** `dotnet publish src/IntunePSApp -c Release -r win-x64` com o SDK do .NET 10. Detalhes em [docs/BUILDING.md](docs/BUILDING.md).
+- **Fork / mudar a marca / traduzir:** [docs/FORKING.md](docs/FORKING.md) lista os poucos lugares a alterar (nome, links, logo, endereço do banco de dados) e como adicionar um idioma.
+- **Como está organizado:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+- **Contribuir:** [CONTRIBUTING.md](CONTRIBUTING.md). A forma mais rápida de ajudar é melhorar o [`catalog/curated.json`](catalog/curated.json).
 
-- Código: **[MIT](LICENSE)** © 2026 Jornada 365.
-- [PSAppDeployToolkit](https://github.com/PSAppDeployToolkit/PSAppDeployToolkit) (LGPL-3.0): baixado do GitHub oficial em tempo de execução e incluído nos pacotes gerados.
-- [Microsoft Win32 Content Prep Tool](https://github.com/microsoft/Microsoft-Win32-Content-Prep-Tool) (licença Microsoft): baixado do GitHub oficial em tempo de execução, não é redistribuído.
-- Dados de aplicativos: [winget-pkgs](https://github.com/microsoft/winget-pkgs) (MIT).
+## O que foi testado (e o que não foi)
 
-Detalhes em [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Este projeto não é afiliado à Microsoft nem ao PSAppDeployToolkit. Microsoft, Intune e Windows são marcas da Microsoft Corporation.
+- **Automatizado:** 125 testes unitários rodam a cada push (os scripts gerados são analisados pelo Windows PowerShell 5.1, ida e volta do `.intunewin`, os dois idiomas, migração de projetos, validações).
+- **De ponta a ponta, pelo autor:** pacotes gerados pela interface e pela linha de comando nos dois idiomas; um pacote gerado executado de verdade com um instalador de teste (instalação, reparo, desinstalação, 22 ações incluindo dependência e importação de `.reg`); preparação da primeira execução em uma pasta vazia; instalação e desinstalação por usuário; geração do banco de dados.
+- **Ainda não verificado pelo autor:** *Publicar no Intune* contra um locatário real (o script foi revisado com base no módulo IntuneWin32App e o modo de validação foi executado; por isso está marcado como **prévia**) e a abertura do Windows Sandbox em si (o script de teste foi executado fora do sandbox). Relatos são bem-vindos nas [issues](https://github.com/sesantanajr/J365-IntunePSApp/issues).
 
-<p align="center">
-  <a href="https://jornada365.cloud"><img src="docs/assets/j365-logo.png" alt="Jornada 365" width="90"></a><br>
-  Feito com 💙 pelo <a href="https://jornada365.cloud">Jornada 365</a>: sua jornada começa aqui.
-</p>
+Como em qualquer ferramenta de empacotamento: **sempre teste o pacote em um grupo piloto antes de uma implantação ampla.**
+
+## Próximos passos
+
+Tema escuro · atualização automática do aplicativo · mais idiomas (os textos são dois arquivos JSON) · versão ARM64 · assinatura de código · atribuições e substituição (supersedence) no script de publicação.
+
+## Créditos
+
+- **[PSAppDeployToolkit](https://psappdeploytoolkit.com)** (LGPL-3.0) - o framework de implantação em que este projeto é baseado. Obrigado à equipe e à comunidade do PSAppDeployToolkit.
+- **[winget-pkgs](https://github.com/microsoft/winget-pkgs)** (MIT) - origem do banco de dados de aplicativos.
+- **[Microsoft Win32 Content Prep Tool](https://github.com/microsoft/Microsoft-Win32-Content-Prep-Tool)** - baixado da Microsoft em tempo de execução, nunca redistribuído.
+- **[IntuneWin32App](https://github.com/MSEndpointMgr/IntuneWin32App)** (MIT) - módulo da comunidade usado pelo script opcional de publicação.
+
+Sem vínculo com a Microsoft ou com a equipe do PSAppDeployToolkit. Veja [NOTICE.md](NOTICE.md) e [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+## Licença
+
+[MIT](LICENSE) © 2026 Sérgio Sant'Ana Junior - Jornada 365.
