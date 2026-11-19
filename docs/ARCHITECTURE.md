@@ -37,9 +37,10 @@ Everything a package needs is in `PackageSettings`, saved as `project.json` next
 | `SummaryWriter.cs` | The Intune instructions (HTML and text). |
 | `ToolsService.cs` | Downloads and validates PSAppDeployToolkit and IntuneWinAppUtil; `PowerShellValidator` parses generated scripts with Windows PowerShell 5.1. |
 | `SetupService.cs` | First-run dependency setup and the update checks. |
-| `InstallService.cs` | Optional per-user installation, shortcuts, uninstall. |
+| `AppUpdater.cs` | Updates the application while it is open: reads the latest GitHub release, downloads the zip, checks it against `SHA256SUMS.txt`, puts the new executable in place of the running one and restarts. |
+| `InstallService.cs` | Optional per-user installation (also over an installed copy that is open), shortcuts, uninstall. |
 | `Integrations.cs` | Windows Sandbox: state of the Windows feature (ready, open, turned off, not in this edition), enabling it with DISM, the `.wsb` configuration and the result of the test. Launcher of the publishing script. |
-| `Native.cs`, `ImageTools.cs` | P/Invoke (MSI, WinVerifyTrust, icons) and image work. |
+| `Native.cs`, `ImageTools.cs` | P/Invoke (MSI, WinVerifyTrust, icons) and image work: the icon of an installer, of the program an `.msi` installs (read from its cabinet with `expand.exe`) or of the copy installed on the computer. |
 
 ## How a package is generated
 
@@ -51,6 +52,21 @@ Everything a package needs is in `PackageSettings`, saved as `project.json` next
 6. Branding is applied (`config.psd1`, `strings.psd1`, `Assets`), the detection script is written (pure ASCII) and parsed.
 7. `IntuneWinBuilder` creates the `.intunewin` and immediately validates it (HMAC, decryption, SHA256).
 8. Instructions, `intune-app.json`, `Publish-ToIntune.ps1` and `Sandbox-Test.ps1` are written; `project.json` is saved last, so an incomplete folder is never listed as a package. A failed build removes its folder.
+
+## Detection and the package mark
+
+Intune runs the detection rule **before** a Win32 app: when it already says "installed", the package never runs. A rule that only looks at the program name and version also matches a copy installed some other way (by hand, by another tool), so on those devices nothing was removed or installed. Since 2.2 the generated package writes a mark when it finishes:
+
+```
+HKLM\SOFTWARE\J365\IntunePSApp\Apps\<application>     (HKCU for packages installed per user; 64-bit view)
+    Version, Name, Vendor, PackageVersion, InstalledUtc, Generator
+```
+
+The detection script first applies the rule (name/version, product code or file) and then requires the mark with a version equal to or higher than the minimum. A copy without the mark is reported as not installed (the script writes `Not detected: ...` and exits 1), so Intune runs the package, which removes that copy and installs its own version. The mark is written at the end of *Post-Install* (a failed step leaves none) and of *Repair*, and removed after the uninstallation. It can be turned off per package (*Require the mark of this package*).
+
+## Updating the application
+
+`AppUpdater` reads `https://api.github.com/repos/<AppInfo.GitHubRepo>/releases/latest` (or `J365_UPDATE_API`), takes the asset `J365-IntunePSApp-<version>-win-x64.zip` and `SHA256SUMS.txt`, downloads the zip with progress and checks its SHA256, extracts `J365.IntunePSApp.exe` next to the running one (`….exe.new`) and checks its version. A running executable cannot be overwritten but can be renamed: the current file becomes `….exe.old`, the new one takes its name, the application restarts with `--updated <previous version>` and the new process removes the `.old` file. On failure the original stays in place. The same rename lets the portable copy update an installed copy that is open. `--update [--check]` does the same from the command line.
 
 ## The Windows Sandbox test
 

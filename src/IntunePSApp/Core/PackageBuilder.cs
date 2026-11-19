@@ -202,6 +202,9 @@ namespace J365.IntunePSApp.Core
             // Intune runs the detection rule before the package: when an older version already counts as "installed",
             // the package (and its removal of existing versions) never runs. A product code changes with the version.
             if (s.RemovePreviousVersions && !s.DetectionCheckVersion && s.DetectionMethod != "ProductCode") v.Warnings.Add(T("Val_Warn_DetectionHidesOldVersions"));
+            // Without the package mark, a copy installed some other way (same name, same or newer version) already counts
+            // as installed: Intune never runs this package on that device, so the removal never happens there.
+            else if (s.RemovePreviousVersions && !s.DetectionRequireMark) v.Warnings.Add(T("Val_Warn_NoPackageMark"));
             return v;
         }
 
@@ -339,11 +342,12 @@ namespace J365.IntunePSApp.Core
 
                 // Application icon for Intune and the Company Portal: always written, nothing to download separately.
                 string icon = Path.Combine(intuneDir, PackageLayout.AppIcon);
-                string iconSource = ImageTools.SaveAppIcon(s.AppIconPath, inst.FullName, s.AppName, s.CatalogId, icon);
+                string iconSource = ImageTools.SaveAppIcon(s.AppIconPath, inst.FullName, s.AppName, s.CatalogId, icon, s.UninstallPattern);
                 Log.Info(iconSource switch
                 {
                     ImageTools.IconCustom => T("Log_AppIconCustom"),
                     ImageTools.IconInstaller => T("Log_AppIconInstaller"),
+                    ImageTools.IconInstalled => T("Log_AppIconInstalled"),
                     _ => T("Log_AppIconGenerated")
                 });
 
@@ -571,7 +575,11 @@ namespace J365.IntunePSApp.Core
 
         // ------------------------------------------------------------------ local tests
 
-        public static (bool Detected, string Output) TestDetection(PackageSettings s)
+        /// <summary>
+        /// Runs the detection script on this computer. <c>NoMark</c>: the application is installed here, but not by this
+        /// package (the package mark is missing or older) - Intune would run the package on a device like this one.
+        /// </summary>
+        public static (bool Detected, bool NoMark, string Output) TestDetection(PackageSettings s)
         {
             string tmp = Path.Combine(AppPaths.Temp, $"detection_{Guid.NewGuid():N}.ps1");
             File.WriteAllText(tmp, ScriptGenerator.DetectionScript(s), Encoding.ASCII);
@@ -581,7 +589,9 @@ namespace J365.IntunePSApp.Core
                 var psi = ToolsService.PowerShellStartInfo($"-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"{tmp}\"");
                 var run = ToolsService.RunPowerShell(psi);
                 string output = run.Output.Trim();
-                return (!run.TimedOut && run.ExitCode == 0 && output.Length > 0, output);
+                bool detected = !run.TimedOut && run.ExitCode == 0 && output.Length > 0;
+                bool noMark = !detected && !run.TimedOut && output.StartsWith(ScriptGenerator.NoMarkPrefix, StringComparison.Ordinal);
+                return (detected, noMark, output);
             }
             finally { try { File.Delete(tmp); } catch { } }
         }

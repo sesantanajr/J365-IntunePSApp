@@ -306,6 +306,51 @@ namespace J365.IntunePSApp.Tests
             Assert.False(ImageTools.SaveInstallerIcon(tmp.File("other.msi", ""), Path.Combine(tmp.Path, "icon.png")));
         }
 
+        [Theory]
+        [InlineData("\"C:\\Program Files\\7-Zip\\7zFM.exe\",0", "C:\\Program Files\\7-Zip\\7zFM.exe", 0)]
+        [InlineData("C:\\Program Files\\App\\app.exe", "C:\\Program Files\\App\\app.exe", 0)]
+        [InlineData("C:\\Windows\\system32\\shell32.dll,-154", "C:\\Windows\\system32\\shell32.dll", -154)]
+        [InlineData("C:\\Apps\\a,b\\app.exe", "C:\\Apps\\a,b\\app.exe", 0)]
+        [InlineData("  \"C:\\App\\app.ico\"  ", "C:\\App\\app.ico", 0)]
+        [InlineData("", "", 0)]
+        public void Icon_locations_from_installed_apps_are_parsed(string value, string path, int index)
+            => Assert.Equal((path, index), ImageTools.ParseIconLocation(value));
+
+        [Fact]
+        public void Uninstallers_setups_and_help_shortcuts_are_not_taken_for_the_application()
+        {
+            foreach (var helper in new[] { "unins000.exe", "Uninstall.exe", "setup.exe", "Update.exe", "crashpad_handler.exe", "vc_redist.x64.exe" })
+                Assert.True(MsiReader.IsHelperProgram(helper), helper);
+            foreach (var app in new[] { "7zFM.exe", "notepad++.exe", "RemoteHelp.exe", "Teams.exe" })
+                Assert.False(MsiReader.IsHelperProgram(app), app);
+            foreach (var helper in new[] { "Uninstall 7-Zip", "7-Zip Help", "Read Me", "Desinstalar App", "License" })
+                Assert.True(MsiReader.IsHelperShortcut(helper), helper);
+            Assert.False(MsiReader.IsHelperShortcut("7-Zip File Manager"));
+            Assert.Equal("7zFM.exe", MsiReader.LongName("7ZFM~1.EXE|7zFM.exe"));
+            Assert.Equal("app.exe", MsiReader.LongName("app.exe"));
+        }
+
+        [Fact]
+        public void Installer_icons_are_cached_by_file_name_size_and_date()
+        {
+            using var tmp = new TempFolder();
+            // A real program with an icon, under an installer name (nothing is run).
+            string setup = Path.Combine(tmp.Path, "setup.exe");
+            File.Copy(Path.Combine(Environment.SystemDirectory, "cmd.exe"), setup);
+            string a = Path.Combine(tmp.Path, "a.png"), b = Path.Combine(tmp.Path, "b.png");
+            Assert.True(ImageTools.SaveInstallerIconCached(setup, a));
+            int before = Directory.GetFiles(AppPaths.IconCache).Length;
+            Assert.True(ImageTools.SaveInstallerIconCached(setup, b));
+            Assert.Equal(File.ReadAllBytes(a), File.ReadAllBytes(b));
+            Assert.Equal(before, Directory.GetFiles(AppPaths.IconCache).Length);
+
+            // No icon: remembered as such, and still no icon the second time.
+            string broken = tmp.File("broken.msi", "garbage");
+            Assert.False(ImageTools.SaveInstallerIconCached(broken, Path.Combine(tmp.Path, "c.png")));
+            Assert.False(ImageTools.SaveInstallerIconCached(broken, Path.Combine(tmp.Path, "c.png")));
+            Assert.False(File.Exists(Path.Combine(tmp.Path, "c.png")));
+        }
+
         [Fact]
         public void A_missing_custom_icon_is_a_validation_error()
         {

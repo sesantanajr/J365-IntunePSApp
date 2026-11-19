@@ -17,6 +17,10 @@ namespace J365.IntunePSApp.Views
         public string Text { get; set; }
         public string ButtonText { get; set; }
         public Action Action { get; set; }
+        /// <summary>Optional second, quieter button (for example "What's new").</summary>
+        public string LinkText { get; set; }
+        public Action LinkAction { get; set; }
+        public Visibility LinkVisibility => string.IsNullOrEmpty(LinkText) ? Visibility.Collapsed : Visibility.Visible;
     }
 
     public partial class HomeView : UserControl, IRefreshable, ILocalized
@@ -94,7 +98,18 @@ namespace J365.IntunePSApp.Views
                 list.Add(new HomeNotice
                 {
                     Glyph = "", Title = T("Notice_AppUpdateTitle", AppInfo.Name, newApp), Text = T("Notice_AppUpdateText", AppInfo.Version),
-                    ButtonText = T("Notice_AppUpdateButton"), Action = () => MainWindow.OpenUrl(AppInfo.ReleasesUrl)
+                    ButtonText = T("Update_Now"), Action = async () => await main.UpdateAppAsync(),
+                    LinkText = T("Notice_WhatsNew"), LinkAction = () => MainWindow.OpenUrl(AppInfo.ReleasesUrl)
+                });
+
+            // This (portable) copy is newer than the installed one: the Start menu still opens the old version.
+            // (Not in screenshots: it depends on the computer that renders them.)
+            if (!App.HasArg("--snapshot") && !AppPaths.IsInstalledCopy && InstallService.IsInstalled && InstallService.InstalledVersion is string installed
+                && VersionUtil.Compare(installed, AppInfo.Version) < 0)
+                list.Add(new HomeNotice
+                {
+                    Glyph = "", Title = T("Notice_InstalledOlderTitle", installed, AppInfo.Version), Text = T("Notice_InstalledOlderText"),
+                    ButtonText = T("Notice_InstalledOlderButton"), Action = () => main.InstallForUser(InstallService.HasDesktopShortcut)
                 });
 
             if (ToolsService.LocalPsadt() == null)
@@ -130,6 +145,11 @@ namespace J365.IntunePSApp.Views
         private void Notice_Click(object sender, RoutedEventArgs e)
         {
             if (sender is FrameworkElement fe && fe.DataContext is HomeNotice n) n.Action?.Invoke();
+        }
+
+        private void NoticeLink_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is HomeNotice n) n.LinkAction?.Invoke();
         }
 
         private void Catalog_Click(object sender, RoutedEventArgs e) => MainWindow.Current.Navigate("catalog");

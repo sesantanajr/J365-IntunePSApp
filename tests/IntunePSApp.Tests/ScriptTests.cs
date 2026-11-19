@@ -138,6 +138,111 @@ namespace J365.IntunePSApp.Tests
         }
 
         [Fact]
+        public void Package_mark_is_written_after_installing_and_removed_after_uninstalling()
+        {
+            var s = Fakes.Settings("MSI");
+            s.Actions.Add(new PackageAction { Type = "Wait", Phase = "PostInstall", Params = { ["Seconds"] = "1" } });
+            string script = ScriptGenerator.DeployScript(Fakes.Template, s, "app.msi");
+            Ps.AssertParses(script);
+            string Fn(string name, string next) { int a = script.IndexOf("function " + name), b = script.IndexOf("function " + next); return script.Substring(a, b - a); }
+            string install = Fn("Install-ADTDeployment", "Uninstall-ADTDeployment");
+            string uninstall = Fn("Uninstall-ADTDeployment", "Repair-ADTDeployment");
+            string repair = script.Substring(script.IndexOf("function Repair-ADTDeployment"), script.IndexOf("## MARK: Initialization") - script.IndexOf("function Repair-ADTDeployment"));
+
+            const string create = @"$markKey = $markRoot.CreateSubKey('SOFTWARE\J365\IntunePSApp\Apps\Contoso App')";
+            Assert.Contains("RegistryHive]::LocalMachine, [Microsoft.Win32.RegistryView]::Registry64", install);
+            // After the installer and after the post-install actions: a failed step leaves no mark.
+            Assert.True(install.IndexOf(create) > install.IndexOf("Start-Sleep -Seconds 1"));
+            Assert.True(install.IndexOf("Start-Sleep -Seconds 1") > install.IndexOf("Start-ADTMsiProcess -Action 'Install'"));
+            Assert.Contains("$markKey.SetValue('Version', '1.2.3')", install);
+            Assert.Contains(create, repair);
+            Assert.True(uninstall.IndexOf("DeleteSubKeyTree('SOFTWARE\\J365\\IntunePSApp\\Apps\\Contoso App', $false)") > uninstall.IndexOf("-ApplicationType 'EXE'"));
+            Assert.DoesNotContain("CreateSubKey", uninstall);
+
+            s.InstallBehavior = "User";
+            Assert.Contains("RegistryHive]::CurrentUser, [Microsoft.Win32.RegistryView]::Default", ScriptGenerator.DeployScript(Fakes.Template, s, "app.msi"));
+
+            s.DetectionRequireMark = false;
+            Assert.DoesNotContain(@"J365\IntunePSApp\Apps", ScriptGenerator.DeployScript(Fakes.Template, s, "app.msi"));
+            Assert.Contains("$RequireMark = $false", ScriptGenerator.DetectionScript(s));
+        }
+
+        [Fact]
+        public void Exe_removals_wait_for_the_uninstaller_copy_it_starts()
+        {
+            var s = Fakes.Settings();
+            string script = ScriptGenerator.DeployScript(Fakes.Template, s, "setup.exe");
+            Assert.Contains("-ApplicationType 'EXE' -ArgumentList '/S' -WaitForChildProcesses", script);
+            s.UninstallExeArgs = "";
+            Assert.Contains("IsNullOrWhiteSpace($_.QuietUninstallString) } -WaitForChildProcesses", ScriptGenerator.DeployScript(Fakes.Template, s, "setup.exe"));
+        }
+
+        [Theory]
+        [InlineData("7-Zip", "7-Zip")]
+        [InlineData("Aplicação: Fiscal/2026\\x", "Aplicacao_ Fiscal_2026_x")]
+        [InlineData("  Notepad++  ", "Notepad++")]
+        [InlineData("日本", "__")]
+        [InlineData("", "App")]
+        [InlineData("App...", "App")]
+        public void Mark_key_names_are_ascii_and_valid(string name, string expected)
+            => Assert.Equal(expected, ScriptGenerator.MarkId(new PackageSettings { AppName = name }));
+
+        [Fact]
+        public void Detection_reports_a_copy_without_the_mark_as_not_installed()
+        {
+            // User context: the mark lives in HKCU, which a test can write. The rule itself (a file) always matches.
+            string id = "J365 Test " + System.Guid.NewGuid().ToString("N").Substring(0, 8);
+            var s = Fakes.Settings();
+            s.AppName = id;
+            s.InstallBehavior = "User";
+            s.DetectionMethod = "File";
+            s.DetectionFilePath = @"%SystemRoot%\System32\cmd.exe";
+            s.DetectionVersion = "1.0";
+            string key = ScriptGenerator.MarkKey(s);
+            try
+            {
+                var none = PackageBuilder.TestDetection(s);
+                Assert.False(none.Detected);
+                Assert.True(none.NoMark, none.Output);
+                Assert.StartsWith(ScriptGenerator.NoMarkPrefix, none.Output);
+
+                using (var k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(key)) k.SetValue("Version", "0.9");
+                var older = PackageBuilder.TestDetection(s);
+                Assert.False(older.Detected);
+                Assert.True(older.NoMark);
+
+                using (var k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(key)) k.SetValue("Version", "1.0.0.0");
+                var marked = PackageBuilder.TestDetection(s);
+                Assert.True(marked.Detected, marked.Output);
+                Assert.StartsWith("Detected:", marked.Output);
+
+                Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(key, false);
+                s.DetectionRequireMark = false;
+                Assert.True(PackageBuilder.TestDetection(s).Detected);
+
+                s.DetectionFilePath = @"%SystemRoot%\System32\no-such-file.exe";
+                var missing = PackageBuilder.TestDetection(s);
+                Assert.False(missing.Detected);
+                Assert.False(missing.NoMark);
+            }
+            finally { Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(key, false); }
+        }
+
+        [Fact]
+        public void Turning_the_package_mark_off_is_flagged_when_existing_versions_are_removed()
+        {
+            using var tmp = new TempFolder();
+            var s = Fakes.Settings();
+            s.InstallerPath = tmp.File("setup.exe", "x");
+            string warning = Loc.T("Val_Warn_NoPackageMark");
+            Assert.DoesNotContain(warning, PackageBuilder.Validate(s).Warnings);
+            s.DetectionRequireMark = false;
+            Assert.Contains(warning, PackageBuilder.Validate(s).Warnings);
+            s.RemovePreviousVersions = false;
+            Assert.DoesNotContain(warning, PackageBuilder.Validate(s).Warnings);
+        }
+
+        [Fact]
         public void Actions_are_written_in_their_phase()
         {
             var s = Fakes.Settings();

@@ -27,11 +27,20 @@
               </Button>
             </WrapPanel>
           </StackPanel>
-          <!-- Jornada 365 logo, on a white panel so its blue lettering reads on the dark banner. Opens the blog. -->
-          <Grid x:Name="HeroArt" Grid.Column="1" Width="330" Margin="24,0,4,0" VerticalAlignment="Center">
-            <Ellipse Width="250" Height="250" Fill="#10FFFFFF"/>
-            <Button Style="{StaticResource LogoBadge}" Padding="22,18" HorizontalAlignment="Center" VerticalAlignment="Center" Click="Blog_Click" ToolTip="{l:T Credits_BlogTip}">
-              <Image Source="/Assets/j365-logo.png" Width="270" RenderOptions.BitmapScalingMode="HighQuality"/>
+          <!-- Jornada 365 logo in its version for dark backgrounds (transparent, white lettering), on a soft glow. Opens the blog. -->
+          <Grid x:Name="HeroArt" Grid.Column="1" Width="350" Margin="24,0,0,0" VerticalAlignment="Center">
+            <Ellipse Width="330" Height="230">
+              <Ellipse.Fill>
+                <RadialGradientBrush>
+                  <GradientStop Color="#2A4FC3F7" Offset="0"/>
+                  <GradientStop Color="#0C4FC3F7" Offset="0.6"/>
+                  <GradientStop Color="#004FC3F7" Offset="1"/>
+                </RadialGradientBrush>
+              </Ellipse.Fill>
+            </Ellipse>
+            <Button Style="{StaticResource LogoLink}" HorizontalAlignment="Center" VerticalAlignment="Center" Click="Blog_Click" ToolTip="{l:T Credits_BlogTip}"
+                    AutomationProperties.Name="{l:T Credits_BlogTip}">
+              <Image Source="/Assets/j365-logo-dark.png" Width="320" RenderOptions.BitmapScalingMode="HighQuality"/>
             </Button>
           </Grid>
         </Grid>
@@ -43,7 +52,8 @@
           <DataTemplate>
             <Border Style="{StaticResource Notice}">
               <DockPanel>
-                <Button DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Content="{Binding ButtonText}" Padding="14,7" VerticalAlignment="Center" Margin="16,0,0,0" Click="Notice_Click"/>
+                <Button DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Content="{Binding ButtonText}" Padding="14,7" VerticalAlignment="Center" Margin="8,0,0,0" Click="Notice_Click"/>
+                <Button DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Content="{Binding LinkText}" Visibility="{Binding LinkVisibility}" Padding="12,7" VerticalAlignment="Center" Margin="16,0,0,0" Click="NoticeLink_Click"/>
                 <TextBlock DockPanel.Dock="Left" Text="{Binding Glyph}" Style="{StaticResource Icon}" Foreground="{StaticResource Brand}" FontSize="18" Margin="2,0,14,0" VerticalAlignment="Center"/>
                 <StackPanel VerticalAlignment="Center">
                   <TextBlock Text="{Binding Title}" FontWeight="SemiBold" Foreground="{StaticResource Ink}" TextWrapping="Wrap"/>

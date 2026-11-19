@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace J365.IntunePSApp.Core
 {
@@ -115,6 +118,142 @@ namespace J365.IntunePSApp.Core
                 if (db != IntPtr.Zero) NativeMethods.MsiCloseHandle(db);
             }
         }
+
+        /// <summary>A program inside an MSI (row of the File table) and the cabinet that holds its compressed copy.</summary>
+        public sealed class PackedFile
+        {
+            public string Key { get; set; }
+            public string Name { get; set; }
+            public long Size { get; set; }
+            /// <summary>"#name": cabinet embedded in the .msi; "name.cab": next to the .msi; empty: not compressed.</summary>
+            public string Cabinet { get; set; } = "";
+            public bool FromShortcut { get; set; }
+        }
+
+        /// <summary>
+        /// Programs of an MSI that probably carry the icon of the application, best first: what the shortcuts of the
+        /// package open, then the other programs, largest first. Uninstallers, setups and updaters are left out.
+        /// </summary>
+        public static List<PackedFile> IconCandidates(string path, int max = 3)
+        {
+            var result = new List<PackedFile>();
+            IntPtr db = IntPtr.Zero;
+            try
+            {
+                if (NativeMethods.MsiOpenDatabase(path, IntPtr.Zero, out db) != 0) return result;
+                var files = Rows(db, "SELECT `File`, `FileName`, `FileSize`, `Sequence` FROM `File`", 4)
+                    .Select(r => new { Key = r[0], Name = LongName(r[1]), Size = Number(r[2]), Sequence = Number(r[3]) })
+                    .Where(f => f.Key.Length > 0)
+                    .ToList();
+                var byKey = new Dictionary<string, (string Name, long Size, long Sequence)>(StringComparer.OrdinalIgnoreCase);
+                foreach (var f in files) byKey.TryAdd(f.Key, (f.Name, f.Size, f.Sequence));
+                var keyFiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var r in Rows(db, "SELECT `Component`, `KeyPath` FROM `Component`", 2)) keyFiles.TryAdd(r[0], r[1]);
+                var media = Rows(db, "SELECT `LastSequence`, `Cabinet` FROM `Media`", 2)
+                    .Select(r => (Last: Number(r[0]), Cabinet: r[1] ?? "")).OrderBy(m => m.Last).ToList();
+
+                var order = new List<(string Key, bool Shortcut)>();
+                foreach (var r in Rows(db, "SELECT `Name`, `Component_`, `Target` FROM `Shortcut`", 3))
+                {
+                    if (IsHelperShortcut(LongName(r[0]))) continue;
+                    // "[#file]" (or "[!file]") names the file; an advertised shortcut names a feature and opens the key file of its component.
+                    var m = Regex.Match(r[2] ?? "", @"\[[#!]([^\]]+)\]");
+                    string key = m.Success ? m.Groups[1].Value : keyFiles.TryGetValue(r[1] ?? "", out var kp) ? kp : null;
+                    if (!string.IsNullOrEmpty(key)) order.Add((key, true));
+                }
+                foreach (var f in files.OrderByDescending(f => f.Size)) order.Add((f.Key, false));
+
+                var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var (key, shortcut) in order)
+                {
+                    if (result.Count >= max) break;
+                    if (!seen.Add(key) || !byKey.TryGetValue(key, out var f)) continue;
+                    if (!f.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) || IsHelperProgram(f.Name)) continue;
+                    string cabinet = media.FirstOrDefault(x => x.Last >= f.Sequence).Cabinet ?? "";
+                    result.Add(new PackedFile { Key = key, Name = f.Name, Size = f.Size, Cabinet = cabinet, FromShortcut = shortcut });
+                }
+            }
+            catch { }
+            finally { if (db != IntPtr.Zero) NativeMethods.MsiCloseHandle(db); }
+            return result;
+        }
+
+        /// <summary>Shortcuts that do not open the application itself.</summary>
+        public static bool IsHelperShortcut(string name)
+            => Regex.IsMatch(name ?? "", @"(?i)uninstall|\bremove\b|\bhelp\b|read ?me|manual|licen[cs]e|web ?site|\burl\b|documentation|release notes|change ?log|desinstal");
+
+        /// <summary>Programs that are not the application (uninstallers, setups, updaters, crash reporters, runtimes).</summary>
+        public static bool IsHelperProgram(string fileName)
+            => Regex.IsMatch(Path.GetFileNameWithoutExtension(fileName ?? ""), @"(?i)^(unins|uninst|remove|setup|install|update|updater|autoupdate|crash|bugreport|elevat|repair|vc_?redist|dotnet|ndp\d|msiexec|regasm)");
+
+        /// <summary>
+        /// Copies a stream of the _Streams table (a cabinet embedded in the .msi) to a file.
+        /// False when there is no such stream or it is larger than <paramref name="maxBytes"/>.
+        /// </summary>
+        public static bool SaveStream(string path, string name, string destination, long maxBytes)
+        {
+            // Stream names are identifiers: the name is checked instead of quoted in the query.
+            if (string.IsNullOrEmpty(name) || !Regex.IsMatch(name, @"^[\w.\-]+$")) return false;
+            IntPtr db = IntPtr.Zero, view = IntPtr.Zero, rec = IntPtr.Zero;
+            try
+            {
+                if (NativeMethods.MsiOpenDatabase(path, IntPtr.Zero, out db) != 0) return false;
+                if (NativeMethods.MsiDatabaseOpenView(db, "SELECT `Data` FROM `_Streams` WHERE `Name`='" + name + "'", out view) != 0) return false;
+                if (NativeMethods.MsiViewExecute(view, IntPtr.Zero) != 0 || NativeMethods.MsiViewFetch(view, out rec) != 0) return false;
+                uint size = NativeMethods.MsiRecordDataSize(rec, 1);
+                if (size == 0 || size > maxBytes) return false;
+                using var fs = File.Create(destination);
+                var buffer = new byte[1 << 20];
+                while (true)
+                {
+                    uint n = (uint)buffer.Length;
+                    if (NativeMethods.MsiRecordReadStream(rec, 1, buffer, ref n) != 0) return false;
+                    if (n == 0) break;
+                    fs.Write(buffer, 0, (int)n);
+                }
+                return fs.Length > 0;
+            }
+            catch { return false; }
+            finally
+            {
+                if (rec != IntPtr.Zero) NativeMethods.MsiCloseHandle(rec);
+                if (view != IntPtr.Zero) NativeMethods.MsiCloseHandle(view);
+                if (db != IntPtr.Zero) NativeMethods.MsiCloseHandle(db);
+            }
+        }
+
+        /// <summary>Rows of a query as text (integers come back as their digits). Empty when the table does not exist.</summary>
+        private static List<string[]> Rows(IntPtr db, string query, int fields)
+        {
+            var rows = new List<string[]>();
+            if (NativeMethods.MsiDatabaseOpenView(db, query, out IntPtr view) != 0) return rows;
+            try
+            {
+                if (NativeMethods.MsiViewExecute(view, IntPtr.Zero) != 0) return rows;
+                while (NativeMethods.MsiViewFetch(view, out IntPtr rec) == 0)
+                {
+                    try
+                    {
+                        var row = new string[fields];
+                        for (uint i = 0; i < fields; i++) row[i] = GetString(rec, i + 1);
+                        rows.Add(row);
+                    }
+                    finally { NativeMethods.MsiCloseHandle(rec); }
+                }
+            }
+            finally { NativeMethods.MsiCloseHandle(view); }
+            return rows;
+        }
+
+        /// <summary>"7ZFM~1.EXE|7zFM.exe" (short|long) → "7zFM.exe".</summary>
+        public static string LongName(string value)
+        {
+            value ??= "";
+            int bar = value.IndexOf('|');
+            return bar >= 0 ? value.Substring(bar + 1) : value;
+        }
+
+        private static long Number(string value) => long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out long n) ? n : 0;
 
         private static string GetString(IntPtr rec, uint field)
         {

@@ -10,13 +10,17 @@ J365 IntunePSApp is MIT-licensed: you may fork it, change it, ship it under anot
 |---|---|
 | Product name, author, links, GitHub repository (used for the update check and the default database URL) | `AppInfo` in [`src/IntunePSApp/Core/Models.cs`](../src/IntunePSApp/Core/Models.cs) |
 | Assembly name, version, company, copyright | [`src/IntunePSApp/IntunePSApp.csproj`](../src/IntunePSApp/IntunePSApp.csproj) |
-| Logo and icon | `src/IntunePSApp/Assets` (`app.ico`, `app-256.png`, `j365-cloud.png`, `j365-logo.png`, and `author.jpg`, the photo of *Settings > About*) |
+| Logo and icon | `src/IntunePSApp/Assets` (`app.ico`, `app-256.png`, `j365-cloud.png`, `j365-logo-dark.png` (the Jornada 365 logo for dark backgrounds, shown on the Home banner), and `author.jpg`, the photo of *Settings > About*) |
 | Colours and fonts | The palette at the top of [`src/IntunePSApp/Styles.xaml`](../src/IntunePSApp/Styles.xaml) |
 | Texts that mention the product by name | `src/IntunePSApp/Resources/Strings.*.json` (search for "J365") |
 | Data folder and per-user install location | `AppPaths` in [`Core/Infrastructure.cs`](../src/IntunePSApp/Core/Infrastructure.cs) and `InstallService` |
 | Curated application knowledge | [`catalog/curated.json`](../catalog/curated.json) |
 
 The scripts copied to each package (`Publish-ToIntune.ps1`, `Sandbox-Test.ps1`) get the product name and repository of `AppInfo` automatically.
+
+**Updates inside the application** read the latest release of `AppInfo.GitHubRepo` and expect the assets that [`build.yml`](../.github/workflows/build.yml) publishes: `J365-IntunePSApp-<version>-win-x64.zip` (with `J365.IntunePSApp.exe` inside) and `SHA256SUMS.txt`. Keep those names, or change them in `AppUpdater`. The environment variable `J365_UPDATE_API` points the check to another URL with the same JSON (an internal mirror, or a test server).
+
+The generated packages write their mark under `HKLM\SOFTWARE\J365\IntunePSApp\Apps` (`ScriptGenerator.MarkRoot`). A rebranded edition can change it; packages already deployed keep the key they were generated with.
 
 ## Your own application database
 
@@ -48,11 +52,15 @@ O J365 IntunePSApp usa a licença MIT: você pode fazer um fork, alterar, distri
 |---|---|
 | Nome do produto, autor, links, repositório do GitHub (usado na verificação de novas versões e no endereço padrão do banco de dados) | `AppInfo` em [`src/IntunePSApp/Core/Models.cs`](../src/IntunePSApp/Core/Models.cs) |
 | Nome do assembly, versão, empresa, copyright | [`src/IntunePSApp/IntunePSApp.csproj`](../src/IntunePSApp/IntunePSApp.csproj) |
-| Logo e ícone | `src/IntunePSApp/Assets` |
+| Logo e ícone | `src/IntunePSApp/Assets` (`app.ico`, `app-256.png`, `j365-cloud.png`, `j365-logo-dark.png` - o logo do Jornada 365 para fundo escuro, no banner da tela inicial - e `author.jpg`, a foto de *Configurações > Sobre*) |
 | Cores e fontes | A paleta no início de [`src/IntunePSApp/Styles.xaml`](../src/IntunePSApp/Styles.xaml) |
 | Textos que citam o nome do produto | `src/IntunePSApp/Resources/Strings.*.json` (procure por "J365") |
 | Pasta de dados e local da instalação por usuário | `AppPaths` em [`Core/Infrastructure.cs`](../src/IntunePSApp/Core/Infrastructure.cs) e `InstallService` |
 | Curadoria de aplicativos | [`catalog/curated.json`](../catalog/curated.json) |
+
+**A atualização dentro do aplicativo** lê a última release de `AppInfo.GitHubRepo` e espera os arquivos que o [`build.yml`](../.github/workflows/build.yml) publica: `J365-IntunePSApp-<versão>-win-x64.zip` (com o `J365.IntunePSApp.exe` dentro) e `SHA256SUMS.txt`. Mantenha esses nomes ou altere-os em `AppUpdater`. A variável de ambiente `J365_UPDATE_API` aponta a verificação para outra URL com o mesmo JSON (um espelho interno ou um servidor de teste).
+
+Os pacotes gerados gravam a marca em `HKLM\SOFTWARE\J365\IntunePSApp\Apps` (`ScriptGenerator.MarkRoot`). Uma edição com outra marca pode mudar essa chave; os pacotes já implantados mantêm a chave com que foram gerados.
 
 ## Seu próprio banco de dados
 

@@ -278,7 +278,8 @@ namespace J365.IntunePSApp.Core
                             Type = Convert.ToString(k.GetValue("WindowsInstaller")) == "1" ? "MSI" : "EXE",
                             QuietUninstall = !string.IsNullOrWhiteSpace(k.GetValue("QuietUninstallString") as string),
                             Scope = T(t.ScopeKey),
-                            KeyName = sub
+                            KeyName = sub,
+                            DisplayIcon = k.GetValue("DisplayIcon") as string ?? ""
                         });
                     }
                 }

@@ -97,6 +97,12 @@ namespace J365.IntunePSApp.Core
         public string DetectionVersion { get; set; } = "";
         public bool DetectionCheckVersion { get; set; } = true;
         public string DetectionFilePath { get; set; } = "";
+        /// <summary>
+        /// The package writes a registry mark when it finishes and the detection requires it: a copy of the application
+        /// installed some other way (by hand, by another tool) is not "installed" for Intune, so the package runs there,
+        /// removes that copy and installs this version.
+        /// </summary>
+        public bool DetectionRequireMark { get; set; } = true;
         // Output
         public string OutputRoot { get; set; } = "";
 
@@ -395,6 +401,8 @@ namespace J365.IntunePSApp.Core
         public bool QuietUninstall { get; set; }
         public string Scope { get; set; }
         public string KeyName { get; set; }
+        /// <summary>Icon shown in "Installed apps" ("C:\Program Files\7-Zip\7zFM.exe",0).</summary>
+        public string DisplayIcon { get; set; } = "";
         public string SilentLabel => Type == "MSI" || QuietUninstall ? T("Common_Yes") : T("Installed_NeedsParameter");
     }
 

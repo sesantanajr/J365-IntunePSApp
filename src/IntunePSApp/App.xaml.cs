@@ -26,7 +26,7 @@ namespace J365.IntunePSApp
         public static bool HasArg(string name) => Args.Any(a => string.Equals(a, name, StringComparison.OrdinalIgnoreCase));
 
         /// <summary>Command-line switches that run without opening the main window.</summary>
-        private static readonly string[] CliSwitches = { "--help", "-h", "/?", "--version", "--build", "--setup", "--update-catalog", "--sandbox", "--install", "--uninstall" };
+        private static readonly string[] CliSwitches = { "--help", "-h", "/?", "--version", "--build", "--setup", "--update-catalog", "--sandbox", "--install", "--uninstall", "--update" };
 
         protected override void OnStartup(StartupEventArgs e)
         {
@@ -40,6 +40,9 @@ namespace J365.IntunePSApp
             base.OnStartup(e);
             AppPaths.CleanTemp();
             Log.Prune();
+            // After an update: the previous executable (….old) goes, and "Installed apps" shows the running version.
+            _ = AppUpdater.CleanupAsync();
+            InstallService.RefreshRegistration();
 
             if (CliSwitches.Any(HasArg))
             {
@@ -152,6 +155,32 @@ namespace J365.IntunePSApp
             return 0;
         }
 
+        /// <summary>
+        /// --update [--check]: updates this executable to the latest release (the next start runs the new version).
+        /// Exit codes: 0 updated or already current, 1 failed, 10 (--check) a newer version is available.
+        /// </summary>
+        private static int CliUpdate()
+        {
+            var r = AppUpdater.GetLatestAsync(CancellationToken.None).GetAwaiter().GetResult();
+            if (VersionUtil.Compare(r.Version, AppInfo.Version) <= 0) { Console.WriteLine(T("Update_UpToDate", AppInfo.Version)); return 0; }
+            if (HasArg("--check")) { Console.WriteLine(T("Cli_UpdateAvailable", r.Version, AppInfo.Version)); return 10; }
+            if (!AppUpdater.CanUpdateInPlace) { Console.WriteLine(T("Update_ReadOnly", Path.GetDirectoryName(AppPaths.ExePath))); return 1; }
+            int lastTenth = -1;
+            var progress = new Progress<(long, long?)>(p =>
+            {
+                if (p.Item2 is not long total || total <= 0) return;
+                int tenth = (int)(p.Item1 * 10 / total);
+                if (tenth != lastTenth) { lastTenth = tenth; Console.WriteLine($"  {tenth * 10}%"); }
+            });
+            Console.WriteLine(T("Update_Downloading", r.Version));
+            var (newExe, zip) = AppUpdater.DownloadAsync(r, AppPaths.ExePath, progress, CancellationToken.None).GetAwaiter().GetResult();
+            AppUpdater.Replace(newExe, AppPaths.ExePath);
+            AppUpdater.RefreshCompanionFiles(zip, Path.GetDirectoryName(AppPaths.ExePath));
+            if (AppPaths.IsInstalledCopy) InstallService.SetRegisteredVersion(r.Version);
+            Console.WriteLine(T("Cli_Updated", AppInfo.Version, r.Version));
+            return 0;
+        }
+
         private static int RunCliWork()
         {
             Log.Entry += en => Console.WriteLine($"[{en.TimeLabel}] {en.Text}");
@@ -166,6 +195,7 @@ namespace J365.IntunePSApp
                     foreach (var i in items) Console.WriteLine($"  {i.StateLabel,-10} {i.Title}  {i.Detail}");
                     return ok ? 0 : 1;
                 }
+                if (HasArg("--update")) return CliUpdate();
                 if (HasArg("--update-catalog"))
                 {
                     CatalogService.Instance.UpdateAsync(ConfigStore.Current.CatalogUrl, null, CancellationToken.None, force: HasArg("--force")).GetAwaiter().GetResult();

@@ -446,6 +446,8 @@
                   <CheckBox x:Name="ChkDetVersion" Style="{StaticResource Switch}" Content="{l:T Ed_DetVersion}" Margin="0,4,0,0" Checked="Det_Changed" Unchecked="Det_Changed"/>
                   <TextBox x:Name="TxtDetVersion" Width="180" Margin="10,0,0,0"/>
                 </StackPanel>
+                <CheckBox x:Name="ChkDetMark" Style="{StaticResource Switch}" Content="{l:T Ed_DetMark}" Margin="0,16,0,0" Checked="Det_Changed" Unchecked="Det_Changed"/>
+                <TextBlock x:Name="DetMarkHint" Style="{StaticResource Hint}"/>
                 <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
                   <Button Style="{StaticResource SecondaryButton}" Click="TestDetection_Click">
                     <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE9D5;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock Text="{l:T Ed_TestHere}"/></StackPanel>

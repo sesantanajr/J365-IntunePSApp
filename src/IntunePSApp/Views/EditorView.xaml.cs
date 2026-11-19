@@ -127,6 +127,7 @@ namespace J365.IntunePSApp.Views
                 TxtDetFile.Text = s.DetectionFilePath;
                 ChkDetVersion.IsChecked = s.DetectionCheckVersion;
                 TxtDetVersion.Text = s.DetectionVersion;
+                ChkDetMark.IsChecked = s.DetectionRequireMark;
                 TxtCompany.Text = s.CompanyName;
                 TxtLogo.Text = s.LogoPath;
                 TxtAccent.Text = s.AccentColor;
@@ -151,44 +152,56 @@ namespace J365.IntunePSApp.Views
         // ------------------------------------------------------------------ application icon
 
         private string _appIconKind;
+        private int _iconRequest;
 
         /// <summary>
-        /// Works out the icon the package will get (chosen file, icon of the installer or generated tile) and shows it
-        /// in the header and on the Application step.
+        /// Works out the icon the package will get (chosen file, icon of the installer, icon of the copy installed here
+        /// or generated tile) and shows it in the header and on the Application step. Reading the program out of a large
+        /// .msi takes a few seconds, so it runs in the background; only the latest request is shown.
         /// </summary>
-        private void RefreshAppIcon()
+        private async void RefreshAppIcon()
         {
             if (AppIconThumb == null) return;
             string installer = _s?.InstallerPath ?? "";
             string custom = TxtAppIcon.Text.Trim().Trim('"');
-            _installerIcon = null;
-            _appIconKind = null;
+            string name = TxtName.Text.Trim(), colorKey = _s?.CatalogId, pattern = TxtPattern.Text.Trim();
+            int request = ++_iconRequest;
+            string kind = null, file = null;
             if (installer.Length > 0 || custom.Length > 0)
             {
-                try
-                {
-                    string file = Path.Combine(AppPaths.Temp, "editor-app-icon.png");
-                    _appIconKind = ImageTools.SaveAppIcon(custom, installer, TxtName.Text.Trim(), _s?.CatalogId, file);
-                    _installerIcon = file;
-                }
-                catch (Exception ex) { Log.Warn(ex.Message); }
+                AppIconHint.Text = T("Ed_AppIconLooking");
+                file = Path.Combine(AppPaths.Temp, $"editor-app-icon-{Guid.NewGuid():N}.png");
+                try { kind = await Task.Run(() => ImageTools.SaveAppIcon(custom, installer, name, colorKey, file, pattern)); }
+                catch (Exception ex) { Log.Warn(ex.Message); file = null; }
             }
+            if (request != _iconRequest) { TryDelete(file); return; }   // a newer request replaced this one
+            string previous = _installerIcon;
+            _installerIcon = kind != null ? file : null;
+            _appIconKind = kind;
+            if (previous != null && previous != _installerIcon) TryDelete(previous);
             AppIconThumb.Source = MainWindow.LoadBitmap(_installerIcon);
             AppIconHint.Text = _appIconKind switch
             {
                 ImageTools.IconCustom => T("Ed_AppIconCustom"),
                 ImageTools.IconInstaller => T("Ed_AppIconInstaller"),
+                ImageTools.IconInstalled => T("Ed_AppIconInstalled"),
                 ImageTools.IconGenerated => T("Ed_AppIconGenerated"),
                 _ => T("Ed_AppIconNone")
             };
+            UpdateLogo();
+            UpdateHeader();
+        }
+
+        private static void TryDelete(string file)
+        {
+            if (string.IsNullOrEmpty(file)) return;
+            try { File.Delete(file); } catch { }
         }
 
         private void AppIcon_Changed(object sender, TextChangedEventArgs e)
         {
             if (_loading) return;
             RefreshAppIcon();
-            UpdateLogo();
-            UpdateHeader();
         }
 
         private void AppIcon_Click(object sender, RoutedEventArgs e)
@@ -240,6 +253,7 @@ namespace J365.IntunePSApp.Views
             s.DetectionFilePath = TxtDetFile.Text.Trim();
             s.DetectionCheckVersion = ChkDetVersion.IsChecked == true;
             s.DetectionVersion = TxtDetVersion.Text.Trim();
+            s.DetectionRequireMark = ChkDetMark.IsChecked == true;
             s.CompanyName = TxtCompany.Text.Trim();
             s.LogoPath = TxtLogo.Text.Trim().Trim('"');
             s.AccentColor = NormalizeHex(TxtAccent.Text);
@@ -452,6 +466,7 @@ namespace J365.IntunePSApp.Views
             BodyScroll.ScrollToTop();
             if (_step == ReviewStep) BuildSummary();
             if (_step == 2 || _step == 6) UpdatePreview();
+            if (_step == 5) UpdateDetectionPanels();
         }
 
         private void Step_Checked(object sender, RoutedEventArgs e)
@@ -827,23 +842,27 @@ namespace J365.IntunePSApp.Views
 
         private void UpdateDetectionPanels()
         {
-            if (PnlDetName == null) return;
+            if (PnlDetName == null || DetMarkHint == null) return;
             PnlDetName.Visibility = RbDetName.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
             PnlDetCode.Visibility = RbDetCode.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
             PnlDetFile.Visibility = RbDetFile.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
             TxtDetVersion.IsEnabled = ChkDetVersion.IsChecked == true;
+            var who = new PackageSettings { AppName = TxtName.Text.Trim(), InstallBehavior = TagOf(CmbBehavior) };
+            DetMarkHint.Text = ChkDetMark.IsChecked == true ? T("Ed_DetMarkHint", ScriptGenerator.MarkDisplayPath(who)) : T("Ed_DetMarkOffHint");
         }
 
         private async void TestDetection_Click(object sender, RoutedEventArgs e)
         {
             var s = Collect();
-            (bool Detected, string Output) r;
+            (bool Detected, bool NoMark, string Output) r;
             try { r = await Task.Run(() => PackageBuilder.TestDetection(s)); }
             catch (Exception ex) { Ui.Error(ex.Message); return; }
             DetResult.Visibility = Visibility.Visible;
             DetResult.Background = r.Detected ? (Brush)FindResource("SuccessSoft") : (Brush)FindResource("WarningSoft");
             DetResultText.Foreground = r.Detected ? (Brush)FindResource("Success") : (Brush)FindResource("Warning");
-            DetResultText.Text = r.Detected ? T("Ed_Detected", r.Output) : T("Ed_NotDetected");
+            DetResultText.Text = r.Detected ? T("Ed_Detected", Regex.Replace(r.Output, @"^Detected:\s*", ""))
+                : r.NoMark ? T("Ed_DetectedNoMark", ScriptGenerator.MarkDisplayPath(s))
+                : T("Ed_NotDetected");
         }
 
         private void ViewDetection_Click(object sender, RoutedEventArgs e)
@@ -864,7 +883,7 @@ namespace J365.IntunePSApp.Views
                 Tuple.Create(T("Rev_Experience"), mode + (s.ProcessesToClose.Count > 0 ? T("Rev_V_Closes", string.Join(", ", s.ProcessesToClose)) : "") + (s.AllowDefer ? T("Rev_V_Defer", s.DeferTimes) : "")),
                 Tuple.Create(T("Rev_Previous"), s.RemovePreviousVersions ? T("Rev_V_Removes", s.UninstallPattern) : T("Rev_V_Keeps")),
                 Tuple.Create(T("Rev_Actions"), s.Actions.Count == 0 ? T("Rev_V_None") : string.Join("; ", s.Actions.Select(a => a.TypeLabel))),
-                Tuple.Create(T("Rev_Detection"), s.DetectionMethod switch { "File" => s.DetectionFilePath, "ProductCode" => s.MsiProductCode, _ => s.DetectionNamePattern } + (s.DetectionCheckVersion ? $"  ≥ {s.DetectionVersion}" : "")),
+                Tuple.Create(T("Rev_Detection"), s.DetectionMethod switch { "File" => s.DetectionFilePath, "ProductCode" => s.MsiProductCode, _ => s.DetectionNamePattern } + (s.DetectionCheckVersion ? $"  ≥ {s.DetectionVersion}" : "") + (s.DetectionRequireMark ? T("Rev_V_Mark") : "")),
                 Tuple.Create(T("Rev_Branding"), $"{(string.IsNullOrEmpty(s.CompanyName) ? T("Rev_V_NoCompany") : s.CompanyName)} · {s.DialogStyle} · {s.AccentColor}"),
                 Tuple.Create(T("Sum_F_InstallCmd"), cmds.Install),
             };

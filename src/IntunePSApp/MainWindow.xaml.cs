@@ -73,6 +73,7 @@ namespace J365.IntunePSApp
             if (!string.IsNullOrEmpty(snap)) { await SnapshotRunner.RunAsync(this, snap); return; }
 
             if (App.HasArg("--installed")) Toast(T("Install_Done"), "ok");
+            if (App.Arg("--updated") is string from) Toast(T("Update_Done", AppInfo.Name, AppInfo.Version, from), "ok");
             if (SetupService.NeedsSetup && !App.HasArg("--no-setup")) await ShowSetupAsync(refresh: false);
             else if (!App.HasArg("--no-update")) _ = BackgroundChecksAsync();
 
@@ -341,17 +342,102 @@ namespace J365.IntunePSApp
 
         private void SetupInstall_Click(object sender, RoutedEventArgs e) => InstallForUser(desktopShortcut: false);
 
-        /// <summary>Installs the per-user copy and restarts from it.</summary>
+        /// <summary>
+        /// Installs (or updates) the per-user copy and restarts from it. When the installed copy is open it is asked to
+        /// close first (it may be building a package); if it stays open it keeps running the old version until closed.
+        /// </summary>
         public void InstallForUser(bool desktopShortcut)
         {
             try
             {
+                var running = AppUpdater.RunningCopies(InstallService.InstalledExe);
+                if (running.Count > 0)
+                {
+                    if (!Ui.Confirm(T("Install_RunningPrompt", InstallService.InstalledVersion ?? "?"), T("Install_CloseAndUpdate"), T("Common_Cancel"))) return;
+                    foreach (var p in running)
+                    {
+                        try { p.CloseMainWindow(); if (!p.WaitForExit(15000)) Log.Warn(T("Install_StillRunning")); }
+                        catch { }
+                        finally { p.Dispose(); }
+                    }
+                }
                 ConfigStore.Save();
                 string exe = InstallService.Install(desktopShortcut);
                 Process.Start(new ProcessStartInfo(exe, "--installed") { UseShellExecute = true });
                 Application.Current.Shutdown();
             }
             catch (Exception ex) { Ui.Error(ex.Message); }
+        }
+
+        // ------------------------------------------------------------------ application update
+
+        private bool _updating;
+
+        /// <summary>
+        /// Updates the application with it open: finds the latest release, asks, downloads it with progress (it can be
+        /// cancelled), checks it and restarts in the new version. Packages, settings, the database and tools are kept.
+        /// </summary>
+        public async Task UpdateAppAsync()
+        {
+            if (_updating) return;
+            if (Editor != null && Editor.IsBuilding) { Ui.Warn(T("Update_WaitBuild")); return; }
+            string target = AppPaths.ExePath;
+            if (!AppUpdater.CanUpdateInPlace)
+            {
+                if (Ui.Confirm(T("Update_ReadOnly", Path.GetDirectoryName(target)), T("Notice_AppUpdateButton"), T("Common_Close"))) OpenUrl(AppInfo.ReleasesUrl);
+                return;
+            }
+            _updating = true;
+            try
+            {
+                var ct = ShowBusy(T("Update_Title"), T("Update_Checking"));
+                var release = await AppUpdater.GetLatestAsync(ct);
+                HideBusy();
+                ConfigStore.Current.LatestAppVersion = release.Version;
+                if (VersionUtil.Compare(release.Version, AppInfo.Version) <= 0) { Toast(T("Update_UpToDate", AppInfo.Version), "ok"); return; }
+                string size = release.ZipSize > 0 ? (release.ZipSize / 1048576d).ToString("N0", Loc.Instance.Culture) + " MB" : "?";
+                if (!Ui.Confirm(T("Update_Confirm", AppInfo.Name, AppInfo.Version, release.Version, size), T("Update_Now"), T("Common_Cancel"))) return;
+
+                ct = ShowBusy(T("Update_DownloadingTitle", release.Version), T("Update_Starting"));
+                SetStatus(T("Update_DownloadingTitle", release.Version), true);
+                var progress = new Progress<(long, long?)>(p => BusyProgressReport(p.Item1, p.Item2));
+                var (newExe, zip) = await AppUpdater.DownloadAsync(release, target, progress, ct);
+
+                ShowBusy(T("Update_Installing", release.Version), T("Update_Restarting"), cancellable: false);
+                string previous = AppInfo.Version;
+                ConfigStore.Save();
+                await Task.Run(() =>
+                {
+                    AppUpdater.Replace(newExe, target);
+                    AppUpdater.RefreshCompanionFiles(zip, Path.GetDirectoryName(target));
+                });
+                if (AppPaths.IsInstalledCopy) InstallService.SetRegisteredVersion(release.Version);
+                Log.Ok(T("Log_Updated", previous, release.Version));
+                try { AppUpdater.Restart(target, previous); }
+                catch (Exception ex)
+                {
+                    // The new version is in place; only the restart failed: the user opens it again.
+                    HideBusy();
+                    Ui.Info(T("Update_RestartManually", release.Version, ex.Message));
+                }
+                Application.Current.Shutdown();
+            }
+            catch (OperationCanceledException)
+            {
+                HideBusy();
+                Toast(T("Update_Cancelled"), "info");
+            }
+            catch (Exception ex)
+            {
+                HideBusy();
+                Log.Error(T("Log_UpdateFailed", ex.Message));
+                if (Ui.Confirm(T("Update_Failed", ex.Message), T("Notice_AppUpdateButton"), T("Common_Close"))) OpenUrl(AppInfo.ReleasesUrl);
+            }
+            finally
+            {
+                _updating = false;
+                SetStatus(null);
+            }
         }
 
         // ------------------------------------------------------------------ application database

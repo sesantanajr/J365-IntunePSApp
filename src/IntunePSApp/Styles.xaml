@@ -447,24 +447,27 @@
     </Setter>
   </Style>
 
-  <!-- White badge that carries the Jornada 365 logo on dark surfaces -->
-  <Style x:Key="LogoBadge" TargetType="Button">
+  <!-- A transparent logo that is also a link: no box around it; it brightens a little under the mouse -->
+  <Style x:Key="LogoLink" TargetType="Button">
     <Setter Property="Cursor" Value="Hand"/>
-    <Setter Property="Padding" Value="12,8"/>
-    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+    <Setter Property="Padding" Value="0"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Opacity" Value="0.96"/>
+    <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
     <Setter Property="WindowChrome.IsHitTestVisibleInChrome" Value="True"/>
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
-          <Border x:Name="bd" Background="White" CornerRadius="10" Padding="{TemplateBinding Padding}">
+          <Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
           </Border>
-          <ControlTemplate.Triggers>
-            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="Background" Value="#EAF4FE"/></Trigger>
-          </ControlTemplate.Triggers>
         </ControlTemplate>
       </Setter.Value>
     </Setter>
+    <Style.Triggers>
+      <Trigger Property="IsMouseOver" Value="True"><Setter Property="Opacity" Value="1"/></Trigger>
+      <Trigger Property="IsKeyboardFocused" Value="True"><Setter Property="Opacity" Value="1"/></Trigger>
+    </Style.Triggers>
   </Style>
 
   <!-- Round photo with a white ring (author, on dark surfaces) -->

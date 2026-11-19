@@ -77,6 +77,69 @@ namespace J365.IntunePSApp.Core
             return "(" + string.Join(" + ", parts) + ")";
         }
 
+        // ------------------------------------------------------------------ package mark
+
+        /// <summary>Registry key, under HKLM (64-bit view) or HKCU, where every package writes its mark.</summary>
+        public const string MarkRoot = @"SOFTWARE\J365\IntunePSApp\Apps";
+
+        /// <summary>Name of the mark key of an application: its name in ASCII, without characters a key name cannot have.</summary>
+        public static string MarkId(PackageSettings s)
+        {
+            string id = Regex.Replace(Ascii(s.AppName ?? "", '_'), @"[^A-Za-z0-9 ._+()\-]", "_");
+            id = Regex.Replace(id, @"\s+", " ").Trim().TrimEnd('.', ' ');
+            if (id.Length > 80) id = id.Substring(0, 80).TrimEnd('.', ' ');
+            return id.Length == 0 ? "App" : id;
+        }
+
+        public static string MarkKey(PackageSettings s) => MarkRoot + "\\" + MarkId(s);
+
+        /// <summary>Where the mark is, as shown to people: HKLM\SOFTWARE\J365\IntunePSApp\Apps\7-Zip.</summary>
+        public static string MarkDisplayPath(PackageSettings s) => (s.InstallBehavior == "User" ? "HKCU\\" : "HKLM\\") + MarkKey(s);
+
+        /// <summary>Version written in the mark (compared with the minimum version of the detection).</summary>
+        public static string MarkVersion(PackageSettings s)
+            => Ascii(string.IsNullOrWhiteSpace(s.DetectionVersion) ? s.AppVersion ?? "" : s.DetectionVersion).Trim();
+
+        /// <summary>
+        /// PowerShell expression that opens the hive of the mark. The 64-bit view is explicit: the package and the
+        /// detection script read the same key whatever the bitness of the PowerShell that runs them.
+        /// </summary>
+        private static string MarkHive(PackageSettings s) => s.InstallBehavior == "User"
+            ? "[Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::CurrentUser, [Microsoft.Win32.RegistryView]::Default)"
+            : "[Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::LocalMachine, [Microsoft.Win32.RegistryView]::Registry64)";
+
+        private static List<string> WriteMarkLines(PackageSettings s)
+        {
+            string key = Lit(MarkKey(s)), shown = MarkDisplayPath(s), version = MarkVersion(s);
+            return new List<string>
+            {
+                "    ## Package mark: tells the Intune detection that this package installed the application. A copy installed",
+                "    ## some other way (by hand, by another tool) has no mark, so Intune runs the package there and replaces it.",
+                $"    $markRoot = {MarkHive(s)}",
+                $"    $markKey = $markRoot.CreateSubKey({key})",
+                $"    $markKey.SetValue('Version', {Lit(version)})",
+                $"    $markKey.SetValue('Name', {Lit(s.AppName)})",
+                $"    $markKey.SetValue('Vendor', {Lit(s.AppVendor)})",
+                $"    $markKey.SetValue('PackageVersion', {Lit(s.AppVersion)})",
+                "    $markKey.SetValue('InstalledUtc', [System.DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ', [System.Globalization.CultureInfo]::InvariantCulture))",
+                $"    $markKey.SetValue('Generator', {Lit(AppInfo.Name + " " + AppInfo.Version)})",
+                "    $markKey.Close()",
+                "    $markRoot.Close()",
+                $"    Write-ADTLogEntry -Message {Lit($"Package mark written: {shown} (version {version}).")}",
+                ""
+            };
+        }
+
+        private static List<string> RemoveMarkLines(PackageSettings s) => new List<string>
+        {
+            "    ## Removes the package mark: the Intune detection no longer reports the application as installed.",
+            $"    $markRoot = {MarkHive(s)}",
+            $"    $markRoot.DeleteSubKeyTree({Lit(MarkKey(s))}, $false)",
+            "    $markRoot.Close()",
+            $"    Write-ADTLogEntry -Message {Lit($"Package mark removed: {MarkDisplayPath(s)}.")}",
+            ""
+        };
+
         // ------------------------------------------------------------------ Invoke-AppDeployToolkit.ps1
 
         public static string DeployScript(string templateText, PackageSettings s, string installerRelative)
@@ -206,6 +269,8 @@ namespace J365.IntunePSApp.Core
             L.Add("");
             Mark(L, "Post-Install", "\"Post-$($adtSession.DeploymentType)\"");
             AddActions(L, s, "PostInstall");
+            // Written after the post-install actions: a failed action leaves no mark, so Intune tries again.
+            if (s.DetectionRequireMark) L.AddRange(WriteMarkLines(s));
             if (!string.IsNullOrWhiteSpace(s.CompletionMessage))
             {
                 L.Add("    ## Message shown when the installation finishes.");
@@ -239,6 +304,7 @@ namespace J365.IntunePSApp.Core
             Mark(L, "Uninstall", "$adtSession.DeploymentType");
             L.AddRange(RemoveLines(s, false));
             L.Add("");
+            if (s.DetectionRequireMark) L.AddRange(RemoveMarkLines(s));
             L.Add("");
             Mark(L, "Post-Uninstallation", "\"Post-$($adtSession.DeploymentType)\"");
             AddActions(L, s, "PostUninstall");
@@ -266,6 +332,7 @@ namespace J365.IntunePSApp.Core
             L.Add("");
             L.Add("");
             Mark(L, "Post-Repair", "\"Post-$($adtSession.DeploymentType)\"");
+            if (s.DetectionRequireMark) L.AddRange(WriteMarkLines(s));
             return L;
         }
 
@@ -290,9 +357,12 @@ namespace J365.IntunePSApp.Core
             string pat = Lit(s.UninstallPattern);
             string msi = $"Uninstall-ADTApplication -Name {pat} -NameMatch 'Wildcard' -ApplicationType 'MSI'";
             string ua = (s.UninstallExeArgs ?? "").Trim();
+            // -WaitForChildProcesses: many uninstallers (NSIS, 7-Zip) copy themselves to %TEMP%, start the copy and exit at once.
+            // Without waiting for that copy the removal "finishes" while the program is still installed, and the new
+            // version is installed at the same time.
             string exe = ua.Length > 0
-                ? $"Uninstall-ADTApplication -Name {pat} -NameMatch 'Wildcard' -ApplicationType 'EXE' -ArgumentList {Lit(ua)}"
-                : $"Uninstall-ADTApplication -Name {pat} -NameMatch 'Wildcard' -ApplicationType 'EXE' -FilterScript {{ ![System.String]::IsNullOrWhiteSpace($_.QuietUninstallString) }}";
+                ? $"Uninstall-ADTApplication -Name {pat} -NameMatch 'Wildcard' -ApplicationType 'EXE' -ArgumentList {Lit(ua)} -WaitForChildProcesses"
+                : $"Uninstall-ADTApplication -Name {pat} -NameMatch 'Wildcard' -ApplicationType 'EXE' -FilterScript {{ ![System.String]::IsNullOrWhiteSpace($_.QuietUninstallString) }} -WaitForChildProcesses";
             var L = new List<string>();
             if (continueOnError)
             {
@@ -389,9 +459,13 @@ namespace J365.IntunePSApp.Core
 
         // ------------------------------------------------------------------ Intune detection script
 
+        /// <summary>First words the detection script writes when the application is there but the package mark is not.</summary>
+        public const string NoMarkPrefix = "Not detected:";
+
         public static string DetectionScript(PackageSettings s)
         {
             bool check = s.DetectionCheckVersion && !string.IsNullOrWhiteSpace(s.DetectionVersion);
+            bool mark = s.DetectionRequireMark;
             string title = Comment($"{s.AppName} {s.AppVersion}");
             var sb = new StringBuilder();
             sb.AppendLine("<#");
@@ -402,10 +476,19 @@ namespace J365.IntunePSApp.Core
             sb.AppendLine("                  - Run script as 32-bit process on 64-bit clients: No");
             sb.AppendLine("                  - Enforce script signature check: No");
             sb.AppendLine("    Result      : writes to STDOUT and exits with 0 when the application is installed.");
+            if (mark)
+            {
+                sb.AppendLine($"    Package mark: {Comment(MarkDisplayPath(s))}");
+                sb.AppendLine("                  Written by the package when the installation finishes. An application installed some");
+                sb.AppendLine("                  other way has no mark: it is reported as not installed, so Intune runs the package,");
+                sb.AppendLine("                  which removes that copy (when set to) and installs this version.");
+            }
             sb.AppendLine("#>");
             sb.AppendLine("$ErrorActionPreference = 'SilentlyContinue'");
             sb.AppendLine($"$CheckVersion = {(check ? "$true" : "$false")}");
             sb.AppendLine($"$MinimumVersion = {Lit(Ascii(s.DetectionVersion ?? ""))}");
+            sb.AppendLine($"$RequireMark = {(mark ? "$true" : "$false")}");
+            sb.AppendLine($"$MarkPath = {Lit(MarkKey(s))}");
             sb.AppendLine();
             sb.AppendLine(@"function ConvertTo-VersionParts([string]$Value)
 {
@@ -428,22 +511,31 @@ function Test-VersionOk([string]$Installed)
     }
     return $true
 }
+
+function Test-PackageMark
+{
+    # The package writes this key when the installation finishes (Version = the version it installed).
+    $base = " + MarkHive(s) + @"
+    $k = $base.OpenSubKey($MarkPath)
+    if (-not $k) { return $false }
+    $v = [string]$k.GetValue('Version')
+    $k.Close()
+    return (Test-VersionOk $v)
+}
 ");
             if (s.DetectionMethod == "File")
             {
                 sb.AppendLine("# Rule: the file exists (and its file version is equal to or higher than the minimum).");
                 sb.AppendLine($"$FilePath = [Environment]::ExpandEnvironmentVariables({AsciiExpression(s.DetectionFilePath)})");
-                sb.AppendLine(@"if (Test-Path -LiteralPath $FilePath -PathType Leaf)
+                sb.AppendLine(@"
+function Find-Application
 {
+    if (-not (Test-Path -LiteralPath $FilePath -PathType Leaf)) { return $null }
     $fv = (Get-Item -LiteralPath $FilePath).VersionInfo
     $installed = '{0}.{1}.{2}.{3}' -f $fv.FileMajorPart, $fv.FileMinorPart, $fv.FileBuildPart, $fv.FilePrivatePart
-    if (Test-VersionOk $installed)
-    {
-        Write-Output ""Detected: $FilePath ($installed)""
-        exit 0
-    }
-}
-exit 1");
+    if (Test-VersionOk $installed) { return ""$FilePath ($installed)"" }
+    return $null
+}");
             }
             else
             {
@@ -464,34 +556,48 @@ exit 1");
                 }
                 sb.AppendLine($"$IncludeCurrentUser = {(s.InstallBehavior == "User" ? "$true" : "$false")}");
                 sb.AppendLine(@"
-$targets = @(
-    @([Microsoft.Win32.RegistryHive]::LocalMachine, [Microsoft.Win32.RegistryView]::Registry64),
-    @([Microsoft.Win32.RegistryHive]::LocalMachine, [Microsoft.Win32.RegistryView]::Registry32)
-)
-if ($IncludeCurrentUser) { $targets += ,@([Microsoft.Win32.RegistryHive]::CurrentUser, [Microsoft.Win32.RegistryView]::Default) }
-
-foreach ($t in $targets)
+function Find-Application
 {
-    $base = [Microsoft.Win32.RegistryKey]::OpenBaseKey($t[0], $t[1])
-    $key = $base.OpenSubKey('SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall')
-    if (-not $key) { continue }
-    foreach ($sub in $key.GetSubKeyNames())
+    $targets = @(
+        @([Microsoft.Win32.RegistryHive]::LocalMachine, [Microsoft.Win32.RegistryView]::Registry64),
+        @([Microsoft.Win32.RegistryHive]::LocalMachine, [Microsoft.Win32.RegistryView]::Registry32)
+    )
+    if ($IncludeCurrentUser) { $targets += ,@([Microsoft.Win32.RegistryHive]::CurrentUser, [Microsoft.Win32.RegistryView]::Default) }
+    foreach ($t in $targets)
     {
-        $k = $key.OpenSubKey($sub)
-        if (-not $k) { continue }
-        $dn = [string]$k.GetValue('DisplayName')
-        $dv = [string]$k.GetValue('DisplayVersion')
-        $k.Close()
-        if (" + match + @" -and (Test-VersionOk $dv))
+        $base = [Microsoft.Win32.RegistryKey]::OpenBaseKey($t[0], $t[1])
+        $key = $base.OpenSubKey('SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall')
+        if (-not $key) { continue }
+        foreach ($sub in $key.GetSubKeyNames())
         {
-            Write-Output ""Detected: $dn $dv""
-            exit 0
-        }
-    }
-    $key.Close()
-}
-exit 1");
+            $k = $key.OpenSubKey($sub)
+            if (-not $k) { continue }
+            $dn = [string]$k.GetValue('DisplayName')
+            $dv = [string]$k.GetValue('DisplayVersion')
+            $k.Close()
+            if (" + match + @" -and (Test-VersionOk $dv))
+            {
+                $key.Close()
+                if ($dv -and -not $dn.Contains($dv)) { return ""$dn $dv"" }
+                return $dn
             }
+        }
+        $key.Close()
+    }
+    return $null
+}");
+            }
+            sb.AppendLine(@"
+$found = Find-Application
+if (-not $found) { exit 1 }
+if ($RequireMark -and -not (Test-PackageMark))
+{
+    # Not installed by this package: a nonzero exit code means ""not installed"" for Intune, whatever is written.
+    Write-Output """ + NoMarkPrefix + @" $found is installed, but not by this package (no package mark in $MarkPath). Intune runs the package.""
+    exit 1
+}
+Write-Output ""Detected: $found""
+exit 0");
             return Ascii(sb.ToString().Replace("\r\n", "\n").Replace("\n", "\r\n"));
         }
 

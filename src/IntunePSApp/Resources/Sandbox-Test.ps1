@@ -154,7 +154,8 @@ function global:Test-Detection
     $output = & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $global:J365Test.Detection 2>$null
     $text = ($output | Out-String).Trim()
     $detected = ($LASTEXITCODE -eq 0) -and ($text.Length -gt 0)
-    if ($detected) { Write-Host ('  Detected: ' + $text) -ForegroundColor Green }
+    if ($detected) { Write-Host ('  ' + $text) -ForegroundColor Green }
+    elseif ($text.Length -gt 0) { Write-Host ('  ' + $text) -ForegroundColor Yellow }
     else { Write-Host '  Not detected' -ForegroundColor Yellow }
     $global:J365Test.Detected = $detected
 }

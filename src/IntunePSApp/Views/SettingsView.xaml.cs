@@ -111,6 +111,8 @@ namespace J365.IntunePSApp.Views
             string newApp = UpdateService.NewAppVersion;
             UpdateInfoText.Text = newApp != null ? T("Settings_UpdateAvailable", newApp)
                 : ConfigStore.Current.LastUpdateCheck.HasValue ? T("Settings_UpToDate", ConfigStore.Current.LastUpdateCheck.Value.ToString("g", culture)) : "";
+            BtnUpdateNow.Visibility = newApp != null ? Visibility.Visible : Visibility.Collapsed;
+            BtnUpdateNowText.Text = newApp != null ? T("Settings_UpdateTo", newApp) : "";
 
             bool installed = InstallService.IsInstalled;
             bool envData = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("J365_INTUNEPSAPP_DATA"));
@@ -136,14 +138,23 @@ namespace J365.IntunePSApp.Views
             UpdateInfoText.Text = T("Main_Checking");
             await UpdateService.CheckAsync(true, CancellationToken.None);
             UpdateInfo();
-            string v = UpdateService.NewAppVersion;
-            if (v != null && Ui.Confirm(T("Settings_UpdatePrompt", AppInfo.Name, v, AppInfo.Version), T("Notice_AppUpdateButton"), T("Common_Close")))
-                MainWindow.OpenUrl(AppInfo.ReleasesUrl);
+            // A newer version: the update itself asks before downloading.
+            if (UpdateService.NewAppVersion != null) await MainWindow.Current.UpdateAppAsync();
+        }
+
+        private async void UpdateNow_Click(object sender, RoutedEventArgs e)
+        {
+            await MainWindow.Current.UpdateAppAsync();
+            UpdateInfo();
         }
 
         private void Install_Click(object sender, RoutedEventArgs e)
         {
-            if (!Ui.Confirm(T("Settings_InstallConfirm", AppPaths.InstallDir), T("Settings_Install"), T("Common_Cancel"))) return;
+            // The confirmation explains what happens; an open installed copy is handled by InstallForUser.
+            string question = InstallService.IsInstalled
+                ? T("Settings_InstallUpdateConfirm", InstallService.InstalledVersion ?? "?", AppInfo.Version, AppPaths.InstallDir)
+                : T("Settings_InstallConfirm", AppPaths.InstallDir);
+            if (!Ui.Confirm(question, InstallService.IsInstalled ? T("Settings_InstallUpdate") : T("Settings_Install"), T("Common_Cancel"))) return;
             MainWindow.Current.InstallForUser(ChkDesktopShortcut.IsChecked == true);
         }
 

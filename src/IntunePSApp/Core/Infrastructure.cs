@@ -85,6 +85,8 @@ namespace J365.IntunePSApp.Core
         public static string Branding => Ensure(Path.Combine(Data, "branding"));
         public static string Logs => Ensure(Path.Combine(Data, "logs"));
         public static string Temp => Ensure(Path.Combine(Data, "temp"));
+        /// <summary>Icons already read from installers (a large .msi takes seconds to read).</summary>
+        public static string IconCache => Ensure(Path.Combine(Data, "cache", "icons"));
         /// <summary>Portable: next to the data. Installed: Documents (a place the user can find).</summary>
         public static string DefaultOutput => IsPortable
             ? Path.Combine(Data, "Packages")

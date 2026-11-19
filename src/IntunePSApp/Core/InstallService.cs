@@ -49,8 +49,19 @@ namespace J365.IntunePSApp.Core
             string target = InstalledExe;
             if (!string.Equals(Path.GetFullPath(AppPaths.ExePath), Path.GetFullPath(target), StringComparison.OrdinalIgnoreCase))
             {
-                try { File.Copy(AppPaths.ExePath, target, true); }
-                catch (IOException ex) { throw new IOException(T("Err_InstallInUse"), ex); }
+                // The installed copy may be open: it cannot be overwritten, but it can be renamed (AppUpdater.Replace).
+                // It goes on running from the old file until it is closed; the next start uses the new one.
+                string staged = target + ".new";
+                try
+                {
+                    File.Copy(AppPaths.ExePath, staged, true);
+                    AppUpdater.Replace(staged, target);
+                }
+                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+                {
+                    try { File.Delete(staged); } catch { }
+                    throw new IOException(T("Err_InstallInUse"), ex);
+                }
                 MigrateData();
             }
             string description = T("App_Tagline");
@@ -74,6 +85,27 @@ namespace J365.IntunePSApp.Core
             }
             Log.Ok(T("Log_Installed", AppPaths.InstallDir));
             return target;
+        }
+
+        /// <summary>
+        /// The installed copy updated itself (or was replaced): "Installed apps" shows the version that is running.
+        /// </summary>
+        public static void RefreshRegistration()
+        {
+            if (AppPaths.IsInstalledCopy && InstalledVersion is string v && v != AppInfo.Version) SetRegisteredVersion(AppInfo.Version);
+        }
+
+        /// <summary>Version (and size) shown in "Installed apps" for the installed copy.</summary>
+        public static void SetRegisteredVersion(string version)
+        {
+            try
+            {
+                using var k = Registry.CurrentUser.OpenSubKey(UninstallKey, true);
+                if (k == null) return;
+                k.SetValue("DisplayVersion", version);
+                k.SetValue("EstimatedSize", (int)(new FileInfo(InstalledExe).Length / 1024), RegistryValueKind.DWord);
+            }
+            catch { }
         }
 
         /// <summary>

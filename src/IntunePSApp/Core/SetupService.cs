@@ -201,7 +201,7 @@ namespace J365.IntunePSApp.Core
                 if (!cfg.CheckForUpdates) return;
                 if (cfg.LastUpdateCheck.HasValue && (DateTime.Now - cfg.LastUpdateCheck.Value).TotalHours < 20) return;
             }
-            string json = await Http.TryGetStringAsync(AppInfo.LatestReleaseApi, 20, ct);
+            string json = await Http.TryGetStringAsync(AppUpdater.ApiUrl, 20, ct);
             if (json != null)
             {
                 try

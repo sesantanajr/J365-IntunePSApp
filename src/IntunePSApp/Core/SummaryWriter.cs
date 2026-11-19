@@ -25,6 +25,7 @@ namespace J365.IntunePSApp.Core
                 _ => T("Sum_V_DetName", s.DetectionNamePattern)
             };
             if (s.DetectionCheckVersion && !string.IsNullOrWhiteSpace(s.DetectionVersion)) det += T("Sum_V_DetVersion", s.DetectionVersion);
+            if (s.DetectionRequireMark) det += T("Sum_V_DetMark", ScriptGenerator.MarkDisplayPath(s));
             string desc = !string.IsNullOrWhiteSpace(s.Description) ? s.Description : $"{s.AppName} {s.AppVersion}".Trim();
             if (!string.IsNullOrWhiteSpace(s.CompanyName)) desc += T("Sum_V_CompanyPackage", s.CompanyName);
 
@@ -54,7 +55,7 @@ namespace J365.IntunePSApp.Core
             rows.Add((g5, T("Sum_F_Signature"), T("Common_No")));
             rows.Add((g5, T("Sum_F_WhatChecks"), det));
             if (s.InstallerType == "MSI" && !string.IsNullOrWhiteSpace(s.MsiProductCode) && s.MsiProductCode.StartsWith("{"))
-                rows.Add((g5, T("Sum_F_MsiAlt"), T("Sum_V_MsiAlt", s.MsiProductCode, s.AppVersion)));
+                rows.Add((g5, T("Sum_F_MsiAlt"), T("Sum_V_MsiAlt", s.MsiProductCode, s.AppVersion) + (s.DetectionRequireMark ? T("Sum_V_MsiAltNoMark") : "")));
             rows.Add((g6, T("Sum_F_Suggestion"), T("Sum_V_Suggestion")));
             return rows;
         }
