@@ -115,7 +115,7 @@ The installer is identified (technology, silent switches, database match) and yo
 |---|---|
 | **Requirements** | Windows 10/11 Pro, Enterprise or Education with the *Windows Sandbox* feature and hardware virtualisation enabled. When the feature is turned off, the application offers to install it (administrator permission, then a restart). Windows Home and Windows Server do not have it. |
 | **What you see in the sandbox** | A PowerShell window with the elapsed time and the last entry of the PSAppDeployToolkit log while the package runs, then `RESULT`. It stays open with four commands: `Test-Install`, `Test-Uninstall`, `Test-Detection` and `Show-Log`. |
-| **What comes back** | Exit code, detection and time on the result card; `result.json` and the logs in `Sandbox\Results` of the package. |
+| **What comes back** | Exit code, detection and time on the result card; `result.json` and the logs in `Sandbox\Results` of the package. Reopening the package shows its last result again (2.1.1). |
 | **What the test changes inside the sandbox** | It turns off the Smart App Control evaluation (it makes installers take minutes there) and QuickEdit in the test window (a click would pause it). Both only exist in that disposable Windows. |
 | **Time limit** | 60 minutes per run, the same default as Intune. A package that asks a question nobody answers is stopped and reported as failed. |
 | **Differences from Intune** | Intune installs as SYSTEM; the sandbox installs as its local administrator. Always finish with a pilot group. |
@@ -174,10 +174,10 @@ Every release is built by GitHub Actions from the tagged commit and carries chec
 
 ```powershell
 # 1. Checksum: compare with SHA256SUMS.txt of the release
-Get-FileHash .\J365-IntunePSApp-2.1.0-win-x64.zip -Algorithm SHA256
+Get-FileHash .\J365-IntunePSApp-2.1.1-win-x64.zip -Algorithm SHA256
 
 # 2. Provenance: proves the file was built by this repository's workflow (GitHub CLI)
-gh attestation verify .\J365-IntunePSApp-2.1.0-win-x64.zip --repo sesantanajr/J365-IntunePSApp
+gh attestation verify .\J365-IntunePSApp-2.1.1-win-x64.zip --repo sesantanajr/J365-IntunePSApp
 ```
 
 What the application itself verifies: the database installers (SHA256 from the winget manifest), the PSAppDeployToolkit module (Authenticode signature), IntuneWinAppUtil (Microsoft signature, otherwise discarded) and every `.intunewin` it creates (HMAC and SHA256). See [SECURITY.md](SECURITY.md).
@@ -343,7 +343,7 @@ O instalador é identificado (tecnologia, parâmetros silenciosos, correspondên
 |---|---|
 | **Requisitos** | Windows 10/11 Pro, Enterprise ou Education com o recurso *Área Restrita do Windows* (Windows Sandbox) e virtualização de hardware habilitada. Quando o recurso está desligado, o aplicativo oferece instalar (permissão de administrador e, depois, reiniciar). O Windows Home e o Windows Server não têm o recurso. |
 | **O que aparece no sandbox** | Uma janela do PowerShell com o tempo decorrido e a última linha do log do PSAppDeployToolkit enquanto o pacote roda, e depois `RESULT`. Ela fica aberta com quatro comandos: `Test-Install`, `Test-Uninstall`, `Test-Detection` e `Show-Log`. |
-| **O que volta** | Código de saída, detecção e tempo no cartão de resultado; `result.json` e os logs em `Sandbox\Results` do pacote. |
+| **O que volta** | Código de saída, detecção e tempo no cartão de resultado; `result.json` e os logs em `Sandbox\Results` do pacote. Ao reabrir o pacote, o último resultado aparece de novo (2.1.1). |
 | **O que o teste altera dentro do sandbox** | Desliga a avaliação do Smart App Control (ela faz os instaladores levarem minutos ali) e o QuickEdit da janela do teste (um clique a pausaria). As duas alterações só existem naquele Windows descartável. |
 | **Limite de tempo** | 60 minutos por execução, o mesmo padrão do Intune. Um pacote que faz uma pergunta sem resposta é interrompido e reportado como falha. |
 | **Diferenças em relação ao Intune** | O Intune instala como SYSTEM; o sandbox instala como o administrador local dele. Sempre finalize com um grupo piloto. |
@@ -402,10 +402,10 @@ Cada versão é compilada pelo GitHub Actions a partir do commit marcado e traz 
 
 ```powershell
 # 1. Checksum: compare com o SHA256SUMS.txt da versão
-Get-FileHash .\J365-IntunePSApp-2.1.0-win-x64.zip -Algorithm SHA256
+Get-FileHash .\J365-IntunePSApp-2.1.1-win-x64.zip -Algorithm SHA256
 
 # 2. Procedência: prova que o arquivo foi compilado pelo workflow deste repositório (GitHub CLI)
-gh attestation verify .\J365-IntunePSApp-2.1.0-win-x64.zip --repo sesantanajr/J365-IntunePSApp
+gh attestation verify .\J365-IntunePSApp-2.1.1-win-x64.zip --repo sesantanajr/J365-IntunePSApp
 ```
 
 O que o próprio aplicativo verifica: os instaladores do banco de dados (SHA256 do manifesto do winget), o módulo do PSAppDeployToolkit (assinatura Authenticode), o IntuneWinAppUtil (assinatura da Microsoft, senão é descartado) e cada `.intunewin` criado (HMAC e SHA256). Veja [SECURITY.md](SECURITY.md).

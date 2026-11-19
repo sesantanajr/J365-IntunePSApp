@@ -2,7 +2,12 @@
 
 Package any Windows application for Microsoft Intune in minutes, with no scripting. Built on [PSAppDeployToolkit](https://psappdeploytoolkit.com). Created by [Sérgio Sant'Ana Junior](https://www.linkedin.com/in/sergiosantanacloud/) - [Jornada 365](https://jornada365.cloud).
 
-### Highlights
+### New in 2.1.1
+
+- A reopened package shows the result of its last Windows Sandbox test.
+- The package now carries the current README, with the sections about the Windows Sandbox test and troubleshooting.
+
+### Highlights of 2.1
 
 - **The Windows Sandbox test no longer looks frozen.** Inside Windows Sandbox a 2 MB MSI took about two minutes to install (Smart App Control in evaluation mode) and one click on the test window paused it (QuickEdit). Both are handled: the same test now finishes in about half a minute, shows live progress and has a time limit.
 - **Windows Sandbox not installed?** The application explains it and installs the Windows feature for you (administrator permission and a restart are required).
@@ -30,6 +35,10 @@ The executable is not code-signed: Windows SmartScreen may ask for confirmation 
 ## J365 IntunePSApp 2.1 (Português)
 
 Empacote qualquer aplicativo Windows para o Microsoft Intune em minutos, sem escrever scripts. Baseado no [PSAppDeployToolkit](https://psappdeploytoolkit.com). Criado por [Sérgio Sant'Ana Junior](https://www.linkedin.com/in/sergiosantanacloud/) - [Jornada 365](https://jornada365.cloud).
+
+**Novo na 2.1.1:** ao reabrir um pacote, o cartão mostra o resultado do último teste no Windows Sandbox; o pacote agora traz o README atual, com as seções sobre o teste no Sandbox e solução de problemas.
+
+**Destaques da 2.1:**
 
 - **O teste no Windows Sandbox não parece mais travado.** Dentro do Sandbox um MSI de 2 MB levava cerca de dois minutos para instalar (Smart App Control em modo de avaliação) e um clique na janela do teste o pausava (QuickEdit). Os dois casos foram tratados: o mesmo teste termina em cerca de meio minuto, mostra o progresso ao vivo e tem limite de tempo.
 - **Windows Sandbox não instalado?** O aplicativo explica e instala o recurso do Windows para você (pede permissão de administrador e exige reiniciar).
