@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>J365.IntunePSApp</AssemblyName>
+    <RootNamespace>J365.IntunePSApp</RootNamespace>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>1.0.0</Version>
+    <Company>Jornada 365</Company>
+    <Product>J365 IntunePSApp</Product>
+    <Description>Empacotador de aplicativos para o Microsoft Intune com PSAppDeployToolkit</Description>
+    <Copyright>Copyright (c) 2026 Jornada 365 - Licença MIT</Copyright>
+    <NoWarn>$(NoWarn);WPF0001;CA1416;SYSLIB0057</NoWarn>
+    <SatelliteResourceLanguages>pt-BR;en</SatelliteResourceLanguages>
+    <DebugType>embedded</DebugType>
+    <!-- Publicacao portatil: dotnet publish -c Release -r win-x64 -->
+    <SelfContained>false</SelfContained>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <IncludeAllContentForSelfExtract>false</IncludeAllContentForSelfExtract>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\*.png" />
+    <Resource Include="Assets\app.ico" />
+    <EmbeddedResource Include="..\..\catalog\curated.json" LogicalName="curated.json" />
+  </ItemGroup>
+
+</Project>

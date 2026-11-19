@@ -1,0 +1,162 @@
+<UserControl x:Class="J365.IntunePSApp.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel Margin="28,6,28,28" MaxWidth="980" HorizontalAlignment="Left">
+      <TextBlock Text="Configurações" Style="{StaticResource PageTitle}"/>
+      <TextBlock Text="Padrões usados em todos os novos pacotes, banco de dados e ferramentas." Style="{StaticResource MutedText}" FontSize="13.5" Margin="0,4,0,18"/>
+
+      <!-- Empresa -->
+      <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+        <StackPanel>
+          <TextBlock Text="Identidade da empresa" Style="{StaticResource H2}"/>
+          <TextBlock Text="Aparece nas janelas do PSAppDeployToolkit em todos os pacotes." Style="{StaticResource MutedText}"/>
+          <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/></Grid.ColumnDefinitions>
+            <StackPanel><TextBlock Text="Nome da empresa" Style="{StaticResource Label}"/><TextBox x:Name="TxtCompany"/></StackPanel>
+            <StackPanel Grid.Column="2"><TextBlock Text="Autor dos pacotes" Style="{StaticResource Label}"/><TextBox x:Name="TxtAuthor"/></StackPanel>
+          </Grid>
+          <TextBlock Text="Logo" Style="{StaticResource Label}"/>
+          <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <Border Width="40" Height="40" CornerRadius="8" BorderBrush="{StaticResource Line}" BorderThickness="1" Margin="0,0,10,0" Background="{StaticResource Subtle}">
+              <Image x:Name="LogoThumb" Margin="4"/>
+            </Border>
+            <TextBox x:Name="TxtLogo" Grid.Column="1" TextChanged="Logo_Changed"/>
+            <Button Grid.Column="2" Style="{StaticResource SecondaryButton}" Content="Procurar..." Margin="8,0,0,0" Click="Logo_Click"/>
+          </Grid>
+          <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/></Grid.ColumnDefinitions>
+            <StackPanel><TextBlock Text="Cor de destaque" Style="{StaticResource Label}"/><TextBox x:Name="TxtAccent" FontFamily="{StaticResource MonoFont}"/></StackPanel>
+            <StackPanel Grid.Column="2"><TextBlock Text="Estilo das janelas" Style="{StaticResource Label}"/>
+              <ComboBox x:Name="CmbStyle"><ComboBoxItem Tag="Fluent" Content="Moderno (Fluent)"/><ComboBoxItem Tag="Classic" Content="Clássico"/></ComboBox>
+            </StackPanel>
+            <StackPanel Grid.Column="4"><TextBlock Text="Idioma das janelas" Style="{StaticResource Label}"/>
+              <ComboBox x:Name="CmbLanguage"><ComboBoxItem Tag="Auto" Content="Automático"/><ComboBoxItem Tag="pt-BR" Content="Português (Brasil)"/><ComboBoxItem Tag="en" Content="English"/><ComboBoxItem Tag="es" Content="Español"/></ComboBox>
+            </StackPanel>
+          </Grid>
+          <CheckBox x:Name="ChkImeLogs" Style="{StaticResource Switch}" Content="Gravar os logs do PSADT na pasta do Intune Management Extension" Margin="0,16,0,0"/>
+        </StackPanel>
+      </Border>
+
+      <!-- Padroes -->
+      <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+        <StackPanel>
+          <TextBlock Text="Padrões de experiência" Style="{StaticResource H2}"/>
+          <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition Width="160"/><ColumnDefinition Width="16"/><ColumnDefinition Width="200"/></Grid.ColumnDefinitions>
+            <StackPanel><TextBlock Text="Modo de exibição" Style="{StaticResource Label}"/>
+              <ComboBox x:Name="CmbMode"><ComboBoxItem Tag="Auto" Content="Automático (recomendado)"/><ComboBoxItem Tag="Silent" Content="Silencioso"/><ComboBoxItem Tag="Interactive" Content="Interativo"/></ComboBox>
+            </StackPanel>
+            <StackPanel Grid.Column="2"><TextBlock Text="Adiamentos" Style="{StaticResource Label}"/><TextBox x:Name="TxtDefer"/></StackPanel>
+            <StackPanel Grid.Column="4"><TextBlock Text="Fechar apps após (s)" Style="{StaticResource Label}"/><TextBox x:Name="TxtCountdown"/></StackPanel>
+          </Grid>
+          <CheckBox x:Name="ChkDefer" Style="{StaticResource Switch}" Content="Permitir adiar a instalação" Margin="0,16,0,0"/>
+          <CheckBox x:Name="ChkBlock" Style="{StaticResource Switch}" Content="Impedir abrir o aplicativo durante a instalação"/>
+          <CheckBox x:Name="ChkDisk" Style="{StaticResource Switch}" Content="Verificar espaço em disco"/>
+          <CheckBox x:Name="ChkRemovePrev" Style="{StaticResource Switch}" Content="Remover versões anteriores antes de instalar"/>
+          <TextBlock Text="Mensagem de boas-vindas padrão" Style="{StaticResource Label}"/>
+          <TextBox x:Name="TxtWelcome" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60" VerticalContentAlignment="Top"/>
+          <TextBlock Text="Mensagem de conclusão padrão" Style="{StaticResource Label}"/>
+          <TextBox x:Name="TxtCompletion" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="50" VerticalContentAlignment="Top"/>
+          <Grid Margin="0,4,0,0">
+            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/></Grid.ColumnDefinitions>
+            <StackPanel><TextBlock Text="Arquitetura preferida no catálogo" Style="{StaticResource Label}"/>
+              <ComboBox x:Name="CmbArch"><ComboBoxItem Tag="x64" Content="64 bits (x64)"/><ComboBoxItem Tag="x86" Content="32 bits (x86)"/><ComboBoxItem Tag="arm64" Content="ARM64"/></ComboBox>
+            </StackPanel>
+            <StackPanel Grid.Column="2"><TextBlock Text="Idioma preferido dos instaladores" Style="{StaticResource Label}"/>
+              <ComboBox x:Name="CmbLocale"><ComboBoxItem Tag="pt-BR" Content="Português (Brasil)"/><ComboBoxItem Tag="en-US" Content="Inglês (EUA)"/><ComboBoxItem Tag="es-ES" Content="Espanhol"/></ComboBox>
+            </StackPanel>
+          </Grid>
+          <StackPanel Orientation="Horizontal" Margin="0,20,0,0">
+            <Button Style="{StaticResource PrimaryButton}" Click="Save_Click">
+              <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE74E;" Style="{StaticResource Icon}" Foreground="White" Margin="0,0,8,0"/><TextBlock Text="Salvar configurações"/></StackPanel>
+            </Button>
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <!-- Pastas -->
+      <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+        <StackPanel>
+          <TextBlock Text="Pastas" Style="{StaticResource H2}"/>
+          <TextBlock Text="Pasta onde os pacotes são criados" Style="{StaticResource Label}"/>
+          <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <TextBox x:Name="TxtOutput"/>
+            <Button Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="Escolher..." Margin="8,0,0,0" Click="Output_Click"/>
+          </Grid>
+          <TextBlock Text="Dados do aplicativo" Style="{StaticResource Label}"/>
+          <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <TextBox x:Name="TxtData" IsReadOnly="True"/>
+            <Button Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="Abrir" Margin="8,0,0,0" Click="OpenData_Click"/>
+          </Grid>
+          <TextBlock x:Name="PortableInfo" Style="{StaticResource Hint}"/>
+        </StackPanel>
+      </Border>
+
+      <!-- Banco de dados -->
+      <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+        <StackPanel>
+          <TextBlock Text="Banco de dados de aplicativos" Style="{StaticResource H2}"/>
+          <TextBlock x:Name="CatalogInfo" Style="{StaticResource Body}" Margin="0,6,0,0"/>
+          <TextBlock Text="Endereço de atualização" Style="{StaticResource Label}"/>
+          <TextBox x:Name="TxtCatalogUrl" FontFamily="{StaticResource MonoFont}"/>
+          <TextBlock Style="{StaticResource Hint}" Text="Gerado diariamente pelo GitHub Actions deste projeto a partir do repositório público microsoft/winget-pkgs (licença MIT), com curadoria do Jornada 365."/>
+          <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+            <TextBlock Text="Verificar atualizações a cada" VerticalAlignment="Center"/>
+            <TextBox x:Name="TxtCatalogDays" Width="60" Margin="10,0,8,0" HorizontalContentAlignment="Center"/>
+            <TextBlock Text="dia(s)" VerticalAlignment="Center"/>
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+            <Button Style="{StaticResource SecondaryButton}" Click="CatalogUpdate_Click">
+              <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE72C;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock Text="Atualizar agora"/></StackPanel>
+            </Button>
+            <Button Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Click="CatalogImport_Click">
+              <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8B5;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock Text="Importar arquivo (offline)..."/></StackPanel>
+            </Button>
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <!-- Ferramentas -->
+      <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+        <StackPanel>
+          <TextBlock Text="Ferramentas" Style="{StaticResource H2}"/>
+          <Grid Margin="0,12,0,0">
+            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <Grid.RowDefinitions><RowDefinition/><RowDefinition Height="12"/><RowDefinition/></Grid.RowDefinitions>
+            <StackPanel>
+              <TextBlock Text="PSAppDeployToolkit (template v4)" Style="{StaticResource H3}"/>
+              <TextBlock x:Name="PsadtInfo" Style="{StaticResource MutedText}"/>
+            </StackPanel>
+            <Button Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="Baixar / atualizar" Click="PsadtUpdate_Click"/>
+            <StackPanel Grid.Row="2">
+              <TextBlock Text="Microsoft Win32 Content Prep Tool (IntuneWinAppUtil.exe)" Style="{StaticResource H3}"/>
+              <TextBlock x:Name="IwauInfo" Style="{StaticResource MutedText}"/>
+            </StackPanel>
+            <Button Grid.Row="2" Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="Baixar" Click="IwauUpdate_Click"/>
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <!-- Sobre -->
+      <Border CornerRadius="12" Background="{StaticResource HeroBrush}" Padding="24,20">
+        <Grid>
+          <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/></Grid.ColumnDefinitions>
+          <Image Source="/Assets/j365-cloud.png" Width="96" Margin="0,0,20,0" VerticalAlignment="Top"/>
+          <StackPanel Grid.Column="1">
+            <TextBlock x:Name="AboutTitle" Foreground="White" FontFamily="{StaticResource DisplayFont}" FontSize="20" FontWeight="SemiBold"/>
+            <TextBlock Foreground="#C9DBF0" TextWrapping="Wrap" Margin="0,6,0,0"
+                       Text="Projeto de código aberto (licença MIT) do Jornada 365. Usa o PSAppDeployToolkit (LGPL-3.0), o Microsoft Win32 Content Prep Tool (licença Microsoft, baixado do GitHub oficial) e dados do repositório winget-pkgs (MIT)."/>
+            <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+              <Button Style="{StaticResource HeroButton}" Padding="14,7" FontSize="13" Click="Blog_Click" Content="jornada365.cloud"/>
+              <Button Style="{StaticResource HeroOutlineButton}" Padding="14,7" FontSize="13" Margin="8,0,0,0" Click="Repo_Click" Content="Código no GitHub"/>
+            </StackPanel>
+          </StackPanel>
+        </Grid>
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

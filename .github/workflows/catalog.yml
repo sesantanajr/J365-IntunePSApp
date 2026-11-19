@@ -1,0 +1,49 @@
+name: Atualizar banco de dados de aplicativos
+
+on:
+  schedule:
+    - cron: '17 4 * * *'   # todos os dias, 01:17 (horário de Brasília)
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths: [ 'catalog/curated.json', 'tools/CatalogBuilder/**' ]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: catalog
+  cancel-in-progress: false
+
+jobs:
+  catalog:
+    name: Gerar catalog.json.gz a partir do winget-pkgs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Gerar banco de dados
+        run: dotnet run --project tools/CatalogBuilder -c Release -- --out out --curated catalog/curated.json
+
+      - name: Publicar na release "catalog"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          COUNT=$(jq .count out/catalog-meta.json)
+          GEN=$(jq -r .generated out/catalog-meta.json)
+          COMMIT=$(jq -r .commit out/catalog-meta.json)
+          if ! gh release view catalog >/dev/null 2>&1; then
+            gh release create catalog --title "Banco de dados de aplicativos" --notes "Gerado automaticamente." --latest=false
+          fi
+          gh release upload catalog out/catalog.json.gz out/catalog-meta.json --clobber
+          gh release edit catalog --latest=false --notes "Banco de dados do **J365 IntunePSApp**, gerado automaticamente todos os dias a partir do [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs) (licença MIT) com a curadoria do Jornada 365.
+
+          - **Aplicativos:** $COUNT
+          - **Gerado em:** $GEN (UTC)
+          - **winget-pkgs:** \`${COMMIT:0:12}\`
+
+          O aplicativo baixa este arquivo automaticamente. Para uso offline: Configurações → Importar arquivo."

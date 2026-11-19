@@ -1,0 +1,58 @@
+name: Build e release
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+    paths-ignore: [ 'catalog/curated.json' ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Compilar versão portátil (win-x64)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Definir versão
+        shell: pwsh
+        run: |
+          $ver = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME.TrimStart('v') } else { '1.0.0' }
+          "VERSION=$ver" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Compilar
+        run: dotnet build src/IntunePSApp -c Release -p:Version=${{ env.VERSION }}
+
+      - name: Compilar gerador do banco de dados
+        run: dotnet build tools/CatalogBuilder -c Release
+
+      - name: Publicar executável único
+        shell: pwsh
+        run: |
+          dotnet publish src/IntunePSApp -c Release -r win-x64 -o publish -p:Version=$env:VERSION
+          Copy-Item README.md, LICENSE, THIRD-PARTY-NOTICES.md publish/
+          New-Item -ItemType Directory dist | Out-Null
+          $zip = "dist/J365-IntunePSApp-$env:VERSION-win-x64.zip"
+          Compress-Archive -Path publish/* -DestinationPath $zip
+          "$((Get-FileHash $zip -Algorithm SHA256).Hash)  $(Split-Path $zip -Leaf)" | Out-File dist/SHA256SUMS.txt -Encoding ascii
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: J365-IntunePSApp-win-x64
+          path: dist/*
+
+      - name: Criar release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create $env:GITHUB_REF_NAME dist/* --title "J365 IntunePSApp $env:VERSION" --notes-file .github/RELEASE_NOTES.md --latest

@@ -1,0 +1,19 @@
+## .NET
+bin/
+obj/
+publish/
+out/
+*.user
+*.suo
+.vs/
+.vscode/
+*.DotSettings.user
+TestResults/
+
+## Dados locais do aplicativo (modo portátil)
+IntunePSApp-Data/
+
+## Sistema
+Thumbs.db
+Desktop.ini
+.DS_Store
