@@ -43,7 +43,7 @@ To use a database you built yourself: *Settings > Application database > Import 
 
 - **Long paths.** Windows cannot start an executable whose full path is longer than 260 characters. If `dotnet run` or `dotnet test` fails with a "file name too long" error, clone the repository into a shorter folder.
 - **Smart App Control.** On computers with Smart App Control turned on, Windows may block freshly built, unsigned executables. That protection cannot be configured per application; build and test on a computer (or virtual machine) where it is off.
-- **Development switches.** `--snapshot <folder>` renders every page to PNG files (it is how the screenshots of this repository are made); see `SnapshotRunner.cs`. The data folder can be redirected with the environment variable `J365_INTUNEPSAPP_DATA`.
+- **Development switches.** `--snapshot <folder>` renders every page to PNG files (it is how the screenshots of this repository are made); see `SnapshotRunner.cs`. `--snapshot-size 900x580` renders them at another window size (the window cannot be larger than the screen), and steps taller than the window get a second file ending in `-end`. The data folder can be redirected with the environment variable `J365_INTUNEPSAPP_DATA`: point it to a folder with a neutral path, because the output folder appears in the screenshots.
 - **Release.** Pushing a tag `vX.Y.Z` makes GitHub Actions run the tests, build the executable and publish the release with checksums, the source package and the provenance attestation.
 
 ---

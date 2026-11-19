@@ -87,6 +87,8 @@ namespace J365.IntunePSApp
                 {
                     w.Editor.GoStep(i);
                     await Shot($"03-editor-{i + 1}");
+                    // Steps taller than the window: a second capture shows their last part.
+                    if (w.Editor.ScrollToEnd()) await Shot($"03-editor-{i + 1}-end");
                 }
                 if (App.HasArg("--snapshot-build"))
                 {

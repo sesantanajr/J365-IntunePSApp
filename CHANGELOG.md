@@ -2,6 +2,12 @@
 
 All notable changes to J365 IntunePSApp. Versions follow [Semantic Versioning](https://semver.org).
 
+## Unreleased
+
+- A reopened package shows the result of its last Windows Sandbox test on the result card.
+- Documentation: new screenshots made with 2.1 (both languages), README sections about the Windows Sandbox test, screen sizes and troubleshooting.
+- Capture mode (`--snapshot`): steps taller than the window get a second capture of their last part.
+
 ## 2.1.0 - 2026-11-19
 
 ### Fixed

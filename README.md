@@ -24,6 +24,8 @@
 >
 > This project is **based on [PSAppDeployToolkit](https://psappdeploytoolkit.com)**, the open-source deployment framework: every package it generates is a standard PSAppDeployToolkit v4 package. J365 IntunePSApp is the friendly front end that writes the package for you.
 
+<p align="center"><a href="https://jornada365.cloud"><img src="docs/assets/j365-blog-logo.png" alt="Jornada 365" width="240"></a></p>
+
 ---
 
 ## What it does
@@ -37,6 +39,16 @@ You pick an application (from a database of 16,000+ apps, or your own `.msi` / `
 - the complete **PSAppDeployToolkit package**, so you can keep editing it by hand if you want.
 
 Anyone can use it: there is nothing to install, no script to write and no PowerShell knowledge required.
+
+## What is new in 2.1
+
+- **The Windows Sandbox test no longer looks frozen.** Inside Windows Sandbox a 2 MB MSI took about two minutes to install and a single click on the test window paused it. Both causes are handled: the same test now takes about half a minute, shows live progress and has a time limit.
+- **Windows Sandbox not installed?** The application says so and installs the Windows feature for you.
+- **The result of the test comes back to the application**: exit code, detection, time and logs.
+- **Versions already installed**: the option to uninstall whatever is on the device before installing is on the first step, and the generated script logs what it found and removed.
+- **The window adapts to the screen**, down to 900 x 580.
+
+Details in [Testing in Windows Sandbox](#testing-in-windows-sandbox), [Troubleshooting](#troubleshooting) and the [changelog](CHANGELOG.md). Upgrading: replace the executable; settings, packages and projects keep working.
 
 ## Download
 
@@ -67,7 +79,8 @@ Anyone can use it: there is nothing to install, no script to write and no PowerS
 | **Publish to Intune (preview)** | A generated `Publish-ToIntune.ps1` creates the app in your tenant with your own sign-in, without assignments. See [docs/INTUNE-PUBLISH.md](docs/INTUNE-PUBLISH.md). |
 | **English and Portuguese** | Switch the language at any time (sidebar or Settings). The generated instructions follow the same language. |
 | **Portable or installed** | Runs from any folder. Optionally installs for your user (Start menu, *Installed apps*) without administrator rights, and uninstalls cleanly. |
-| **Command line** | `--build`, `--setup`, `--update-catalog`, `--install`... for automation. |
+| **Any screen size** | The window fits small notebooks, 125-150 % scaling and remote sessions: icon-only sidebar and pages that reflow. |
+| **Command line** | `--build`, `--sandbox`, `--setup`, `--update-catalog`, `--install`... for automation. |
 
 ## How it works
 
@@ -75,18 +88,44 @@ Anyone can use it: there is nothing to install, no script to write and no PowerS
 
 <p align="center"><img src="docs/screenshots/en/catalog.png" alt="App catalog" width="88%"></p>
 
+The installer is identified (technology, silent switches, database match) and you decide right there what happens to **versions already installed on the device**: uninstall whatever is found, then install the new one.
+
+<p align="center"><img src="docs/screenshots/en/installer.png" alt="Installer identified and the option to uninstall versions already installed" width="88%"></p>
+
 **2. Customise** - experience, actions, dependencies, uninstall, detection and branding. Everything is filled in with sensible defaults.
 
 <p align="center"><img src="docs/screenshots/en/experience.png" alt="User experience with live preview" width="88%"></p>
 <p align="center"><img src="docs/screenshots/en/actions.png" alt="Dependencies and ready-made actions" width="88%"></p>
 
-**3. Generate and send to Intune** - the package is validated (script syntax, `.intunewin` integrity) and you get the commands, the detection script and the instructions.
+**3. Generate** - the package is validated (script syntax, `.intunewin` integrity) and you get the commands, the detection script and the instructions.
 
-<p align="center"><img src="docs/screenshots/en/generated.png" alt="Package ready for Intune" width="88%"></p>
+**4. Test in Windows Sandbox, then send to Intune** - one click installs the package in a disposable Windows and runs the detection rule. The result comes back to the same card.
+
+<p align="center"><img src="docs/screenshots/en/generated.png" alt="Package ready for Intune, with the result of the Windows Sandbox test" width="88%"></p>
 
 **Later** - the application tells you when a packaged app has a new version.
 
 <p align="center"><img src="docs/screenshots/en/packages.png" alt="My packages with update notice" width="88%"></p>
+
+## Testing in Windows Sandbox
+
+*Test in Sandbox* opens a disposable Windows, installs the package with the same command line Intune uses and runs the detection rule. Nothing changes on your computer.
+
+| | |
+|---|---|
+| **Requirements** | Windows 10/11 Pro, Enterprise or Education with the *Windows Sandbox* feature and hardware virtualisation enabled. When the feature is turned off, the application offers to install it (administrator permission, then a restart). Windows Home and Windows Server do not have it. |
+| **What you see in the sandbox** | A PowerShell window with the elapsed time and the last entry of the PSAppDeployToolkit log while the package runs, then `RESULT`. It stays open with four commands: `Test-Install`, `Test-Uninstall`, `Test-Detection` and `Show-Log`. |
+| **What comes back** | Exit code, detection and time on the result card; `result.json` and the logs in `Sandbox\Results` of the package. |
+| **What the test changes inside the sandbox** | It turns off the Smart App Control evaluation (it makes installers take minutes there) and QuickEdit in the test window (a click would pause it). Both only exist in that disposable Windows. |
+| **Time limit** | 60 minutes per run, the same default as Intune. A package that asks a question nobody answers is stopped and reported as failed. |
+| **Differences from Intune** | Intune installs as SYSTEM; the sandbox installs as its local administrator. Always finish with a pilot group. |
+| **Command line** | `J365.IntunePSApp.exe --sandbox "<package folder>"` |
+
+## Any screen size
+
+The window never opens larger than the screen and remembers its size. On small notebooks, 125-150 % scaling and remote sessions the sidebar keeps only its icons and every page reflows.
+
+<p align="center"><img src="docs/screenshots/en/compact.png" alt="The same result card in a 900 x 580 window" width="62%"></p>
 
 ## What is generated
 
@@ -121,6 +160,7 @@ In Intune (*Apps > Windows > Add > Windows app (Win32)*):
 ```text
 J365.IntunePSApp.exe [file]                                   open a project (project.json) or analyse an installer
 J365.IntunePSApp.exe --build <project.json|installer> [--out <folder>] [--native]
+J365.IntunePSApp.exe --sandbox <package folder>               test a generated package in Windows Sandbox
 J365.IntunePSApp.exe --setup                                  download and verify the dependencies
 J365.IntunePSApp.exe --update-catalog [--force]               update the application database
 J365.IntunePSApp.exe --install [--desktop-shortcut] [--quiet] install for the current user
@@ -151,6 +191,19 @@ The project is open source so you can **audit it, build it yourself, fork it or 
 - **Fork / rebrand / translate:** [docs/FORKING.md](docs/FORKING.md) lists the few places to change (name, links, logo, database URL) and how to add a language.
 - **How it is organised:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 - **Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md). The quickest way to help is improving [`catalog/curated.json`](catalog/curated.json).
+
+## Troubleshooting
+
+| Symptom | What to do |
+|---|---|
+| The sandbox test stays on *Installing* for minutes (version 2.0) | Update to 2.1 and click *Test in Sandbox* again: packages generated by 2.0 get the new test script automatically. If you had clicked on the test window, press Enter in it. |
+| *Windows Sandbox is not enabled on this computer* | Choose *Install the feature now*, accept the Windows permission prompt and restart. By hand: *Turn Windows features on or off > Windows Sandbox*, or as administrator `dism /Online /Enable-Feature /FeatureName:Containers-DisposableClientVM /All`. Virtualisation (Intel VT-x / AMD-V) must be enabled in the firmware. |
+| *Windows Sandbox is already open* | Windows allows one sandbox at a time: close its window and test again. |
+| The sandbox test failed | *Open logs* on the result card, or `Show-Log` in the test window. Exit codes: `0`, `1707`, `3010`, `1641` are success; `1618` means another installation was running; `1602` means the user deferred or cancelled. |
+| Intune says *Installed* but the old version is still there | The detection rule has no version check, so the old version already counts as installed and Intune never runs the package. Turn on *Require a version equal to or higher than* in the Detection step (the review step warns about it). |
+| *Windows protected your PC* when starting the application | See [Download](#download): the executable is not code-signed. |
+
+Application logs: `IntunePSApp-Data\logs` next to the executable (portable) or `%LOCALAPPDATA%\J365\IntunePSApp\logs` (installed). On the devices, PSAppDeployToolkit writes by default to `C:\ProgramData\Microsoft\IntuneManagementExtension\Logs`.
 
 ## What was tested (and what was not)
 
@@ -201,6 +254,8 @@ Not affiliated with Microsoft or with the PSAppDeployToolkit team. See [NOTICE.m
 >
 > Este projeto foi **criado com base no [PSAppDeployToolkit](https://psappdeploytoolkit.com)**, o framework de implantação de código aberto: todo pacote gerado é um pacote padrão do PSAppDeployToolkit v4. O J365 IntunePSApp é a interface amigável que escreve o pacote para você.
 
+<p align="center"><a href="https://jornada365.cloud"><img src="docs/assets/j365-blog-logo.png" alt="Jornada 365" width="240"></a></p>
+
 ## O que ele faz
 
 Você escolhe um aplicativo (em um banco de dados com mais de 16.000 apps, ou o seu próprio `.msi` / `.exe`), responde a algumas perguntas e recebe tudo o que o Intune precisa:
@@ -212,6 +267,16 @@ Você escolhe um aplicativo (em um banco de dados com mais de 16.000 apps, ou o 
 - o **pacote PSAppDeployToolkit** completo, para continuar editando manualmente se quiser.
 
 Qualquer pessoa consegue usar: não há nada para instalar, nenhum script para escrever e não é preciso conhecer PowerShell.
+
+## Novidades da 2.1
+
+- **O teste no Windows Sandbox não parece mais travado.** Dentro do Windows Sandbox um MSI de 2 MB levava cerca de dois minutos para instalar, e um único clique na janela do teste o pausava. As duas causas foram tratadas: o mesmo teste agora leva cerca de meio minuto, mostra o progresso ao vivo e tem limite de tempo.
+- **Windows Sandbox não instalado?** O aplicativo avisa e instala o recurso do Windows para você.
+- **O resultado do teste volta para o aplicativo**: código de saída, detecção, tempo e logs.
+- **Versões já instaladas**: a opção de desinstalar o que houver no dispositivo antes de instalar está no primeiro passo, e o script gerado registra o que encontrou e removeu.
+- **A janela se ajusta à tela**, até 900 x 580.
+
+Detalhes em [Teste no Windows Sandbox](#teste-no-windows-sandbox), [Solução de problemas](#solução-de-problemas) e no [changelog](CHANGELOG.md). Para atualizar: substitua o executável; configurações, pacotes e projetos continuam funcionando.
 
 ## Download
 
@@ -242,7 +307,8 @@ Qualquer pessoa consegue usar: não há nada para instalar, nenhum script para e
 | **Publicar no Intune (prévia)** | Um `Publish-ToIntune.ps1` gerado cria o aplicativo no seu locatário com o seu próprio login, sem atribuições. Veja [docs/INTUNE-PUBLISH.md](docs/INTUNE-PUBLISH.md). |
 | **Inglês e português** | Troque o idioma a qualquer momento (barra lateral ou Configurações). As instruções geradas seguem o mesmo idioma. |
 | **Portátil ou instalado** | Roda de qualquer pasta. Se quiser, instala para o seu usuário (Menu Iniciar, *Aplicativos instalados*) sem precisar de administrador, e desinstala sem deixar resíduos. |
-| **Linha de comando** | `--build`, `--setup`, `--update-catalog`, `--install`... para automação. |
+| **Qualquer tamanho de tela** | A janela cabe em notebooks pequenos, escala de 125-150 % e sessões remotas: barra lateral só com ícones e páginas que se reorganizam. |
+| **Linha de comando** | `--build`, `--sandbox`, `--setup`, `--update-catalog`, `--install`... para automação. |
 
 ## Como funciona
 
@@ -250,18 +316,44 @@ Qualquer pessoa consegue usar: não há nada para instalar, nenhum script para e
 
 <p align="center"><img src="docs/screenshots/pt-BR/catalog.png" alt="Catálogo de aplicativos" width="88%"></p>
 
+O instalador é identificado (tecnologia, parâmetros silenciosos, correspondência no banco de dados) e ali mesmo você decide o que acontece com as **versões já instaladas no dispositivo**: desinstalar o que for encontrado e depois instalar a nova.
+
+<p align="center"><img src="docs/screenshots/pt-BR/installer.png" alt="Instalador identificado e a opção de desinstalar versões já instaladas" width="88%"></p>
+
 **2. Personalize** - experiência, ações, dependências, desinstalação, detecção e visual. Tudo já vem preenchido com padrões sensatos.
 
 <p align="center"><img src="docs/screenshots/pt-BR/experience.png" alt="Experiência do usuário com prévia" width="88%"></p>
 <p align="center"><img src="docs/screenshots/pt-BR/actions.png" alt="Dependências e ações prontas" width="88%"></p>
 
-**3. Gere e envie ao Intune** - o pacote é validado (sintaxe dos scripts, integridade do `.intunewin`) e você recebe os comandos, o script de detecção e as instruções.
+**3. Gere** - o pacote é validado (sintaxe dos scripts, integridade do `.intunewin`) e você recebe os comandos, o script de detecção e as instruções.
 
-<p align="center"><img src="docs/screenshots/pt-BR/generated.png" alt="Pacote pronto para o Intune" width="88%"></p>
+**4. Teste no Windows Sandbox e envie ao Intune** - um clique instala o pacote em um Windows descartável e executa a regra de detecção. O resultado volta para o mesmo cartão.
+
+<p align="center"><img src="docs/screenshots/pt-BR/generated.png" alt="Pacote pronto para o Intune, com o resultado do teste no Windows Sandbox" width="88%"></p>
 
 **Depois** - o aplicativo avisa quando um app empacotado tem versão nova.
 
 <p align="center"><img src="docs/screenshots/pt-BR/packages.png" alt="Meus pacotes com aviso de atualização" width="88%"></p>
+
+## Teste no Windows Sandbox
+
+*Testar no Sandbox* abre um Windows descartável, instala o pacote com a mesma linha de comando usada pelo Intune e executa a regra de detecção. Nada muda no seu computador.
+
+| | |
+|---|---|
+| **Requisitos** | Windows 10/11 Pro, Enterprise ou Education com o recurso *Área Restrita do Windows* (Windows Sandbox) e virtualização de hardware habilitada. Quando o recurso está desligado, o aplicativo oferece instalar (permissão de administrador e, depois, reiniciar). O Windows Home e o Windows Server não têm o recurso. |
+| **O que aparece no sandbox** | Uma janela do PowerShell com o tempo decorrido e a última linha do log do PSAppDeployToolkit enquanto o pacote roda, e depois `RESULT`. Ela fica aberta com quatro comandos: `Test-Install`, `Test-Uninstall`, `Test-Detection` e `Show-Log`. |
+| **O que volta** | Código de saída, detecção e tempo no cartão de resultado; `result.json` e os logs em `Sandbox\Results` do pacote. |
+| **O que o teste altera dentro do sandbox** | Desliga a avaliação do Smart App Control (ela faz os instaladores levarem minutos ali) e o QuickEdit da janela do teste (um clique a pausaria). As duas alterações só existem naquele Windows descartável. |
+| **Limite de tempo** | 60 minutos por execução, o mesmo padrão do Intune. Um pacote que faz uma pergunta sem resposta é interrompido e reportado como falha. |
+| **Diferenças em relação ao Intune** | O Intune instala como SYSTEM; o sandbox instala como o administrador local dele. Sempre finalize com um grupo piloto. |
+| **Linha de comando** | `J365.IntunePSApp.exe --sandbox "<pasta do pacote>"` |
+
+## Qualquer tamanho de tela
+
+A janela nunca abre maior que a tela e lembra o tamanho. Em notebooks pequenos, escala de 125-150 % e sessões remotas a barra lateral fica só com os ícones e todas as páginas se reorganizam.
+
+<p align="center"><img src="docs/screenshots/pt-BR/compact.png" alt="O mesmo cartão de resultado em uma janela de 900 x 580" width="62%"></p>
 
 ## O que é gerado
 
@@ -296,6 +388,7 @@ No Intune (*Aplicativos > Windows > Adicionar > Aplicativo do Windows (Win32)*):
 ```text
 J365.IntunePSApp.exe [arquivo]                                abre um projeto (project.json) ou analisa um instalador
 J365.IntunePSApp.exe --build <project.json|instalador> [--out <pasta>] [--native]
+J365.IntunePSApp.exe --sandbox <pasta do pacote>              testa um pacote gerado no Windows Sandbox
 J365.IntunePSApp.exe --setup                                  baixa e verifica as dependências
 J365.IntunePSApp.exe --update-catalog [--force]               atualiza o banco de dados de aplicativos
 J365.IntunePSApp.exe --install [--desktop-shortcut] [--quiet] instala para o usuário atual
@@ -326,6 +419,19 @@ O projeto é de código aberto para que você possa **auditar, compilar, fazer u
 - **Fork / mudar a marca / traduzir:** [docs/FORKING.md](docs/FORKING.md) lista os poucos lugares a alterar (nome, links, logo, endereço do banco de dados) e como adicionar um idioma.
 - **Como está organizado:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 - **Contribuir:** [CONTRIBUTING.md](CONTRIBUTING.md). A forma mais rápida de ajudar é melhorar o [`catalog/curated.json`](catalog/curated.json).
+
+## Solução de problemas
+
+| Sintoma | O que fazer |
+|---|---|
+| O teste no sandbox fica em *Installing* por minutos (versão 2.0) | Atualize para a 2.1 e clique em *Testar no Sandbox* novamente: os pacotes gerados pela 2.0 recebem o novo script de teste automaticamente. Se você tinha clicado na janela do teste, pressione Enter nela. |
+| *O Windows Sandbox não está ativo neste computador* | Escolha *Instalar o recurso agora*, aceite o pedido de permissão do Windows e reinicie. Manualmente: *Ativar ou desativar recursos do Windows > Área Restrita do Windows*, ou, como administrador, `dism /Online /Enable-Feature /FeatureName:Containers-DisposableClientVM /All`. A virtualização (Intel VT-x / AMD-V) precisa estar habilitada no firmware. |
+| *O Windows Sandbox já está aberto* | O Windows permite um sandbox por vez: feche a janela dele e teste de novo. |
+| O teste no sandbox falhou | *Abrir logs* no cartão de resultado, ou `Show-Log` na janela do teste. Códigos de saída: `0`, `1707`, `3010` e `1641` são sucesso; `1618` indica outra instalação em andamento; `1602` indica que o usuário adiou ou cancelou. |
+| O Intune mostra *Instalado*, mas a versão antiga continua lá | A regra de detecção não confere a versão, então a versão antiga já conta como instalada e o Intune nunca executa o pacote. Ative *Exigir versão igual ou superior a* no passo Detecção (o passo de revisão avisa sobre isso). |
+| *O Windows protegeu o computador* ao abrir o aplicativo | Veja [Download](#download-1): o executável não tem assinatura de código. |
+
+Logs do aplicativo: `IntunePSApp-Data\logs` ao lado do executável (portátil) ou `%LOCALAPPDATA%\J365\IntunePSApp\logs` (instalado). Nos dispositivos, o PSAppDeployToolkit grava por padrão em `C:\ProgramData\Microsoft\IntuneManagementExtension\Logs`.
 
 ## O que foi testado (e o que não foi)
 

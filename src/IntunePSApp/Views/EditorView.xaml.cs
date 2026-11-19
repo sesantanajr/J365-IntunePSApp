@@ -406,6 +406,15 @@ namespace J365.IntunePSApp.Views
             if (sender is RadioButton rb && int.TryParse(rb.Tag as string, out int i)) { _step = i; GoStep(i); }
         }
 
+        /// <summary>Scrolls the current step to its end. Returns false when the whole step already fits in the window.</summary>
+        public bool ScrollToEnd()
+        {
+            BodyScroll.UpdateLayout();
+            if (BodyScroll.ScrollableHeight < 1) return false;
+            BodyScroll.ScrollToEnd();
+            return true;
+        }
+
         private void Back_Click(object sender, RoutedEventArgs e) => GoStep(_step - 1);
         private void Next_Click(object sender, RoutedEventArgs e) => GoStep(_step + 1);
 
@@ -1039,6 +1048,17 @@ namespace J365.IntunePSApp.Views
             _sandboxTimer = null;
         }
 
+        /// <summary>A reopened package shows the result of its last sandbox test, when one was recorded (Sandbox\Results\result.json).</summary>
+        private void ShowLastSandboxResult(string packageFolder)
+        {
+            var result = SandboxService.ReadResult(packageFolder);
+            if (result?.Last == null) return;
+            _sandboxFolder = packageFolder;
+            _sandboxResult = result;
+            _sandboxClosed = true;
+            RefreshSandboxStatus();
+        }
+
         private void ResetSandboxStatus()
         {
             StopSandboxWatch();
@@ -1104,7 +1124,8 @@ namespace J365.IntunePSApp.Views
                 DropText.Text = string.IsNullOrEmpty(s.InstallerPath) ? T("Ed_DropHere") : Path.GetFileName(s.InstallerPath);
                 // A project inside a package folder brings the previous result back (commands, tests, publishing).
                 _last = PackageBuilder.TryLoadResult(path, s);
-                if (_last != null) ShowResult(_last); else ResultCard.Visibility = Visibility.Collapsed;
+                if (_last != null) { ShowResult(_last); ShowLastSandboxResult(_last.PackageFolder); }
+                else ResultCard.Visibility = Visibility.Collapsed;
                 main.Navigate("editor");
                 GoStep(_last != null ? ReviewStep : 1);
                 if (!string.IsNullOrEmpty(s.InstallerPath) && !File.Exists(s.InstallerPath)) main.Toast(T("Ed_ProjectMissingInstaller"), "warn");
