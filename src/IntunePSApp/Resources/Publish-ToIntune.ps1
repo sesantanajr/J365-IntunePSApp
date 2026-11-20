@@ -413,25 +413,39 @@ function Get-AccessToken
 
 function Invoke-Graph
 {
-    param([string]$Method, [string]$Path, $Body)
+    # -NoRetry: only a throttled request (HTTP 429, never processed) is sent again. For the creation of the app: a
+    # time-out may come after Intune created it, and a second request would create a second app.
+    param([string]$Method, [string]$Path, $Body, [switch]$NoRetry)
 
     $url = $GraphUrl.TrimEnd('/') + '/beta' + $Path
     $bytes = $null
     if ($null -ne $Body) { $bytes = [System.Text.Encoding]::UTF8.GetBytes(($Body | ConvertTo-Json -Depth 12 -Compress)) }
     for ($attempt = 1; ; $attempt++)
     {
-        $answer = Invoke-Http -Method $Method -Url $url -Headers @{ Authorization = 'Bearer ' + (Get-AccessToken) } -Body $bytes -ContentType 'application/json'
+        $token = Get-AccessToken
+        try { $answer = Invoke-Http -Method $Method -Url $url -Headers @{ Authorization = 'Bearer ' + $token } -Body $bytes -ContentType 'application/json' }
+        catch
+        {
+            # No answer at all (network, proxy, time-out): a read is safe to ask again.
+            if ($Method -ne 'GET' -or $attempt -ge 6) { throw }
+            Write-Note ($_.Exception.Message + ' - trying again in ' + (5 * $attempt) + ' s...')
+            Assert-NotCancelled
+            Start-Sleep -Seconds (5 * $attempt)
+            continue
+        }
         if ($answer.Status -ge 200 -and $answer.Status -lt 300)
         {
             if ([string]::IsNullOrWhiteSpace($answer.Text)) { return $null }
             return ($answer.Text | ConvertFrom-Json)
         }
-        # Throttling and temporary service errors are retried, as Microsoft Graph asks.
-        if (($answer.Status -eq 429 -or $answer.Status -eq 503 -or $answer.Status -eq 504) -and $attempt -lt 6)
+        # Throttling and temporary service errors are retried, as Microsoft Graph asks (a read also after a 500 or 502).
+        $retry = ($answer.Status -eq 429) -or (-not $NoRetry -and ($answer.Status -eq 503 -or $answer.Status -eq 504)) -or ($Method -eq 'GET' -and ($answer.Status -eq 500 -or $answer.Status -eq 502))
+        if ($retry -and $attempt -lt 6)
         {
             $wait = $answer.RetryAfter
             if ($wait -le 0) { $wait = 5 * $attempt }
             Write-Note ('Microsoft Graph asked to wait ' + $wait + ' s (HTTP ' + $answer.Status + ')...')
+            Assert-NotCancelled
             Start-Sleep -Seconds ([Math]::Min($wait, 120))
             continue
         }
@@ -481,27 +495,51 @@ function Wait-FileState([string]$FilePath, [string]$Stage, [int]$Minutes)
         $file = Invoke-Graph -Method 'GET' -Path $FilePath
         $state = [string]$file.uploadState
         if ($state -eq ($Stage + 'Success')) { return $file }
-        if ($state -eq ($Stage + 'Failed') -or $state -eq ($Stage + 'TimedOut')) { throw ('Intune reported "' + $state + '" for the content of the app.') }
+        if ($state -eq ($Stage + 'Failed') -or $state -eq ($Stage + 'TimedOut') -or $state -eq 'error') { throw ('Intune reported "' + $state + '" for the content of the app.') }
         Start-Sleep -Seconds 3
     }
     throw ('Intune did not finish "' + $Stage + '" within ' + $Minutes + ' minutes.')
 }
 
-function Send-Block([string]$SasUri, [string]$BlockId, [byte[]]$Data)
+# The upload address of the content (a SAS link of Azure Storage) is valid for a limited time: it is renewed when it is
+# 7 minutes old, and at once after Azure Storage refused it.
+function Update-UploadAddress([switch]$Force)
 {
-    $url = $SasUri + '&comp=block&blockid=' + [uri]::EscapeDataString($BlockId)
+    if (-not $Force -and ((Get-Date) - $script:SasIssued).TotalMinutes -lt 7) { return }
+    $null = Invoke-Graph -Method 'POST' -Path ($script:FilePath + '/renewUpload') -Body @{}
+    $renewed = Wait-FileState -FilePath $script:FilePath -Stage 'azureStorageUriRenewal' -Minutes 10
+    $script:SasUri = [string]$renewed.azureStorageUri
+    $script:SasIssued = Get-Date
+}
+
+# One PUT to Azure Storage. A dropped network or a busy service is asked again: up to 8 attempts, 5 to 30 s apart (or
+# what Retry-After asks), with a fresh upload address when it is old or was refused.
+function Invoke-Storage([string]$Query, [byte[]]$Data, [string]$ContentType, [hashtable]$Headers, [string]$What)
+{
     for ($attempt = 1; ; $attempt++)
     {
+        Assert-NotCancelled
         $failure = ''
+        $wait = 0
+        $refused = $false
+        $final = $false
         try
         {
-            $answer = Invoke-Http -Method 'PUT' -Url $url -Headers @{ 'x-ms-blob-type' = 'BlockBlob' } -Body $Data -ContentType 'application/octet-stream' -TimeoutSeconds 600
+            $answer = Invoke-Http -Method 'PUT' -Url ($script:SasUri + $Query) -Headers $Headers -Body $Data -ContentType $ContentType -TimeoutSeconds 600
             if ($answer.Status -eq 201) { return }
             $failure = 'HTTP ' + $answer.Status
+            $wait = $answer.RetryAfter
+            $refused = ($answer.Status -eq 403)
+            # A request Azure Storage rejects for what it carries would be rejected again.
+            $final = ($answer.Status -ge 400 -and $answer.Status -lt 500 -and @(403, 408, 429) -notcontains $answer.Status)
         }
         catch { $failure = $_.Exception.Message }
-        if ($attempt -ge 4) { throw ('The upload failed after ' + $attempt + ' attempts: ' + $failure) }
-        Start-Sleep -Seconds (3 * $attempt)
+        if ($final -or $attempt -ge 8) { throw ($What + ' failed after ' + $attempt + ' attempt(s): ' + $failure) }
+        if ($wait -le 0) { $wait = Get-Random -Minimum 5 -Maximum 31 }
+        Write-Note ($What + ': ' + $failure + ' - trying again in ' + $wait + ' s...')
+        Start-Sleep -Seconds ([Math]::Min($wait, 60))
+        try { Update-UploadAddress -Force:$refused }
+        catch { Write-Note ('The upload address could not be renewed: ' + $_.Exception.Message) }
     }
 }
 
@@ -747,6 +785,16 @@ try
     }
     if ([string]$app.informationUrl -match '^https?://') { $body['informationUrl'] = [string]$app.informationUrl }
     if ($icon) { $body['largeIcon'] = [ordered]@{ type = 'image/png'; value = [Convert]::ToBase64String([System.IO.File]::ReadAllBytes($icon)) } }
+    elseif ($targetId)
+    {
+        # Without an icon in the package, the update keeps the icon of the app: a change without largeIcon removes it.
+        try
+        {
+            $kept = Invoke-Graph -Method 'GET' -Path ('/deviceAppManagement/mobileApps/' + $targetId + '?$select=largeIcon')
+            if ($kept.largeIcon -and $kept.largeIcon.value) { $body['largeIcon'] = [ordered]@{ type = [string]$kept.largeIcon.type; value = [string]$kept.largeIcon.value } }
+        }
+        catch { Write-Note ('The icon of the app could not be read: ' + $_.Exception.Message) }
+    }
 
     Assert-NotCancelled
     if ($targetId)
@@ -759,7 +807,24 @@ try
     else
     {
         Write-Step 'Creating the app...'
-        $created = Invoke-Graph -Method 'POST' -Path '/deviceAppManagement/mobileApps' -Body $body
+        $createStarted = (Get-Date).ToUniversalTime().AddMinutes(-2)
+        try { $created = Invoke-Graph -Method 'POST' -Path '/deviceAppManagement/mobileApps' -Body $body -NoRetry }
+        catch
+        {
+            # A time-out can come after Intune created the app: one of this name created during this run is removed below.
+            # A refusal (4xx) created nothing, and an app of the same name made meanwhile by someone else is not touched.
+            if ($_.Exception.Message -match 'HTTP 5\d\d|No answer from') {
+            try
+            {
+                $filter = "isof('microsoft.graph.win32LobApp') and displayName eq '" + ([string]$app.displayName).Replace("'", "''") + "'"
+                $recent = @((Invoke-Graph -Method 'GET' -Path ('/deviceAppManagement/mobileApps?$filter=' + [uri]::EscapeDataString($filter))).value |
+                    Where-Object { $_.createdDateTime -and ([datetime]$_.createdDateTime).ToUniversalTime() -ge $createStarted })
+                if ($recent.Count -eq 1) { $script:CreatedAppId = [string]$recent[0].id }
+            }
+            catch { }
+            }
+            throw
+        }
         $targetId = [string]$created.id
         if (-not $targetId) { throw 'Intune did not return the id of the new app.' }
         $script:CreatedAppId = $targetId
@@ -780,8 +845,9 @@ try
     $contentFile = Invoke-Graph -Method 'POST' -Path ($appPath + '/contentVersions/' + $versionId + '/files') -Body $fileBody
     $filePath = $appPath + '/contentVersions/' + $versionId + '/files/' + [string]$contentFile.id
     $contentFile = Wait-FileState -FilePath $filePath -Stage 'azureStorageUriRequest' -Minutes 10
-    $sasUri = [string]$contentFile.azureStorageUri
-    $sasIssued = Get-Date
+    $script:FilePath = $filePath
+    $script:SasUri = [string]$contentFile.azureStorageUri
+    $script:SasIssued = Get-Date
 
     Write-Step ('Uploading ' + [math]::Round($encryptedSize / 1MB, 1) + ' MB to Intune...')
     $blockIds = New-Object System.Collections.Generic.List[string]
@@ -809,17 +875,10 @@ try
                 $data = $buffer
                 if ($filled -lt $buffer.Length) { $data = New-Object byte[] $filled; [Array]::Copy($buffer, $data, $filled) }
 
-                # The upload address is valid for a limited time: it is renewed every 7 minutes.
-                if (((Get-Date) - $sasIssued).TotalMinutes -ge 7)
-                {
-                    $null = Invoke-Graph -Method 'POST' -Path ($filePath + '/renewUpload') -Body @{}
-                    $contentFile = Wait-FileState -FilePath $filePath -Stage 'azureStorageUriRenewal' -Minutes 10
-                    $sasUri = [string]$contentFile.azureStorageUri
-                    $sasIssued = Get-Date
-                }
-                Assert-NotCancelled
+                # A renewal that fails here leaves the current address: a refusal of it renews again before the next attempt.
+                try { Update-UploadAddress } catch { Write-Note ('The upload address could not be renewed: ' + $_.Exception.Message) }
                 $blockId = [Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes('block-' + $blockIds.Count.ToString('000000')))
-                Send-Block -SasUri $sasUri -BlockId $blockId -Data $data
+                Invoke-Storage -Query ('&comp=block&blockid=' + [uri]::EscapeDataString($blockId)) -Data $data -ContentType 'application/octet-stream' -Headers @{ 'x-ms-blob-type' = 'BlockBlob' } -What 'The upload'
                 $blockIds.Add($blockId)
                 $sent += $filled
                 $percent = [int]([math]::Floor($sent * 100 / [math]::Max(1, $encryptedSize)))
@@ -832,8 +891,8 @@ try
     finally { $zip.Dispose() }
 
     $blockList = '<?xml version="1.0" encoding="utf-8"?><BlockList>' + (($blockIds | ForEach-Object { '<Latest>' + $_ + '</Latest>' }) -join '') + '</BlockList>'
-    $answer = Invoke-Http -Method 'PUT' -Url ($sasUri + '&comp=blocklist') -Body ([System.Text.Encoding]::UTF8.GetBytes($blockList)) -ContentType 'application/xml' -TimeoutSeconds 300
-    if ($answer.Status -ne 201) { throw ('The upload could not be finished (HTTP ' + $answer.Status + ').') }
+    try { Update-UploadAddress } catch { Write-Note ('The upload address could not be renewed: ' + $_.Exception.Message) }
+    Invoke-Storage -Query '&comp=blocklist' -Data ([System.Text.Encoding]::UTF8.GetBytes($blockList)) -ContentType 'application/xml' -Headers $null -What 'Finishing the upload'
     Write-Ok ('Uploaded in ' + $blockIds.Count + ' block(s)')
 
     Write-Step 'Waiting for Intune to confirm the content (this can take a few minutes)...'
@@ -856,7 +915,15 @@ try
         # One change: settings, detection, version and the new content become active together.
         Write-Step 'Updating the settings of the existing app...'
         $body['committedContentVersion'] = $versionId
-        $null = Invoke-Graph -Method 'PATCH' -Path ('/deviceAppManagement/mobileApps/' + $targetId) -Body $body
+        try { $null = Invoke-Graph -Method 'PATCH' -Path ('/deviceAppManagement/mobileApps/' + $targetId) -Body $body }
+        catch
+        {
+            if ($_.Exception.Message -notmatch 'HTTP 400' -or $_.Exception.Message -notmatch '(?i)runAsAccount|installExperience') { throw }
+            # Intune keeps the install context (system or user) of an existing app: everything else is changed.
+            $body.Remove('installExperience')
+            $null = Invoke-Graph -Method 'PATCH' -Path ('/deviceAppManagement/mobileApps/' + $targetId) -Body $body
+            Write-Note 'Intune keeps the install context (system or user) of the existing app; everything else was updated.'
+        }
     }
     else
     {
@@ -873,19 +940,30 @@ try
         else
         {
             Write-Step ('Assigning: ' + $assignmentLabel + '...')
+            # Intune assigns only a published app, a few seconds after its content became active.
+            for ($i = 0; $i -lt 20; $i++)
+            {
+                $published = ''
+                try { $published = [string](Invoke-Graph -Method 'GET' -Path ('/deviceAppManagement/mobileApps/' + $targetId + '?$select=publishingState')).publishingState } catch { }
+                if (-not $published -or $published -eq 'published') { break }
+                Start-Sleep -Seconds 3
+            }
             $target = @{ '@odata.type' = '#microsoft.graph.allLicensedUsersAssignmentTarget' }
             if ($AssignTo -eq 'AllDevices') { $target = @{ '@odata.type' = '#microsoft.graph.allDevicesAssignmentTarget' } }
             if ($AssignTo -eq 'Group') { $target = [ordered]@{ '@odata.type' = '#microsoft.graph.groupAssignmentTarget'; groupId = $GroupId } }
+            $settings = [ordered]@{
+                '@odata.type' = '#microsoft.graph.win32LobAppAssignmentSettings'; notifications = 'showAll'
+                restartSettings = $null; installTimeSettings = $null
+            }
+            # Delivery optimization is not available in the national clouds.
+            if (([uri]$GraphUrl).Host -eq 'graph.microsoft.com') { $settings['deliveryOptimizationPriority'] = 'notConfigured' }
             $assignBody = @{
                 mobileAppAssignments = @(
                     [ordered]@{
                         '@odata.type' = '#microsoft.graph.mobileAppAssignment'
                         intent        = $AssignIntent
                         target        = $target
-                        settings      = [ordered]@{
-                            '@odata.type' = '#microsoft.graph.win32LobAppAssignmentSettings'; notifications = 'showAll'
-                            restartSettings = $null; installTimeSettings = $null; deliveryOptimizationPriority = 'notConfigured'
-                        }
+                        settings      = $settings
                     }
                 )
             }

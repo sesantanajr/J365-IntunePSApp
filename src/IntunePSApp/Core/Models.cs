@@ -195,6 +195,10 @@ namespace J365.IntunePSApp.Core
         /// <summary>The tenant <see cref="IntunePlan"/> belongs to, as the connection names it.</summary>
         public string IntunePlanTenant { get; set; } = "";
         public DateTime? IntunePlanUtc { get; set; }
+        /// <summary>The plans of Intune found by that reading (what the answer rests on), or null.</summary>
+        public List<IntunePlanFound> IntunePlans { get; set; }
+        /// <summary>How long a new certificate of the connection is valid, in months (6, 12 or 24).</summary>
+        public int CertificateMonths { get; set; } = AppCertificate.DefaultMonths;
         /// <summary>Opens the publication to Intune as soon as a package is generated.</summary>
         public bool PublishAfterBuild { get; set; }
 

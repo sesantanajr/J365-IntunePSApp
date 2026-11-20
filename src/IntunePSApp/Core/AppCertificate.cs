@@ -18,7 +18,14 @@ namespace J365.IntunePSApp.Core
     public static class AppCertificate
     {
         public const string CommonName = "J365 IntunePSApp";
-        public const int ValidityDays = 365;
+
+        /// <summary>The validities offered when a certificate is created, in months (at least six).</summary>
+        public static readonly int[] ValidityMonths = { 6, 12, 24 };
+
+        public const int DefaultMonths = 12;
+
+        /// <summary>A validity among those offered; anything else is the default.</summary>
+        public static int Months(int months) => Array.IndexOf(ValidityMonths, months) >= 0 ? months : DefaultMonths;
 
         /// <summary>Tries the TPM first. Tests turn it off so they do not leave keys in the TPM of the computer.</summary>
         public static bool UseTpm { get; set; } = true;
@@ -34,10 +41,11 @@ namespace J365.IntunePSApp.Core
         }
 
         /// <summary>
-        /// Creates the certificate and its key and stores it for the current Windows user. The TPM is tried first;
-        /// <paramref name="softwareOnly"/> skips it (tests, and computers whose TPM refuses new keys).
+        /// Creates the certificate and its key and stores it for the current Windows user, valid for
+        /// <paramref name="months"/> (6, 12 or 24). The TPM is tried first; <paramref name="softwareOnly"/> skips it (tests,
+        /// and computers whose TPM refuses new keys).
         /// </summary>
-        public static X509Certificate2 Create(string label, bool softwareOnly = false)
+        public static X509Certificate2 Create(string label, bool softwareOnly = false, int months = DefaultMonths)
         {
             string keyName = "J365-IntunePSApp-" + Guid.NewGuid().ToString("N");
             var providers = softwareOnly || !UseTpm
@@ -76,7 +84,7 @@ namespace J365.IntunePSApp.Core
                 request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(new OidCollection { new Oid("1.3.6.1.5.5.7.3.2") }, false));
                 request.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(request.PublicKey, false));
                 var now = DateTimeOffset.UtcNow;
-                using (var created = request.CreateSelfSigned(now.AddMinutes(-10), now.AddDays(ValidityDays)))
+                using (var created = request.CreateSelfSigned(now.AddMinutes(-10), now.AddMonths(Months(months))))
                 {
                     // The certificate refers to the persisted key by its name, so the store keeps the link (the key stays
                     // where it was created, in the TPM or in the key store).

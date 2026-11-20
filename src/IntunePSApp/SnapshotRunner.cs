@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
@@ -128,6 +129,24 @@ namespace J365.IntunePSApp
                     await Shot($"03-editor-{i + 1}");
                     // Steps taller than the window: a second capture shows their last part.
                     if (w.Editor.ScrollToEnd()) await Shot($"03-editor-{i + 1}-end");
+                    // The other moments of the dialog in the preview (nothing open, the last notice).
+                    if (w.Editor.PreviewVisible)
+                    {
+                        var moments = w.Editor.PreviewMoments;
+                        foreach (var moment in moments.Skip(1))
+                        {
+                            w.Editor.ShowPreviewMoment(moment);
+                            await Shot($"03-editor-{i + 1}-{moment}");
+                        }
+                        w.Editor.ShowPreviewMoment(moments[0]);
+                    }
+                }
+                // The bar of a build halfway through.
+                if (App.HasArg("--snapshot-progress"))
+                {
+                    w.Editor.ShowProgressSample(true);
+                    await Shot("04-progress");
+                    w.Editor.ShowProgressSample(false);
                 }
                 // Walking through the steps changes nothing: the package must not count as "unsaved".
                 File.WriteAllText(Path.Combine(dir, "editor-state.txt"), "unsaved=" + w.Editor.HasUnsavedChanges);

@@ -62,8 +62,14 @@ namespace J365.IntunePSApp.Views
             StepList.ItemsSource = _steps;
             TxtAdminHint.Text = IntuneConnection.UserAccount;
             TxtScript.Text = ConnectScripts.Bash;
+            // The validity of a new certificate: the one chosen last time (12 months at first).
+            int months = AppCertificate.Months(ConfigStore.Current.CertificateMonths);
+            foreach (int m in AppCertificate.ValidityMonths)
+                CmbCertMonths.Items.Add(new ComboBoxItem { Tag = m, Content = T(m == AppCertificate.DefaultMonths ? "Connect_CertMonthsDefault" : "Connect_CertMonths", m) });
+            CmbCertMonths.SelectedIndex = Array.IndexOf(AppCertificate.ValidityMonths, months);
             if (start == "code") OptCode.IsChecked = true;
             else if (start == "delegated") OptAuto.IsChecked = true;
+            UpdateCertValidity();
             Closing += (s, e) =>
             {
                 if (!_running) return;
@@ -143,6 +149,21 @@ namespace J365.IntunePSApp.Views
             bool automatic = OptAuto?.IsChecked == true || OptCert?.IsChecked == true;
             if (AutoInfo != null) AutoInfo.Visibility = automatic ? Visibility.Visible : Visibility.Collapsed;
             if (TxtReq1 != null) TxtReq1.Text = T(OptCert?.IsChecked == true ? "Connect_Req1Cert" : "Connect_Req1");
+            UpdateCertValidity();
+        }
+
+        /// <summary>The validity of the certificate only belongs to the way with a certificate.</summary>
+        private void UpdateCertValidity()
+        {
+            if (CertValidityPanel != null) CertValidityPanel.Visibility = OptCert?.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void CertMonths_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if ((CmbCertMonths.SelectedItem as ComboBoxItem)?.Tag is not int months || months == ConfigStore.Current.CertificateMonths) return;
+            // Remembered at once: the setup (or the renewal) about to start creates the certificate with it.
+            ConfigStore.Current.CertificateMonths = months;
+            ConfigStore.Save();
         }
 
         private void Primary_Click(object sender, RoutedEventArgs e)
@@ -520,7 +541,7 @@ namespace J365.IntunePSApp.Views
                 // check, and the way that does not depend on the account.
                 bool certificate = IntuneConnection.UsesCertificate, noPlan = IntuneSubscription.Blocks;
                 var actions = new List<(string, Action)>();
-                if (noPlan) actions.Add(("Settings_IntunePurchase", () => MainWindow.OpenUrl(IntuneSubscription.PurchaseUrl)));
+                if (noPlan) actions.Add((IntuneSubscription.FixLabelKey, () => MainWindow.OpenUrl(IntuneSubscription.FixUrl)));
                 actions.Add((noPlan ? "Settings_IntuneCheckPlanAgain" : "Settings_IntuneCheckPlan", () => _ = CheckPlanAsync()));
                 if (!certificate && !noPlan)
                 {

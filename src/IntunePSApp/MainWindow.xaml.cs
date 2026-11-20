@@ -288,6 +288,18 @@ namespace J365.IntunePSApp
             StatusDot.SetResourceReference(Shape.FillProperty, _statusBusy ? "Cyan" : "Success");
         }
 
+        /// <summary>Progress on the button of the application in the taskbar (0 to 1); null clears it.</summary>
+        public void SetTaskbarProgress(double? value)
+        {
+            TaskbarItemInfo ??= new System.Windows.Shell.TaskbarItemInfo();
+            if (value is double v)
+            {
+                TaskbarItemInfo.ProgressState = System.Windows.Shell.TaskbarItemProgressState.Normal;
+                TaskbarItemInfo.ProgressValue = Math.Clamp(v, 0, 1);
+            }
+            else TaskbarItemInfo.ProgressState = System.Windows.Shell.TaskbarItemProgressState.None;
+        }
+
         public void UpdateToolsStatus()
         {
             string psadt = ToolsService.PsadtVersion is string v ? $"PSAppDeployToolkit {v}" : T("Status_PsadtMissing");

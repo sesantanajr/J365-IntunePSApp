@@ -265,7 +265,7 @@ namespace J365.IntunePSApp.Core
 
         // ------------------------------------------------------------------ build
 
-        public static async Task<BuildResult> BuildAsync(PackageSettings input, bool forceNative, CancellationToken ct)
+        public static async Task<BuildResult> BuildAsync(PackageSettings input, bool forceNative, CancellationToken ct, IProgress<BuildProgressInfo> progress = null)
         {
             var s = input.Clone();
             Migrate(s);
@@ -275,16 +275,18 @@ namespace J365.IntunePSApp.Core
             if (!check.IsValid) throw new InvalidOperationException(T("Err_FixBeforeBuild") + "\n• " + string.Join("\n• ", check.Errors));
             if (ScriptGenerator.ExeMsiCode(s) is string msiCode) Log.Info(T("Log_UninstallByCode", msiCode));
 
+            string outRoot = string.IsNullOrWhiteSpace(s.OutputRoot) ? ConfigStore.Current.OutputFolder : s.OutputRoot;
+            var bp = PlanProgress(s, outRoot, forceNative, progress);
             var sw = Stopwatch.StartNew();
             Log.Step(T("Log_BuildStart", s.AppName, s.AppVersion));
             Log.Step(T("Log_CheckingPsadt"));
+            bp.Begin("psadt", T("Log_CheckingPsadt"));
             // Checked again before every build: the copy in the tools folder could have been changed since it was installed
             // (a copy that fails is installed again from the official release).
             string template = await ToolsService.EnsureVerifiedPsadtAsync(ct);
             string psadtVersion = Path.GetFileName(template);
             Log.Ok($"{AppInfo.PsadtName} {psadtVersion}");
 
-            string outRoot = string.IsNullOrWhiteSpace(s.OutputRoot) ? ConfigStore.Current.OutputFolder : s.OutputRoot;
             Directory.CreateDirectory(outRoot);
             string name = Names.Safe($"{s.AppName}_{s.AppVersion}");
             string pkgRoot = Path.Combine(outRoot, name);
@@ -299,7 +301,9 @@ namespace J365.IntunePSApp.Core
                 Log.Info(T("Log_PackageFolder", pkgRoot));
 
                 Log.Step(T("Log_CopyingTemplate"));
-                await Task.Run(() => CopyDirectory(template, srcDir), ct);
+                bp.Begin("template", T("Log_CopyingTemplate"));
+                long templateBytes = BuildProgress.FolderSize(template);
+                await Task.Run(() => CopyDirectory(template, srcDir, bp.Bytes(templateBytes), ct), ct);
                 foreach (var ph in new[] { @"Files\Add Setup Files Here.txt", @"SupportFiles\Add Supporting Files Here.txt" })
                 {
                     var p = Path.Combine(srcDir, ph);
@@ -311,27 +315,31 @@ namespace J365.IntunePSApp.Core
                 Directory.CreateDirectory(supportDir);
 
                 Log.Step(T("Log_CopyingInstaller"));
+                bp.Begin("installer", T("Log_CopyingInstaller"));
                 var inst = new FileInfo(s.InstallerPath);
-                if (s.IncludeInstallerFolder) await Task.Run(() => CopyInstallerFolder(inst, filesDir, outRoot, ct), ct);
-                else File.Copy(inst.FullName, Path.Combine(filesDir, inst.Name), true);
+                if (s.IncludeInstallerFolder) await Task.Run(() => CopyInstallerFolder(inst, filesDir, outRoot, ct, bp), ct);
+                else await Task.Run(() => BuildProgress.CopyFile(inst.FullName, Path.Combine(filesDir, inst.Name), bp.Bytes(inst.Length), ct), ct);
                 // A package without its installer would only fail on the devices.
                 if (!File.Exists(Path.Combine(filesDir, inst.Name))) throw new InvalidOperationException(T("Val_Installer"));
 
                 if (s.ExtraFiles.Count > 0)
                 {
                     Log.Step(T("Log_CopyingExtras", s.ExtraFiles.Count));
+                    bp.Begin("extras", T("Log_CopyingExtras", s.ExtraFiles.Count));
+                    var extraBytes = bp.Bytes(ExtraBytes(s));
                     await Task.Run(() =>
                     {
                         foreach (var f in s.ExtraFiles)
                         {
                             ct.ThrowIfCancellationRequested();
-                            if (File.Exists(f)) File.Copy(f, Path.Combine(supportDir, Path.GetFileName(f)), true);
-                            else if (Directory.Exists(f)) CopyDirectory(f, Path.Combine(supportDir, Path.GetFileName(f.TrimEnd('\\'))));
+                            if (File.Exists(f)) BuildProgress.CopyFile(f, Path.Combine(supportDir, Path.GetFileName(f)), extraBytes, ct);
+                            else if (Directory.Exists(f)) CopyDirectory(f, Path.Combine(supportDir, Path.GetFileName(f.TrimEnd('\\'))), extraBytes, ct);
                         }
                     }, ct);
                 }
 
                 Log.Step(T("Log_GeneratingScript"));
+                bp.Begin("script", T("Log_GeneratingScript"));
                 var (tpl, _) = TextFiles.Read(Path.Combine(template, "Invoke-AppDeployToolkit.ps1"));
                 string scriptPath = Path.Combine(srcDir, "Invoke-AppDeployToolkit.ps1");
                 TextFiles.Write(scriptPath, ScriptGenerator.DeployScript(tpl, s, inst.Name), true);
@@ -340,6 +348,7 @@ namespace J365.IntunePSApp.Core
                 Log.Ok(T("Log_ScriptOk", s.Actions.Count));
 
                 Log.Step(T("Log_ApplyingBranding"));
+                bp.Begin("branding", T("Log_ApplyingBranding"));
                 ScriptGenerator.UpdateConfig(Path.Combine(srcDir, "Config", "config.psd1"), s);
                 int n = ScriptGenerator.UpdateStrings(Path.Combine(srcDir, "Strings"), s);
                 if (n > 0) Log.Info(T("Log_WelcomeApplied", n));
@@ -373,6 +382,7 @@ namespace J365.IntunePSApp.Core
                     ImageTools.SaveBanner(logoPng ?? Path.Combine(assets, "AppIcon.png"), s.CompanyName, s.AccentColor, Path.Combine(assets, "Banner.Classic.png"));
 
                 Log.Step(T("Log_GeneratingDetection"));
+                bp.Begin("detection", T("Log_GeneratingDetection"));
                 string detPath = Path.Combine(intuneDir, PackageLayout.DetectionPrefix + name + ".ps1");
                 File.WriteAllText(detPath, ScriptGenerator.DetectionScript(s), Encoding.ASCII);
                 var detErr = await Task.Run(() => PowerShellValidator.Validate(detPath), ct);
@@ -380,13 +390,17 @@ namespace J365.IntunePSApp.Core
                 Log.Ok(T("Log_DetectionOk", Path.GetFileName(detPath)));
 
                 Log.Step(T("Log_CreatingIntuneWin"));
+                bp.Begin("intunewin", T("Log_CreatingIntuneWin"));
                 string iwPath = Path.Combine(intuneDir, name + ".intunewin");
-                string tool = await IntuneWinBuilder.BuildAsync(srcDir, iwPath, forceNative, ct);
-                var val = await Task.Run(() => IntuneWinBuilder.Validate(iwPath), ct);
+                string tool = await IntuneWinBuilder.BuildAsync(srcDir, iwPath, forceNative, ct, bp.Report);
+                bp.Begin("validate", T("Log_CheckingIntuneWin"));
+                var val = await Task.Run(() => IntuneWinBuilder.Validate(iwPath, bp.Report, ct), ct);
                 if (!val.Valid) throw new InvalidDataException(T("Err_IntuneWinInvalid"));
                 long size = new FileInfo(iwPath).Length;
-                string sha = await Task.Run(() => Hashing.Sha256File(iwPath), ct);
+                bp.Begin("hash", T("Log_CheckingIntuneWin"));
+                string sha = await Task.Run(() => Hashing.Sha256File(iwPath, bp.Report, ct), ct);
                 Log.Ok(T("Log_IntuneWinOk", (size / 1024d / 1024d).ToString("N1", Culture()), val.FileCount, tool));
+                bp.Begin("finish", T("Log_Finishing"));
 
                 var cmds = ScriptGenerator.Commands(s);
                 var result = new BuildResult
@@ -412,6 +426,7 @@ namespace J365.IntunePSApp.Core
                 result.SummaryTxt = txt;
                 Json.Save(result.ProjectFile, s);
                 Log.Ok(T("Log_BuildDone", sw.Elapsed.TotalSeconds.ToString("N0", Culture())));
+                bp.Complete(T("Ed_Done"));
                 return result;
             }
             catch (Exception ex)
@@ -487,30 +502,75 @@ namespace J365.IntunePSApp.Core
             return reader.ReadToEnd();
         }
 
-        private static void CopyInstallerFolder(FileInfo inst, string filesDir, string outRoot, CancellationToken ct)
+        /// <summary>
+        /// The steps of a build and what each one weighs (estimated seconds, from the sizes): copies go at disk speed,
+        /// the compression of IntuneWinAppUtil is the slow part, the checks read the package once more.
+        /// </summary>
+        private static BuildProgress PlanProgress(PackageSettings s, string outRoot, bool forceNative, IProgress<BuildProgressInfo> progress)
+        {
+            long installer = 0, extras = 0, template = 12L * 1024 * 1024;
+            try
+            {
+                var inst = new FileInfo(s.InstallerPath);
+                installer = s.IncludeInstallerFolder ? InstallerFolderFiles(inst, outRoot).Sum(f => new FileInfo(f).Length) : inst.Length;
+                extras = ExtraBytes(s);
+                if (ToolsService.LocalPsadt() is string local) template = BuildProgress.FolderSize(local);
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+            long content = template + installer + extras;
+            bool iwau = !forceNative && ToolsService.HasIntuneWinAppUtil;
+            return new BuildProgress(progress, new (string, double)[]
+            {
+                ("psadt", 1.0),
+                ("template", BuildProgress.Seconds(template, 120) + 0.3),
+                ("installer", BuildProgress.Seconds(installer, 150) + 0.1),
+                ("extras", extras > 0 ? BuildProgress.Seconds(extras, 150) + 0.1 : 0),
+                ("script", 1.5),
+                ("branding", 0.8),
+                ("detection", 1.2),
+                ("intunewin", BuildProgress.Seconds(content, iwau ? 15 : 45) + 0.5),
+                ("validate", BuildProgress.Seconds(content, 150) + 0.2),
+                ("hash", BuildProgress.Seconds(content, 500)),
+                ("finish", 0.3)
+            });
+        }
+
+        private static long ExtraBytes(PackageSettings s) => s.ExtraFiles.Sum(f =>
+            File.Exists(f) ? new FileInfo(f).Length : Directory.Exists(f) ? BuildProgress.FolderSize(f) : 0);
+
+        /// <summary>The files of the installer's folder, without the output folder when it is inside it.</summary>
+        private static List<string> InstallerFolderFiles(FileInfo inst, string outRoot)
         {
             string outFull = Path.GetFullPath(outRoot).TrimEnd('\\') + "\\";
-            var files = Directory.GetFiles(inst.DirectoryName, "*", SearchOption.AllDirectories)
+            return Directory.GetFiles(inst.DirectoryName, "*", SearchOption.AllDirectories)
                 .Where(f => !f.StartsWith(outFull, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+
+        private static void CopyInstallerFolder(FileInfo inst, string filesDir, string outRoot, CancellationToken ct, BuildProgress bp)
+        {
+            var files = InstallerFolderFiles(inst, outRoot);
             long total = files.Sum(f => new FileInfo(f).Length);
             if (files.Count > 2000 || total > 2L * 1024 * 1024 * 1024)
                 Log.Warn(T("Log_InstallerFolderLarge", files.Count, (total / 1024d / 1024d / 1024d).ToString("N1", Culture())));
+            var bytes = bp?.Bytes(total);
             foreach (var f in files)
             {
                 ct.ThrowIfCancellationRequested();
-                string dest = Path.Combine(filesDir, Path.GetRelativePath(inst.DirectoryName, f));
-                Directory.CreateDirectory(Path.GetDirectoryName(dest));
-                File.Copy(f, dest, true);
+                BuildProgress.CopyFile(f, Path.Combine(filesDir, Path.GetRelativePath(inst.DirectoryName, f)), bytes, ct);
             }
         }
 
-        private static void CopyDirectory(string src, string dest)
+        private static void CopyDirectory(string src, string dest, Action<long> bytes = null, CancellationToken ct = default)
         {
             Directory.CreateDirectory(dest);
             foreach (var d in Directory.GetDirectories(src, "*", SearchOption.AllDirectories))
                 Directory.CreateDirectory(Path.Combine(dest, Path.GetRelativePath(src, d)));
             foreach (var f in Directory.GetFiles(src, "*", SearchOption.AllDirectories))
-                File.Copy(f, Path.Combine(dest, Path.GetRelativePath(src, f)), true);
+            {
+                ct.ThrowIfCancellationRequested();
+                BuildProgress.CopyFile(f, Path.Combine(dest, Path.GetRelativePath(src, f)), bytes, ct);
+            }
         }
 
         // ------------------------------------------------------------------ history

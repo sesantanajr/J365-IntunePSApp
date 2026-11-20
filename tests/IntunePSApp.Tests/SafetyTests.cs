@@ -228,6 +228,36 @@ namespace J365.IntunePSApp.Tests
         }
 
         [Fact]
+        public void The_check_shows_the_plans_of_Intune_it_rests_on()
+        {
+            System.Text.Json.Nodes.JsonObject Plan(string id, string service, string status, string assigned) =>
+                new System.Text.Json.Nodes.JsonObject { ["servicePlanId"] = id, ["service"] = service, ["capabilityStatus"] = status, ["assignedDateTime"] = assigned };
+            const string intune = "c1ec4a95-1f05-45b3-a911-aa3fa01094f5", basic = "882e1d05-acd1-4ccb-8708-6ee03664b117";
+            // A trial of Intune Plan 1 that ended (listed twice by two subscriptions), the basic mobility, and Exchange.
+            var plans = new System.Text.Json.Nodes.JsonArray(
+                Plan(basic, "SCO", "Enabled", "2025-01-10T12:00:00Z"),
+                Plan(intune, "SCO", "Suspended", "2026-10-21T09:30:00Z"),
+                Plan(intune.ToUpperInvariant(), "SCO", "Suspended", "2026-09-01T09:30:00Z"),
+                Plan("9aaf7827-d63c-4b61-89c3-182f06f82e5c", "exchange", "Enabled", "2025-01-10T12:00:00Z"));
+            var found = IntuneSubscription.Found(plans);
+            // Exchange is not listed; the plan of Intune once, with its most recent date; the basic mobility after it.
+            Assert.Equal(new[] { intune, basic }, found.Select(f => f.Id));
+            Assert.Equal("Suspended", found[0].Status);
+            Assert.Equal(new DateTime(2026, 10, 21, 9, 30, 0, DateTimeKind.Utc), found[0].Assigned);
+            Lang.With("pt-BR", () =>
+            {
+                string line = IntuneSubscription.Describe(found[0]);
+                Assert.StartsWith("Microsoft Intune Plan 1: suspenso (atribuído em ", line);
+                Assert.Equal("Mobilidade e Segurança Básicas: ativo", IntuneSubscription.Describe(new IntunePlanFound { Id = basic, Status = "Enabled" }));
+                Assert.Equal("Outro plano do Intune (d9923fe3): vencido, no período de carência (ainda funciona)",
+                    IntuneSubscription.Describe(new IntunePlanFound { Id = "d9923fe3-a2de-4d29-a5be-e3e83bb786be", Status = "Warning" }));
+            });
+            // An active plan comes first.
+            var active = IntuneSubscription.Found(new System.Text.Json.Nodes.JsonArray(Plan(intune, "SCO", "Deleted", "2024-01-01T00:00:00Z"), Plan(intune, "SCO", "Enabled", "2023-01-01T00:00:00Z")));
+            Assert.Equal("Enabled", active[0].Status);
+        }
+
+        [Fact]
         public void A_refusal_of_the_publishing_script_gives_its_request_and_activity_id()
         {
             string error = "Microsoft Graph answered HTTP 401 (UnknownError) to GET /deviceAppManagement/mobileApps: An error has occurred - Activity ID: 32f20c83-f999-4b7b-aa7a-e485513d188a\nIntune refused the application. Check that the tenant has an active Microsoft Intune subscription.";

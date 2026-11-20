@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -66,13 +68,27 @@ namespace J365.IntunePSApp.Views
                 Ui.Error(T("Plan_CheckFailed", ex.Message));
                 return null;
             }
+            string nl2 = Environment.NewLine + Environment.NewLine;
+            // The plans of this check (an unknown answer is not remembered, but what it found is shown).
+            string plans = PlanList(IntuneSubscription.LastCheck?.Plans);
             switch (state)
             {
-                case IntunePlanState.Active: Ui.Info(T("Plan_ResultActive", IntuneConnection.TenantLabel)); break;
-                case IntunePlanState.Unknown: Ui.Info(T("Plan_ResultUnclear", IntuneConnection.TenantLabel)); break;
-                default: Ui.Warn(T("Plan_ResultTitle") + Environment.NewLine + Environment.NewLine + IntuneDiagnosis.Causes(null, IntuneConnection.UsesCertificate)[0]); break;
+                case IntunePlanState.Active: Ui.Info(T("Plan_ResultActive", IntuneConnection.TenantLabel) + nl2 + plans); break;
+                case IntunePlanState.Unknown: Ui.Info(T("Plan_ResultUnclear", IntuneConnection.TenantLabel) + nl2 + plans); break;
+                default:
+                    Ui.Warn(T("Plan_ResultTitle") + nl2 + IntuneDiagnosis.Causes(null, IntuneConnection.UsesCertificate)[0] + nl2 + plans + nl2
+                        + T(state == IntunePlanState.Inactive ? "Plan_HowToInactive" : "Plan_HowToNone"));
+                    break;
             }
             return state;
+        }
+
+        /// <summary>The plans of Intune a reading found, one per line, with their status: what the answer rests on.</summary>
+        public static string PlanList(IReadOnlyList<IntunePlanFound> plans = null)
+        {
+            plans ??= IntuneSubscription.Plans;
+            if (plans.Count == 0) return T("Plan_FoundNone");
+            return T("Plan_Found") + Environment.NewLine + string.Join(Environment.NewLine, plans.Select(p => "•  " + IntuneSubscription.Describe(p)));
         }
 
         /// <summary>

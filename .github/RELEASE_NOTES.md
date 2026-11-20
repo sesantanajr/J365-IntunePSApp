@@ -1,14 +1,16 @@
-## J365 IntunePSApp 2.4.4
+## J365 IntunePSApp 2.4.5
 
 Package any Windows application for Microsoft Intune in minutes, with no scripting. Built on [PSAppDeployToolkit](https://psappdeploytoolkit.com). Created by [Sérgio Sant'Ana Junior](https://www.linkedin.com/in/sergiosantanacloud/) - [Jornada 365](https://jornada365.cloud).
 
-### Why 2.4.4
+### Why 2.4.5
 
-A package of Adobe Acrobat Reader (an .exe) warned that it had no uninstall switches, although the catalog knows the MSI it installs. And publishing with the app certificate failed with *HTTP 401 (UnknownError)*, shown as raw JSON under *"Could not connect"*: Intune answers that to every request of a tenant without an active Intune subscription.
+A test of the Adobe Acrobat Reader package in a real tenant asked whether a required installation really shows the dialog of the preview. It did not quite: the preview used sentences of its own and listed every program. The generation showed no progress. And publishing failed because the Intune subscription of the tenant had expired, which the application now shows plan by plan.
 
-- **Does the tenant have Intune?** The setup reads the subscriptions of the tenant (read only) and says at once when Microsoft Intune is missing, expired or limited to *Basic Mobility and Security*. For a connection set up before, **Check the subscription** asks an administrator to sign in and reads it. The sidebar, the home page, Settings and the card of a package show it, with *Activate Intune in Microsoft 365*.
-- **Clear refusals:** the publishing dialog says *Intune refused this connection* with its cause and the Activity ID for Microsoft support; the error of Intune is opened to its sentence, even when it comes nested twice or cut short.
-- **An .exe that installs an MSI is removed by its product code** (msiexec /x), in the uninstallation and before installing over an existing version: no uninstall switches, no warning, no question. A package of Adobe Acrobat Reader (64-bit) no longer reaches Acrobat Pro or Acrobat 2020.
+- **The preview is the dialog of the toolkit:** the texts and the layout of PSAppDeployToolkit 4.1.8 in the language of the dialogs, at three moments of a required installation (an application open, none open, the last notice after the deferrals). The preview also says when the dialog does not appear at all.
+- **Progress while generating:** the step, the percentage and the time left, also on the status bar and the taskbar.
+- **Test like Intune:** in Windows Sandbox the package runs as SYSTEM, so its dialogs appear as in a required installation.
+- **The plans of the tenant:** *Check the subscription* lists the plans of Intune with their status and says how to reactivate them. Publishing retries the upload more, waits for the app to be published before assigning it, keeps the icon on an update, and never creates an app twice.
+- **Validity of the certificate:** 6, 12 or 24 months, chosen in the connection window when connecting or renewing (12 by default). A policy of the tenant that limits it is explained.
 
 Full list: [CHANGELOG.md](https://github.com/sesantanajr/J365-IntunePSApp/blob/main/CHANGELOG.md). How to connect: [docs/INTUNE-PUBLISH.md](https://github.com/sesantanajr/J365-IntunePSApp/blob/main/docs/INTUNE-PUBLISH.md).
 
@@ -26,15 +28,17 @@ Verify: `Get-FileHash <file> -Algorithm SHA256` and `gh attestation verify <file
 
 ---
 
-## J365 IntunePSApp 2.4.4 (Português)
+## J365 IntunePSApp 2.4.5 (Português)
 
 Empacote qualquer aplicativo Windows para o Microsoft Intune em minutos, sem escrever scripts. Baseado no [PSAppDeployToolkit](https://psappdeploytoolkit.com). Criado por [Sérgio Sant'Ana Junior](https://www.linkedin.com/in/sergiosantanacloud/) - [Jornada 365](https://jornada365.cloud).
 
-**Por que a 2.4.4:** um pacote do Adobe Acrobat Reader (um .exe) avisava que não tinha parâmetros de desinstalação, embora o catálogo conheça o MSI que ele instala. E a publicação com o certificado do aplicativo falhava com *HTTP 401 (UnknownError)*, mostrado como JSON cru sob *"Não foi possível conectar"*: o Intune responde isso a qualquer pedido de um tenant sem assinatura ativa do Intune.
+**Por que a 2.4.5:** um teste do pacote do Adobe Acrobat Reader num tenant real perguntou se a instalação obrigatória mostra mesmo a janela da prévia. Não exatamente: a prévia usava frases próprias e listava todos os programas. A geração não mostrava progresso. E a publicação falhou porque a assinatura do Intune do tenant expirou, o que o aplicativo agora mostra plano a plano.
 
-- **O tenant tem Intune?** A configuração lê as assinaturas do tenant (só leitura) e avisa na hora quando o Microsoft Intune não existe, expirou ou se limita à *Mobilidade e Segurança Básicas*. Para uma conexão configurada antes, **Verificar a assinatura** pede o login de um administrador e faz a leitura. A barra lateral, o início, as Configurações e o cartão do pacote mostram isso, com *Ativar o Intune no Microsoft 365*.
-- **Recusas claras:** a janela de publicação diz *O Intune recusou esta conexão* com a causa e o Activity ID para o suporte da Microsoft; o erro do Intune é aberto até a frase, mesmo quando vem aninhado duas vezes ou cortado.
-- **Um .exe que instala um MSI é removido pelo código do produto** (msiexec /x), na desinstalação e antes de instalar sobre uma versão existente: sem parâmetros de desinstalação, sem aviso, sem pergunta. Um pacote do Adobe Acrobat Reader (64 bits) não alcança mais o Acrobat Pro nem o Acrobat 2020.
+- **A prévia é a janela do toolkit:** os textos e o layout do PSAppDeployToolkit 4.1.8, no idioma das janelas, em três momentos de uma instalação obrigatória (um aplicativo aberto, nada aberto, o último aviso depois dos adiamentos). A prévia também avisa quando a janela nem aparece.
+- **Progresso ao gerar:** a etapa, a porcentagem e o tempo restante, também na barra de status e na barra de tarefas.
+- **Teste como o Intune:** no Windows Sandbox o pacote roda como SYSTEM, e as janelas aparecem como numa instalação obrigatória.
+- **Os planos do tenant:** *Verificar a assinatura* lista os planos do Intune com o status deles e diz como reativar. A publicação tenta o envio de novo mais vezes, espera o app ficar publicado antes de atribuir, mantém o ícone numa atualização e nunca cria um app duas vezes.
+- **Validade do certificado:** 6, 12 ou 24 meses, escolhida na janela de conexão ao conectar ou renovar (12 por padrão). Uma política do tenant que a limite é explicada.
 
 Lista completa: [CHANGELOG.md](https://github.com/sesantanajr/J365-IntunePSApp/blob/main/CHANGELOG.md). Como conectar: [docs/INTUNE-PUBLISH.md](https://github.com/sesantanajr/J365-IntunePSApp/blob/main/docs/INTUNE-PUBLISH.md#publicar-no-intune).
 

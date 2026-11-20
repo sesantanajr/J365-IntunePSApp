@@ -2,33 +2,65 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:l="clr-namespace:J365.IntunePSApp.Localization">
-  <!-- Approximation of the PSAppDeployToolkit 4 welcome dialog, in its two styles. It always shows the light Windows
-       dialog, whatever the theme of this application, so its colors are fixed. -->
+  <!-- The welcome dialog of PSAppDeployToolkit 4.1.8 as the package shows it, in its two styles, drawn from the layout of
+       the toolkit (FluentDialog.xaml, Classic CloseAppsDialog). It shows the light Windows dialog whatever the theme of
+       this application, so its colors are fixed. -->
   <Grid>
-    <!-- Fluent: rounded window, the app icon, accent-coloured main button -->
-    <Border x:Name="FluentCard" Background="White" CornerRadius="10" BorderBrush="#D6DAE1" BorderThickness="1" Effect="{DynamicResource CardShadow}" TextElement.Foreground="#1B1B1B">
-      <StackPanel>
-        <Grid Margin="18,16,18,0">
-          <Image x:Name="FLogo" Width="40" Height="40" HorizontalAlignment="Left" VerticalAlignment="Top" RenderOptions.BitmapScalingMode="HighQuality"/>
-          <StackPanel Margin="52,0,0,0">
-            <TextBlock x:Name="FTitle" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" Foreground="#1B1B1B"/>
-            <TextBlock x:Name="FSubtitle" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" Foreground="#616161"/>
-          </StackPanel>
-        </Grid>
-        <TextBlock x:Name="FBody" Margin="18,14,18,0" Style="{StaticResource Body}" Foreground="#3B3B3B"/>
-        <Border x:Name="FAppsBox" Margin="18,10,18,0" Background="#F3F4F6" CornerRadius="7" Padding="10,8">
-          <TextBlock x:Name="FApps" Style="{StaticResource Body}" Foreground="#3B3B3B"/>
+    <!-- Fluent: accent sidebar with the toolkit logo; header; card with the message, the applications and the deferral or
+         countdown rows; the accent button on the left and Defer on the right, in two equal halves. -->
+    <Border x:Name="FluentCard" Background="#F3F3F3" CornerRadius="8" BorderBrush="#D6DAE1" BorderThickness="1" Effect="{DynamicResource CardShadow}" TextElement.Foreground="#1B1B1B">
+      <Grid>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="20"/><ColumnDefinition/></Grid.ColumnDefinitions>
+        <Border x:Name="FSidebar" CornerRadius="7,0,0,7" Background="{DynamicResource Brand}">
+          <TextBlock Text="&#xE7B8;" Style="{StaticResource Icon}" FontSize="10" Foreground="White" Opacity="0.9" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,9,0,0"/>
         </Border>
-        <TextBlock x:Name="FCustom" Margin="18,10,18,0" Style="{StaticResource Body}" Foreground="#1B1B1B"/>
-        <TextBlock x:Name="FDefer" Margin="18,10,18,0" Style="{StaticResource MutedText}" TextWrapping="Wrap" Foreground="#616161"/>
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="18,16,18,18">
-          <Border x:Name="FDeferBtn" BorderBrush="#C8CCD3" BorderThickness="1" CornerRadius="5" Padding="12,6"><TextBlock Text="{l:T Prev_Defer}" Foreground="#1B1B1B"/></Border>
-          <Border x:Name="FMainBtn" CornerRadius="5" Padding="12,6" Margin="8,0,0,0" Background="{DynamicResource Brand}"><TextBlock x:Name="FMainText" Foreground="White"/></Border>
+        <StackPanel Grid.Column="1">
+          <Grid Margin="14,14,14,10">
+            <Image x:Name="FLogo" Width="40" Height="40" HorizontalAlignment="Left" VerticalAlignment="Top" RenderOptions.BitmapScalingMode="HighQuality"/>
+            <StackPanel Margin="50,0,0,0" VerticalAlignment="Center">
+              <TextBlock x:Name="FTitle" FontSize="16" FontWeight="Bold" TextWrapping="Wrap" Foreground="#1B1B1B"/>
+              <TextBlock x:Name="FSubtitle" FontSize="11" TextWrapping="Wrap" Foreground="#5F5F5F" Margin="0,1,0,0"/>
+            </StackPanel>
+          </Grid>
+          <Border Margin="14,0,14,10" Background="White" BorderBrush="#E5E5E5" BorderThickness="1" CornerRadius="6">
+            <StackPanel>
+              <TextBlock x:Name="FBody" Margin="12,11,12,9" FontSize="12.5" TextWrapping="Wrap" Foreground="#1B1B1B"/>
+              <TextBlock x:Name="FCustom" Margin="12,0,12,9" FontSize="12.5" TextWrapping="Wrap" Foreground="#1B1B1B"/>
+              <Grid x:Name="FAppRow" Margin="12,0,12,10">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                <Image x:Name="FAppIcon" Width="24" Height="24" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
+                <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
+                  <TextBlock x:Name="FAppName" FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap" Foreground="#1B1B1B"/>
+                  <TextBlock x:Name="FAppExe" FontSize="11" TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+              </Grid>
+              <Border x:Name="FSeparator" Height="1" Background="#E5E5E5"/>
+              <DockPanel x:Name="FCountdownRow" Margin="12,9,12,9">
+                <TextBlock Text="&#xE916;" Style="{StaticResource Icon}" FontSize="13" Foreground="#1B1B1B" VerticalAlignment="Center"/>
+                <TextBlock x:Name="FCountdownValue" DockPanel.Dock="Right" FontSize="12.5" FontWeight="SemiBold" Foreground="#1B1B1B" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                <TextBlock x:Name="FCountdownLabel" FontSize="12.5" TextWrapping="Wrap" Foreground="#1B1B1B" VerticalAlignment="Center" Margin="10,0,0,0"/>
+              </DockPanel>
+              <DockPanel x:Name="FDeferRow" Margin="12,9,12,9">
+                <TextBlock Text="&#xE823;" Style="{StaticResource Icon}" FontSize="13" Foreground="#1B1B1B" VerticalAlignment="Center"/>
+                <TextBlock x:Name="FDeferValue" DockPanel.Dock="Right" FontSize="12.5" FontWeight="SemiBold" Foreground="#1B1B1B" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                <TextBlock x:Name="FDeferLabel" FontSize="12.5" TextWrapping="Wrap" Foreground="#1B1B1B" VerticalAlignment="Center" Margin="10,0,0,0"/>
+              </DockPanel>
+            </StackPanel>
+          </Border>
+          <Grid Margin="14,0,14,14">
+            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+            <Border x:Name="FMainBtn" CornerRadius="4" Padding="6,7" Margin="0,0,3,0" Background="{DynamicResource Brand}">
+              <TextBlock x:Name="FMainText" FontSize="12" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"/>
+            </Border>
+            <Border x:Name="FDeferBtn" Grid.Column="1" CornerRadius="4" Padding="6,7" Margin="3,0,0,0" Background="#FBFBFB" BorderBrush="#D1D1D1" BorderThickness="1">
+              <TextBlock x:Name="FDeferText" FontSize="12" Foreground="#1B1B1B" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"/>
+            </Border>
+          </Grid>
         </StackPanel>
-      </StackPanel>
+      </Grid>
     </Border>
 
-    <!-- Classic: square Windows dialog with the banner of the company (logo, name and accent line) -->
+    <!-- Classic: Windows dialog with the banner of the company; centred texts; Close Programs, Defer and Continue. -->
     <Border x:Name="ClassicCard" Background="#F0F0F0" BorderBrush="#7A7A7A" BorderThickness="1" Visibility="Collapsed" Effect="{DynamicResource CardShadow}" TextElement.Foreground="#1F1F1F">
       <StackPanel>
         <DockPanel Background="White" Height="28">
@@ -42,16 +74,36 @@
           </StackPanel>
           <Border x:Name="CAccentBar" Height="4" VerticalAlignment="Bottom" Background="{DynamicResource Brand}"/>
         </Grid>
-        <TextBlock x:Name="CBody" Margin="14,12,14,0" FontSize="12" TextWrapping="Wrap" Foreground="#1F1F1F"/>
-        <Border x:Name="CAppsBox" Margin="14,8,14,0" Background="White" BorderBrush="#ABADB3" BorderThickness="1" Padding="6,4">
-          <TextBlock x:Name="CApps" FontSize="12" Foreground="#1F1F1F"/>
-        </Border>
-        <TextBlock x:Name="CCustom" Margin="14,8,14,0" FontSize="12" TextWrapping="Wrap" Foreground="#1F1F1F"/>
-        <TextBlock x:Name="CDefer" Margin="14,8,14,0" FontSize="12" TextWrapping="Wrap" Foreground="#3C3C3C"/>
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="14,14,14,14">
-          <Border x:Name="CDeferBtn" Background="#E1E1E1" BorderBrush="#ADADAD" BorderThickness="1" Padding="14,4"><TextBlock Text="{l:T Prev_Defer}" FontSize="12"/></Border>
-          <Border Background="#E1E1E1" BorderBrush="#0078D7" BorderThickness="1" Padding="14,4" Margin="8,0,0,0"><TextBlock x:Name="CMainText" FontSize="12"/></Border>
+        <StackPanel Margin="14,10,14,0">
+          <TextBlock x:Name="CWelcome" FontSize="12" TextWrapping="Wrap" TextAlignment="Center"/>
+          <TextBlock x:Name="CTitle" FontSize="12" FontWeight="Bold" TextWrapping="Wrap" TextAlignment="Center" Margin="0,4,0,0"/>
+          <TextBlock x:Name="CCustom" FontSize="12" TextWrapping="Wrap" TextAlignment="Center" Margin="0,8,0,0"/>
+          <TextBlock x:Name="CCloseApps" FontSize="12" TextWrapping="Wrap" TextAlignment="Center" Margin="0,8,0,0"/>
+          <Border x:Name="CAppsBox" Margin="0,6,0,0" Background="White" BorderBrush="#ABADB3" BorderThickness="1" Padding="6,4">
+            <TextBlock x:Name="CApps" FontSize="12"/>
+          </Border>
+          <TextBlock x:Name="CExpiry" FontSize="12" TextWrapping="Wrap" TextAlignment="Center" Margin="0,8,0,0"/>
+          <TextBlock x:Name="CDeferrals" FontSize="12" FontWeight="Bold" TextWrapping="Wrap" TextAlignment="Center" Margin="0,4,0,0"/>
+          <TextBlock x:Name="CExpiryWarning" FontSize="12" TextWrapping="Wrap" TextAlignment="Center" Margin="0,4,0,0"/>
+          <TextBlock x:Name="CCountdownLabel" FontSize="12" FontWeight="Bold" TextWrapping="Wrap" TextAlignment="Center" Margin="0,8,0,0"/>
+          <TextBlock x:Name="CCountdownValue" FontSize="18" FontWeight="Bold" TextAlignment="Center"/>
         </StackPanel>
+        <UniformGrid Columns="3" Margin="14,12,14,12">
+          <Border x:Name="CCloseBtn" Background="#E1E1E1" BorderBrush="#ADADAD" BorderThickness="1" Padding="6,4" Margin="0,0,4,0"><TextBlock x:Name="CCloseText" FontSize="12" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis"/></Border>
+          <Border x:Name="CDeferBtn" Background="#E1E1E1" BorderBrush="#ADADAD" BorderThickness="1" Padding="6,4" Margin="2,0,2,0"><TextBlock x:Name="CDeferText" FontSize="12" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis"/></Border>
+          <Border Background="#E1E1E1" BorderBrush="#ADADAD" BorderThickness="1" Padding="6,4" Margin="4,0,0,0"><TextBlock x:Name="CContinueText" FontSize="12" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis"/></Border>
+        </UniformGrid>
+      </StackPanel>
+    </Border>
+
+    <!-- At this moment the package shows no dialog. -->
+    <Border x:Name="HiddenCard" Visibility="Collapsed" Background="{DynamicResource SurfaceHover}" BorderBrush="{DynamicResource Line2}" BorderThickness="1" CornerRadius="10" Padding="16,14">
+      <StackPanel>
+        <StackPanel Orientation="Horizontal">
+          <TextBlock Text="&#xED1A;" Style="{StaticResource Icon}" FontSize="15" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
+          <TextBlock Text="{l:T Prev_HiddenTitle}" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" Margin="10,0,0,0" TextWrapping="Wrap" VerticalAlignment="Center"/>
+        </StackPanel>
+        <TextBlock x:Name="HiddenText" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,8,0,0"/>
       </StackPanel>
     </Border>
   </Grid>

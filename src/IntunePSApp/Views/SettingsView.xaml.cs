@@ -132,7 +132,9 @@ namespace J365.IntunePSApp.Views
             {
                 // The connection itself works: an administrator activates Intune in the tenant, nothing changes here.
                 IntuneStatusTitle.Text = T("Settings_IntuneNoPlanTitle");
-                IntuneStatusText.Text = IntuneDiagnosis.Causes(null, certificate)[0] + Environment.NewLine + T("Settings_IntuneNoPlanHint", IntuneConnection.Account);
+                string found = IntuneSubscription.FoundLine;
+                IntuneStatusText.Text = IntuneDiagnosis.Causes(null, certificate)[0] + (found.Length > 0 ? Environment.NewLine + found : "")
+                    + Environment.NewLine + T("Settings_IntuneNoPlanHint", IntuneConnection.Account);
             }
             else if (refused)
             {
@@ -182,6 +184,7 @@ namespace J365.IntunePSApp.Views
             BtnIntunePlan.Visibility = noPlan || refused ? Visibility.Visible : Visibility.Collapsed;
             BtnIntunePlanText.Text = noPlan ? T("Settings_IntuneCheckPlanAgain") : T("Settings_IntuneCheckPlan");
             BtnIntunePurchase.Visibility = noPlan ? Visibility.Visible : Visibility.Collapsed;
+            BtnIntunePurchaseText.Text = T(IntuneSubscription.FixLabelKey);
             BtnIntuneTest.Visibility = signedIn && !broken ? Visibility.Visible : Visibility.Collapsed;
             BtnIntuneSwitchAccount.Visibility = signedIn && !certificate && !broken ? Visibility.Visible : Visibility.Collapsed;
             BtnIntuneCopyCode.Visibility = configured && !broken ? Visibility.Visible : Visibility.Collapsed;
@@ -261,7 +264,7 @@ namespace J365.IntunePSApp.Views
         private async void IntunePlan_Click(object sender, RoutedEventArgs e)
             => await RunIntuneAsync(T("Settings_IntuneCheckingPlan"), ct => IntuneConnectUi.CheckPlanAsync(ct));
 
-        private void IntunePurchase_Click(object sender, RoutedEventArgs e) => MainWindow.OpenUrl(IntuneSubscription.PurchaseUrl);
+        private void IntunePurchase_Click(object sender, RoutedEventArgs e) => MainWindow.OpenUrl(IntuneSubscription.FixUrl);
 
         private void IntuneDisconnect_Click(object sender, RoutedEventArgs e)
         {
@@ -314,21 +317,21 @@ namespace J365.IntunePSApp.Views
             accent ??= (Brush)FindResource("Brand");
             AccentSwatch.Background = accent;
             string company = string.IsNullOrWhiteSpace(TxtCompany.Text) ? AppInfo.PsadtName : TxtCompany.Text.Trim();
-            string sample = T("Settings_PreviewApp");
-            BrandPreview.Show(new DialogPreviewModel
+            var logo = (ImageSource)MainWindow.LoadBitmap(TxtLogo.Text.Trim().Trim('"')) ?? new System.Windows.Media.Imaging.BitmapImage(new Uri("pack://application:,,,/Assets/app-256.png"));
+            // A sample application open on the computer: the dialog the packages show with this branding and these defaults.
+            var input = new WelcomePreviewInput
             {
-                Style = TagOf(CmbStyle) == "Classic" ? "Classic" : "Fluent",
-                Accent = accent,
-                Logo = (ImageSource)MainWindow.LoadBitmap(TxtLogo.Text.Trim().Trim('"')) ?? new System.Windows.Media.Imaging.BitmapImage(new Uri("pack://application:,,,/Assets/app-256.png")),
+                Mode = "Auto",
+                AppName = T("Settings_PreviewApp"),
                 Company = company,
-                Title = sample,
-                Subtitle = T("Prev_Subtitle", company),
-                Body = T("Prev_CloseBody"),
-                Apps = new List<string> { T("Settings_PreviewProcess") },
-                Custom = TxtWelcome?.Text.Trim() ?? "",
-                DeferText = ChkDefer?.IsChecked == true ? T("Prev_DeferText", int.TryParse(TxtDefer?.Text, out int d) ? d : 3) : null,
-                MainButton = T("Prev_CloseAndInstall")
-            });
+                Processes = new List<string> { "contoso" },
+                AllowDefer = ChkDefer?.IsChecked == true,
+                DeferTimes = int.TryParse(TxtDefer?.Text, out int d) ? d : 3,
+                CountdownSeconds = int.TryParse(TxtCountdown?.Text, out int c) ? c : 300,
+                CustomMessage = TxtWelcome?.Text.Trim() ?? ""
+            };
+            var info = WelcomePreview.Build(input, WelcomeMoment.AppOpen, EditorView.DialogStrings(TagOf(CmbLanguage)));
+            BrandPreview.Show(info, new DialogPreviewLook { Style = TagOf(CmbStyle) == "Classic" ? "Classic" : "Fluent", Accent = accent, Logo = logo, Company = company });
         }
 
         public static void SelectTag(ComboBox c, string tag)

@@ -331,6 +331,24 @@ namespace J365.IntunePSApp.Core
             using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1 << 20);
             return Convert.ToHexString(SHA256.HashData(fs));
         }
+
+        /// <summary>The same, saying how far it is (0 to 1).</summary>
+        public static string Sha256File(string path, Action<double> progress, CancellationToken ct = default)
+        {
+            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1 << 20, FileOptions.SequentialScan);
+            using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            var buffer = new byte[1 << 20];
+            long total = Math.Max(1, fs.Length), done = 0;
+            int n;
+            while ((n = fs.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                ct.ThrowIfCancellationRequested();
+                sha.AppendData(buffer, 0, n);
+                done += n;
+                progress?.Invoke((double)done / total);
+            }
+            return Convert.ToHexString(sha.GetHashAndReset());
+        }
     }
 
     public static class TextFiles

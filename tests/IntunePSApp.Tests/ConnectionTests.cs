@@ -31,6 +31,8 @@ namespace J365.IntunePSApp.Tests
         private int _spPosts;
         public string Base { get; }
         public bool DenyConsent { get; set; }
+        /// <summary>An app management policy of the tenant: certificates valid for more months than this are refused (0: none).</summary>
+        public int MaxCredentialMonths { get; set; }
         public bool ExistingRegistration { get; set; }
         /// <summary>Intune answers every read with its 401 "Forbidden" (a user without an active Intune role, for example).</summary>
         public bool IntuneRefuses { get; set; }
@@ -248,7 +250,17 @@ namespace J365.IntunePSApp.Tests
             {
                 // keyCredentials is replaced as a whole, as in Microsoft Graph.
                 if (JsonNode.Parse(body)?["keyCredentials"] is JsonArray keys)
+                {
+                    // An app management policy of the tenant: a certificate valid for longer is refused, as Entra ID does.
+                    bool tooLong = MaxCredentialMonths > 0 && keys.Any(k => (string)k?["key"] is string data
+                        && X509CertificateLoader.LoadCertificate(Convert.FromBase64String(data)).NotAfter > DateTime.Now.AddMonths(MaxCredentialMonths).AddDays(2));
+                    if (tooLong)
+                    {
+                        Reply(ctx, 400, new { error = new { code = "Request_BadRequest", message = "Credential lifetime exceeds the max value allowed as per assigned policy." } });
+                        return;
+                    }
                     lock (KeyCredentials) { KeyCredentials.Clear(); KeyCredentials.AddRange(keys.Select(k => k.DeepClone())); }
+                }
                 Reply(ctx, 204, null);
             }
             else if (req.HttpMethod == "GET" && path == "/v1.0/servicePrincipals") Reply(ctx, 200, new { value = Array.Empty<object>() });
@@ -483,12 +495,15 @@ namespace J365.IntunePSApp.Tests
             var created = new List<string>();
             try
             {
+                ConfigStore.Current.CertificateMonths = AppCertificate.DefaultMonths;
                 var r = await IntuneConnection.CreateRegistrationAsync(null, CancellationToken.None, certificate: true);
                 string thumbprint = r.CertificateThumbprint;
                 created.Add(thumbprint);
                 Assert.True(r.ConsentGranted);
                 Assert.True(r.RoleGranted);
                 Assert.Equal(40, thumbprint.Length);
+                // Valid for the months chosen: 12 by default.
+                using (var first = AppCertificate.Find(thumbprint)) Assert.InRange(first.NotAfter, DateTime.Now.AddMonths(12).AddDays(-1), DateTime.Now.AddMonths(12).AddDays(1));
                 // Created and registered, but not the connection until it obtained a token.
                 Assert.NotNull(r.Pending);
                 Assert.False(IntuneConnection.UsesCertificate);
@@ -534,8 +549,11 @@ namespace J365.IntunePSApp.Tests
 
                 // A renewal: the new certificate is added next to the one in use, which keeps working until the new one
                 // obtained a token; only then is the previous one removed from this computer.
+                // Renewed for 6 months this time (the shortest validity offered).
+                ConfigStore.Current.CertificateMonths = 6;
                 var renewal = await IntuneConnection.CreateRegistrationAsync(null, CancellationToken.None, certificate: true);
                 created.Add(renewal.CertificateThumbprint);
+                using (var renewed = AppCertificate.Find(renewal.CertificateThumbprint)) Assert.InRange(renewed.NotAfter, DateTime.Now.AddMonths(6).AddDays(-1), DateTime.Now.AddMonths(6).AddDays(1));
                 Assert.Equal(thumbprint, IntuneConnection.CertificateThumbprint);
                 Assert.True(IntuneConnection.IsSignedIn);
                 Assert.Equal(3, mock.KeyCredentials.Count);
@@ -581,9 +599,47 @@ namespace J365.IntunePSApp.Tests
                 cfg.IntuneAuthMode = IntuneConnection.DelegatedMode;
                 cfg.IntuneCertificateThumbprint = "";
                 cfg.IntuneTenantName = "";
+                cfg.CertificateMonths = AppCertificate.DefaultMonths;
                 AppCertificate.UseTpm = true;
             }
         });
+
+        [Fact]
+        public Task A_policy_of_the_tenant_that_limits_the_validity_is_explained_and_nothing_is_left() => WithMockAsync(async mock =>
+        {
+            AppCertificate.UseTpm = false;
+            int before = CertificatesOfThisApp();
+            try
+            {
+                // An app management policy of the tenant refuses credentials valid for more than a year.
+                mock.MaxCredentialMonths = 12;
+                ConfigStore.Current.CertificateMonths = 24;
+                var ex = await Assert.ThrowsAsync<AuthException>(() => IntuneConnection.CreateRegistrationAsync(null, CancellationToken.None, certificate: true));
+                Assert.Equal("certificate_lifetime", ex.Code);
+                Assert.StartsWith(J365.IntunePSApp.Localization.Loc.T("Cert_ErrLifetimePolicy", 24, "").Split(':')[0], ex.Message);
+                // The certificate made for it does not stay on this computer.
+                Assert.Equal(before, CertificatesOfThisApp());
+                // A shorter validity goes through.
+                ConfigStore.Current.CertificateMonths = 12;
+                var r = await IntuneConnection.CreateRegistrationAsync(null, CancellationToken.None, certificate: true);
+                IntuneConnection.DiscardCertificate(r.Pending);
+                Assert.Equal(before, CertificatesOfThisApp());
+                // Anything else than 6, 12 or 24 months is the default.
+                Assert.Equal(new[] { 6, 12, 24, 12, 12 }, new[] { 6, 12, 24, 0, 36 }.Select(AppCertificate.Months));
+            }
+            finally
+            {
+                ConfigStore.Current.CertificateMonths = AppCertificate.DefaultMonths;
+                AppCertificate.UseTpm = true;
+            }
+        });
+
+        private static int CertificatesOfThisApp()
+        {
+            using var store = new X509Store(StoreName.My, StoreLocation.CurrentUser);
+            store.Open(OpenFlags.ReadOnly);
+            return store.Certificates.Cast<X509Certificate2>().Count(c => c.GetNameInfo(X509NameType.SimpleName, false) == AppCertificate.CommonName);
+        }
 
         [Fact]
         public Task Without_the_right_to_grant_it_the_application_permission_is_reported_with_the_consent_link() => WithMockAsync(async mock =>
@@ -797,6 +853,12 @@ namespace J365.IntunePSApp.Tests
             Assert.DoesNotContain("offline_access", authorize.Path);
             Assert.Equal(IntunePlanState.Inactive, IntuneSubscription.State);
             Assert.NotNull(IntuneSubscription.Checked);
+            // What the answer rests on is kept and shown: the plan of Intune and its status; a subscription that ended is
+            // reactivated in Your products.
+            Assert.Equal("Suspended", IntuneSubscription.Plans.First(p => p.Id == "c1ec4a95-1f05-45b3-a911-aa3fa01094f5").Status);
+            Assert.Contains(IntuneSubscription.Describe(IntuneSubscription.Plans[0]), IntuneSubscription.FoundLine);
+            Assert.Equal(IntuneSubscription.SubscriptionsUrl, IntuneSubscription.FixUrl);
+            Assert.Equal("Settings_IntuneReactivate", IntuneSubscription.FixLabelKey);
 
             // Checked again with the same answer: the date is the one of the new check.
             ConfigStore.Current.IntunePlanUtc = DateTime.UtcNow.AddDays(-30);
@@ -807,6 +869,10 @@ namespace J365.IntunePSApp.Tests
             mock.Plans = EntraMock.PlansOf(("d9923fe3-a2de-4d29-a5be-e3e83bb786be", "SCO", "Enabled"));
             Assert.Equal(IntunePlanState.Unknown, await IntuneSubscription.CheckAsync(CancellationToken.None));
             Assert.Equal(IntunePlanState.Unknown, IntuneSubscription.State);
+            Assert.Empty(IntuneSubscription.Plans);
+            Assert.Equal(IntuneSubscription.PurchaseUrl, IntuneSubscription.FixUrl);
+            // Not remembered, but its result still shows the plan it found.
+            Assert.Equal("d9923fe3-a2de-4d29-a5be-e3e83bb786be", Assert.Single(IntuneSubscription.LastCheck.Plans).Id);
         });
 
         [Fact]

@@ -57,6 +57,14 @@
             </StackPanel>
           </DockPanel>
         </RadioButton>
+        <!-- The certificate: how long it is valid (6, 12 or 24 months), under its card while it is chosen -->
+        <StackPanel x:Name="CertValidityPanel" Margin="62,-2,0,12">
+          <StackPanel Orientation="Horizontal">
+            <TextBlock Text="{l:T Connect_CertValidity}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,0"/>
+            <ComboBox x:Name="CmbCertMonths" Width="190" SelectionChanged="CertMonths_Changed"/>
+          </StackPanel>
+          <TextBlock Text="{l:T Connect_CertValidityHint}" Style="{StaticResource Hint}" TextWrapping="Wrap"/>
+        </StackPanel>
         <RadioButton x:Name="OptAuto" Style="{StaticResource ChoiceCard}" GroupName="connectMethod" Margin="0,0,0,10" Checked="Method_Checked">
           <DockPanel>
             <Border Style="{StaticResource IconTile}" VerticalAlignment="Top"><TextBlock Text="&#xE945;" Style="{StaticResource Icon}" Foreground="{DynamicResource BrandText}" FontSize="16" HorizontalAlignment="Center"/></Border>

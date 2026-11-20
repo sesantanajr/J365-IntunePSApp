@@ -94,6 +94,8 @@ namespace J365.IntunePSApp.Views
         {
             _loading = true;
             _s = s;
+            // Another package: the preview starts again at its first moment.
+            _momentChosen = false;
             try
             {
                 ChkIncludeFolder.IsChecked = s.IncludeInstallerFolder;
@@ -645,29 +647,130 @@ namespace J365.IntunePSApp.Views
 
         private ImageSource _previewLogo;
 
+        /// <summary>The moment of a required installation the preview shows.</summary>
+        private WelcomeMoment _moment = WelcomeMoment.AppOpen;
+        /// <summary>The user picked the moment: it stays while the settings still offer it. Otherwise the first one shows.</summary>
+        private bool _momentChosen;
+        private bool _syncingMoment;
+
+        private static readonly Dictionary<string, PsadtStrings> DialogStringCache = new();
+
+        /// <summary>
+        /// The texts of the dialogs from the string table of the toolkit of this computer, in the language of the dialogs
+        /// ("Auto": the language of this interface, as an example); null without a toolkit (the preview then uses its own).
+        /// </summary>
+        public static PsadtStrings DialogStrings(string language)
+        {
+            string culture = string.IsNullOrEmpty(language) || language == "Auto" ? Loc.Instance.Culture.Name : language;
+            string tpl = ToolsService.LocalPsadt();
+            if (tpl == null) return null;
+            string key = tpl + "|" + culture;
+            lock (DialogStringCache)
+            {
+                if (!DialogStringCache.TryGetValue(key, out var table))
+                {
+                    // A table that cannot be read leaves the texts of this application in the preview (and is not read again).
+                    try { table = PsadtStrings.Load(Path.Combine(tpl, "Strings"), culture); }
+                    catch (Exception ex) { Log.Warn(ex.Message); table = null; }
+                    DialogStringCache[key] = table;
+                }
+                return table;
+            }
+        }
+
+        private void PrevMoment_Checked(object sender, RoutedEventArgs e)
+        {
+            if (_loading || _syncingMoment || (sender as FrameworkElement)?.Tag is not string tag) return;
+            if (Enum.TryParse(tag, out WelcomeMoment moment)) { _moment = moment; _momentChosen = true; }
+            UpdatePreview();
+        }
+
+        /// <summary>Capture mode: the preview of the dialog is on screen.</summary>
+        public bool PreviewVisible => PreviewPanel.Visibility == Visibility.Visible;
+
+        /// <summary>Capture mode: the moments the preview offers for this package.</summary>
+        public IReadOnlyList<WelcomeMoment> PreviewMoments => WelcomePreview.Moments(PreviewInput());
+
+        /// <summary>Capture mode: shows the dialog at one moment (nothing of the package changes).</summary>
+        public void ShowPreviewMoment(WelcomeMoment moment)
+        {
+            _moment = moment;
+            _momentChosen = true;
+            UpdatePreview();
+        }
+
+        /// <summary>Capture mode: the bar of a build halfway through (nothing is built).</summary>
+        public void ShowProgressSample(bool show)
+        {
+            if (!show)
+            {
+                LogCard.Visibility = Visibility.Collapsed;
+                BuildProgressPanel.Visibility = Visibility.Collapsed;
+                BtnCancelBuild.Visibility = Visibility.Collapsed;
+                _log.Clear();
+                return;
+            }
+            GoStep(ReviewStep);
+            ResultCard.Visibility = Visibility.Collapsed;
+            LogCard.Visibility = Visibility.Visible;
+            LogTitle.Text = T("Ed_GeneratingTitle");
+            BuildProgressPanel.Visibility = Visibility.Visible;
+            BtnCancelBuild.Visibility = Visibility.Visible;
+            _log.Clear();
+            var t = DateTime.Now.AddSeconds(-38);
+            foreach (var (level, text, seconds) in new[]
+            {
+                (LogLevel.Step, T("Log_BuildStart", TxtName.Text.Trim(), TxtVersion.Text.Trim()), 0), (LogLevel.Ok, AppInfo.PsadtName + " 4.1.8", 1),
+                (LogLevel.Step, T("Log_CopyingTemplate"), 1), (LogLevel.Step, T("Log_CopyingInstaller"), 2), (LogLevel.Ok, T("Log_ScriptOk", 0), 9),
+                (LogLevel.Step, T("Log_ApplyingBranding"), 9), (LogLevel.Step, T("Log_GeneratingDetection"), 10), (LogLevel.Step, T("Log_CreatingIntuneWin"), 12)
+            })
+                _log.Add(new LogEntry { Time = t.AddSeconds(seconds), Level = level, Text = text });
+            ShowBuildProgress(new BuildProgressInfo { Percent = 64, Step = T("Log_CreatingIntuneWin").TrimEnd('.', ' '), Elapsed = TimeSpan.FromSeconds(38), Remaining = TimeSpan.FromSeconds(21) });
+            LogCard.BringIntoView();
+        }
+
+        private WelcomePreviewInput PreviewInput() => new()
+        {
+            Mode = TagOf(CmbMode),
+            AppName = string.IsNullOrWhiteSpace(TxtName.Text) ? T("Ed_AppName") : TxtName.Text.Trim(),
+            AppVersion = TxtVersion.Text.Trim(),
+            Company = string.IsNullOrWhiteSpace(TxtCompany.Text) ? AppInfo.PsadtName : TxtCompany.Text.Trim(),
+            Processes = Names.ParseProcessList(TxtProcesses.Text),
+            AllowDefer = ChkDefer.IsChecked == true,
+            DeferTimes = Int(TxtDeferTimes.Text, 3),
+            CountdownSeconds = Int(TxtCountdown.Text, 300),
+            CustomMessage = TxtWelcome.Text
+        };
+
         private void UpdatePreview()
         {
             if (PrevDialog == null || TxtName == null) return;
-            string name = $"{TxtName.Text} {TxtVersion.Text}".Trim();
-            string company = string.IsNullOrWhiteSpace(TxtCompany.Text) ? AppInfo.PsadtName : TxtCompany.Text.Trim();
-            var procs = Names.ParseProcessList(TxtProcesses.Text);
-            string label = string.IsNullOrWhiteSpace(TxtName.Text) ? T("Prev_AppLabel") : TxtName.Text.Trim();
             var brush = AccentBrush();
             bool classic = TagOf(CmbStyle) == "Classic";
-            PrevDialog.Show(new DialogPreviewModel
+            string mode = TagOf(CmbMode);
+            string language = TagOf(CmbLanguage);
+            var input = PreviewInput();
+            string company = input.Company;
+            // The moments worth showing for these settings: the one the user chose stays while it still exists, otherwise
+            // the first (the list of applications may be filled after the preview was first drawn).
+            var moments = WelcomePreview.Moments(input);
+            if (!_momentChosen || !moments.Contains(_moment)) _moment = moments[0];
+            _syncingMoment = true;
+            try
             {
-                Style = classic ? "Classic" : "Fluent",
-                Accent = brush,
-                Logo = _previewLogo,
-                Company = company,
-                Title = string.IsNullOrEmpty(name) ? T("Ed_AppName") : name,
-                Subtitle = T("Prev_Subtitle", company),
-                Body = procs.Count > 0 ? T("Prev_CloseBody") : T("Prev_ReadyBody"),
-                Apps = procs.Select(p => $"{label} ({p})").ToList(),
-                Custom = TxtWelcome.Text.Trim(),
-                DeferText = ChkDefer.IsChecked == true ? T("Prev_DeferText", Int(TxtDeferTimes.Text, 3)) : null,
-                MainButton = procs.Count > 0 ? T("Prev_CloseAndInstall") : T("Prev_Install")
-            });
+                foreach (var (button, moment) in new[] { (PrevMomentOpen, WelcomeMoment.AppOpen), (PrevMomentClosed, WelcomeMoment.AppClosed), (PrevMomentLast, WelcomeMoment.LastNotice) })
+                {
+                    button.Visibility = moments.Contains(moment) ? Visibility.Visible : Visibility.Collapsed;
+                    button.IsChecked = moment == _moment;
+                }
+            }
+            finally { _syncingMoment = false; }
+            PrevMoments.Visibility = moments.Count > 1 && mode != "Silent" ? Visibility.Visible : Visibility.Collapsed;
+
+            var info = WelcomePreview.Build(input, _moment, DialogStrings(language));
+            // The list shows the icon of the running program: the icon of the application when it is known.
+            var appIcon = _appIconKind != null && _appIconKind != ImageTools.IconGenerated ? MainWindow.LoadBitmap(_installerIcon) : null;
+            PrevDialog.Show(info, new DialogPreviewLook { Style = classic ? "Classic" : "Fluent", Accent = brush, Logo = _previewLogo, AppIcon = appIcon, Company = company });
             // The completion prompt follows the same style: accent button in Fluent, a plain Windows button in Classic.
             PrevOkBtn.Background = classic ? Ui.Hex("#E1E1E1") : brush;
             ((TextBlock)PrevOkBtn.Child).Foreground = classic ? Ui.Hex("#1F1F1F") : Brushes.White;
@@ -680,13 +783,13 @@ namespace J365.IntunePSApp.Views
             var vis = string.IsNullOrEmpty(done) ? Visibility.Collapsed : Visibility.Visible;
             PrevDoneBox.Visibility = vis;
             PrevDoneLabel.Visibility = vis;
-            PrevNote.Text = TagOf(CmbMode) switch
-            {
-                "Silent" => T("Prev_NoteSilent"),
-                "Interactive" => T("Prev_NoteInteractive"),
-                "WhenNeeded" => procs.Count > 0 ? T("Prev_NoteAutoApps") : T("Prev_NoteWhenNeededNoApps"),
-                _ => T("Prev_NoteAuto")
-            };
+            // What happens at this moment (a dialog that does not appear says why in its own card), in a required
+            // installation, and in which language.
+            var note = new List<string>();
+            if (info.Shown) note.Add(info.Note);
+            if (mode != "Silent") note.Add(T("Prev_NoteRequired"));
+            if (string.IsNullOrEmpty(language) || language == "Auto") note.Add(T("Prev_NoteLanguage", Loc.Instance.Culture.NativeName));
+            PrevNote.Text = string.Join(Environment.NewLine + Environment.NewLine, note);
         }
 
         private Brush AccentBrush()
@@ -1066,19 +1169,30 @@ namespace J365.IntunePSApp.Views
             ResultCard.Visibility = Visibility.Collapsed;
             LogCard.Visibility = Visibility.Visible;
             LogTitle.Text = T("Ed_GeneratingTitle");
-            BuildProgress.Visibility = Visibility.Visible;
+            BuildProgressPanel.Visibility = Visibility.Visible;
+            ShowBuildProgress(new BuildProgressInfo { Step = T("Log_CheckingPsadt") });
             BtnCancelBuild.Visibility = Visibility.Visible;
             _log.Clear();
             _buildCts = new CancellationTokenSource();
             var ct = _buildCts.Token;
             var main = MainWindow.Current;
-            main.SetStatus(T("Ed_GeneratingStatus", $"{s.AppName} {s.AppVersion}".Trim()), true);
+            string title = $"{s.AppName} {s.AppVersion}".Trim();
+            main.SetStatus(T("Ed_GeneratingStatus", title), true);
+            main.SetTaskbarProgress(0);
             void OnLog(LogEntry en) => Dispatcher.BeginInvoke(new Action(() => { _log.Add(en); BodyScroll.ScrollToEnd(); }));
             Log.Entry += OnLog;
+            // Created here, so its reports arrive on this thread.
+            var progress = new Progress<BuildProgressInfo>(p =>
+            {
+                if (!IsBuilding) return;
+                ShowBuildProgress(p);
+                main.SetStatus(T("Ed_GeneratingStatusPct", title, Math.Floor(p.Percent).ToString("0", Loc.Instance.Culture)), true);
+                main.SetTaskbarProgress(p.Percent / 100);
+            });
             try
             {
                 bool native = ChkNative.IsChecked == true;
-                var r = await Task.Run(() => PackageBuilder.BuildAsync(s, native, ct));
+                var r = await Task.Run(() => PackageBuilder.BuildAsync(s, native, ct, progress));
                 _last = r;
                 _s = s;
                 MarkClean();
@@ -1100,6 +1214,8 @@ namespace J365.IntunePSApp.Views
             {
                 LogTitle.Text = T("Ed_Failed");
                 Log.Error(ex.Message);
+                // The bar, the status and the taskbar go before the message (it waits for the user).
+                EndBuildProgress(main);
                 Ui.Error(T("Ed_BuildFailed", ex.Message));
                 return null;
             }
@@ -1107,12 +1223,29 @@ namespace J365.IntunePSApp.Views
             {
                 Log.Entry -= OnLog;
                 IsBuilding = false;
-                BuildProgress.Visibility = Visibility.Collapsed;
-                BtnCancelBuild.Visibility = Visibility.Collapsed;
+                EndBuildProgress(main);
                 BtnGenerate.IsEnabled = BtnGenerate2.IsEnabled = true;
                 SetBuildButton(false);
-                main.SetStatus(null);
             }
+        }
+
+        private void EndBuildProgress(MainWindow main)
+        {
+            BuildProgressPanel.Visibility = Visibility.Collapsed;
+            BtnCancelBuild.Visibility = Visibility.Collapsed;
+            main.SetStatus(null);
+            main.SetTaskbarProgress(null);
+        }
+
+        /// <summary>The bar of the build: percentage, current step, time spent and an estimate of the time left.</summary>
+        private void ShowBuildProgress(BuildProgressInfo p)
+        {
+            BuildBar.Value = p.Percent;
+            BuildPercent.Text = Math.Floor(p.Percent).ToString("0", Loc.Instance.Culture) + "%";
+            BuildStep.Text = p.Step;
+            BuildEta.Text = p.Elapsed.TotalSeconds < 1 ? ""
+                : p.Remaining is TimeSpan left ? T("Ed_BuildEta", Core.BuildProgress.Duration(p.Elapsed), Core.BuildProgress.Duration(left))
+                : T("Ed_BuildElapsed", Core.BuildProgress.Duration(p.Elapsed));
         }
 
         private void CancelBuild_Click(object sender, RoutedEventArgs e) => _buildCts?.Cancel();
@@ -1548,7 +1681,7 @@ namespace J365.IntunePSApp.Views
                 : refused && IntuneSubscription.Blocks ? "purchase"
                 : refused ? "plan" : "";
             BtnPublishOpen.Tag = action;
-            BtnPublishOpen.Content = action switch { "purchase" => T("Settings_IntunePurchase"), "plan" => T("Settings_IntuneCheckPlan"), _ => T("Ed_PublishOpen") };
+            BtnPublishOpen.Content = action switch { "purchase" => T(IntuneSubscription.FixLabelKey), "plan" => T("Settings_IntuneCheckPlan"), _ => T("Ed_PublishOpen") };
             BtnPublishOpen.Visibility = action.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         }
 
@@ -1557,7 +1690,7 @@ namespace J365.IntunePSApp.Views
             switch (BtnPublishOpen.Tag as string)
             {
                 case "purchase":
-                    MainWindow.OpenUrl(IntuneSubscription.PurchaseUrl);
+                    MainWindow.OpenUrl(IntuneSubscription.FixUrl);
                     return;
                 case "plan":
                     // An administrator signs in in the browser; the card then says for certain why Intune refused.

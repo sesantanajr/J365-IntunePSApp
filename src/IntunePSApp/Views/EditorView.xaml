@@ -251,7 +251,7 @@
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                   <TextBlock Text="{l:T Ed_CloseAfter}" VerticalAlignment="Center"/>
-                  <TextBox x:Name="TxtCountdown" Width="76" Margin="10,0,8,0" HorizontalContentAlignment="Center"/>
+                  <TextBox x:Name="TxtCountdown" Width="76" Margin="10,0,8,0" HorizontalContentAlignment="Center" TextChanged="Preview_Changed"/>
                   <TextBlock Text="{l:T Ed_Seconds}" VerticalAlignment="Center"/>
                 </StackPanel>
                 <TextBlock Style="{StaticResource Hint}" Text="{l:T Ed_CountdownHint}"/>
@@ -507,7 +507,7 @@
                     </ComboBox>
                   </StackPanel>
                   <StackPanel Grid.Column="2"><TextBlock Text="{l:T Settings_DialogLanguage}" Style="{StaticResource Label}"/>
-                    <ComboBox x:Name="CmbLanguage">
+                    <ComboBox x:Name="CmbLanguage" SelectionChanged="Style_Changed">
                       <ComboBoxItem Tag="Auto" Content="{l:T Opt_LangAuto}"/>
                       <ComboBoxItem Tag="pt-BR" Content="Português (Brasil)"/>
                       <ComboBoxItem Tag="en" Content="English"/>
@@ -658,7 +658,15 @@
                   <Button x:Name="BtnCancelBuild" DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Content="{l:T Common_Cancel}" Click="CancelBuild_Click" Visibility="Collapsed"/>
                   <TextBlock x:Name="LogTitle" Style="{StaticResource H3}" VerticalAlignment="Center"/>
                 </DockPanel>
-                <ProgressBar x:Name="BuildProgress" Height="5" Margin="0,10,0,10" IsIndeterminate="True"/>
+                <!-- One bar for the whole build: percentage, current step and time left -->
+                <StackPanel x:Name="BuildProgressPanel" Margin="0,10,0,12">
+                  <DockPanel>
+                    <TextBlock x:Name="BuildPercent" DockPanel.Dock="Right" FontFamily="{StaticResource MonoFont}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource BrandText}" Margin="12,0,0,0"/>
+                    <TextBlock x:Name="BuildStep" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                  </DockPanel>
+                  <ProgressBar x:Name="BuildBar" Height="8" Margin="0,8,0,6" Minimum="0" Maximum="100"/>
+                  <TextBlock x:Name="BuildEta" Style="{StaticResource Hint}"/>
+                </StackPanel>
                 <ItemsControl x:Name="LogList">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate>
@@ -680,9 +688,18 @@
       <!-- Preview -->
       <Border x:Name="PreviewPanel" Grid.Column="1" Width="370" Margin="16,0,0,16" Visibility="Collapsed">
         <ScrollViewer VerticalScrollBarVisibility="Auto">
-          <StackPanel>
+          <!-- Room on the right for the scroll bar, which is drawn over the content -->
+          <StackPanel Margin="0,0,12,0">
             <TextBlock Text="{l:T Ed_PreviewOverline}" Style="{StaticResource Overline}"/>
-            <TextBlock Text="{l:T Ed_PreviewHint}" Style="{StaticResource Hint}" Margin="0,2,0,12"/>
+            <TextBlock Text="{l:T Ed_PreviewHint}" Style="{StaticResource Hint}" Margin="0,2,0,10"/>
+            <!-- The moments of a required installation: an application of the list open, none open, deferrals used up -->
+            <Border x:Name="PrevMoments" Style="{StaticResource SegmentTrack}" Padding="3" CornerRadius="10" HorizontalAlignment="Left" Margin="0,0,0,12">
+              <StackPanel Orientation="Horizontal">
+                <RadioButton x:Name="PrevMomentOpen" Style="{StaticResource SegmentItem}" GroupName="prevMoment" Tag="AppOpen" Content="{l:T Prev_MomentOpen}" Padding="10,4" IsChecked="True" Checked="PrevMoment_Checked"/>
+                <RadioButton x:Name="PrevMomentClosed" Style="{StaticResource SegmentItem}" GroupName="prevMoment" Tag="AppClosed" Content="{l:T Prev_MomentClosed}" Padding="10,4" Checked="PrevMoment_Checked"/>
+                <RadioButton x:Name="PrevMomentLast" Style="{StaticResource SegmentItem}" GroupName="prevMoment" Tag="LastNotice" Content="{l:T Prev_MomentLast}" Padding="10,4" Checked="PrevMoment_Checked"/>
+              </StackPanel>
+            </Border>
             <v:DialogPreview x:Name="PrevDialog"/>
             <TextBlock x:Name="PrevDoneLabel" Text="{l:T Ed_PreviewDone}" Style="{StaticResource Overline}" Margin="0,20,0,8"/>
             <Border x:Name="PrevDoneBox" Background="White" CornerRadius="10" BorderBrush="#D6DAE1" BorderThickness="1" Padding="16,12">

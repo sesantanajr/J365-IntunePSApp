@@ -9,9 +9,12 @@
     folder is mapped read-only at C:\J365Package and copied to C:\J365Test before running, the same way
     the Intune Management Extension works from its own cache.
 
-    Differences from a real Intune deployment: Intune runs the package as SYSTEM, the sandbox runs it as
-    the local administrator. Use it to validate the installer switches, the dialogs and the detection
-    rule; always finish with a pilot group in Intune.
+    The package runs the way Intune runs it: as SYSTEM for an app installed for the device (a scheduled
+    task, like the Intune Management Extension), as the signed-in user for an app installed for the user.
+    As SYSTEM, PSAppDeployToolkit shows its dialogs in the session of the signed-in user, exactly as in a
+    required installation: what the user will see, deferrals included. -AsUser runs it as the
+    administrator of the sandbox instead. Use the test to validate the installer switches, the dialogs and
+    the detection rule; always finish with a pilot group in Intune.
 
     What the script does before installing:
       - Turns off the Smart App Control evaluation of the sandbox. Windows Sandbox starts with it in
@@ -26,6 +29,7 @@
     After the test this window stays open with these commands:
         Test-Install      installs again (versions already installed are removed first, when the package is set to do so)
         Test-Uninstall    runs the uninstall command and checks that the app is no longer detected
+        (both take -AsUser to run as the administrator of the sandbox instead of SYSTEM)
         Test-Detection    runs the Intune detection script
         Show-Log          opens the last PSAppDeployToolkit log
 
@@ -46,6 +50,9 @@
 
 .PARAMETER KeepSmartAppControl
     Leaves the Smart App Control state of the sandbox untouched (installers may take several minutes).
+
+.PARAMETER AsUser
+    Runs the package as the administrator of the sandbox, not as SYSTEM.
 #>
 [CmdletBinding()]
 param
@@ -56,7 +63,8 @@ param
     [ValidateRange(1, 600)]
     [int]$TimeoutMinutes = 60,
     [switch]$NoInstall,
-    [switch]$KeepSmartAppControl
+    [switch]$KeepSmartAppControl,
+    [switch]$AsUser
 )
 
 $ErrorActionPreference = 'Stop'
@@ -160,40 +168,98 @@ function global:Test-Detection
     $global:J365Test.Detected = $detected
 }
 
-function global:Invoke-J365Package([string]$CommandLine)
+function global:Invoke-J365AsSystem([string]$Exe, [string]$Arguments, [string]$Folder)
+{
+    # Intune runs the package of an app for the device as SYSTEM: a scheduled task does the same here. PSAppDeployToolkit
+    # then shows its dialogs in the session of the signed-in user, the way a required installation does.
+    $name = 'J365 package test ' + [guid]::NewGuid().ToString('N').Substring(0, 8)
+    $action = New-ScheduledTaskAction -Execute $Exe -Argument $Arguments -WorkingDirectory $Folder
+    $principal = New-ScheduledTaskPrincipal -UserId 'NT AUTHORITY\SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+    $limit = New-TimeSpan -Minutes ($global:J365Test.TimeoutMinutes + 5)
+    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit $limit -MultipleInstances IgnoreNew -Priority 4
+    $null = Register-ScheduledTask -TaskName $name -Action $action -Principal $principal -Settings $settings -Force
+    try
+    {
+        $started = Get-Date
+        Start-ScheduledTask -TaskName $name
+        $watch = [System.Diagnostics.Stopwatch]::StartNew()
+        $timedOut = $false
+        while ($true)
+        {
+            Start-Sleep -Seconds 1
+            # The task is Ready again once its program ended (Queued for a moment after the start).
+            $state = [string](Get-ScheduledTask -TaskName $name).State
+            if ($state -ne 'Running' -and $state -ne 'Queued' -and $watch.Elapsed.TotalSeconds -ge 3) { break }
+            $status = Get-J365LogStatus -Since $started.AddSeconds(-2)
+            Write-J365Line ('  Running as SYSTEM {0:mm\:ss}  {1}' -f $watch.Elapsed, $status)
+            if ($watch.Elapsed.TotalMinutes -ge $global:J365Test.TimeoutMinutes)
+            {
+                $timedOut = $true
+                # Stopping the task ends its own process only: the tree (PowerShell, the installer) is ended with it.
+                $launchers = @(Get-CimInstance Win32_Process -Filter "Name = 'Invoke-AppDeployToolkit.exe'" -ErrorAction SilentlyContinue |
+                    Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($Folder, [System.StringComparison]::OrdinalIgnoreCase) })
+                foreach ($launcher in $launchers) { $null = & taskkill.exe /PID $launcher.ProcessId /T /F 2>&1 }
+                Stop-ScheduledTask -TaskName $name
+                break
+            }
+        }
+        $watch.Stop()
+        # LastTaskResult is the exit code of the program, as an unsigned number.
+        [uint32]$raw = (Get-ScheduledTaskInfo -TaskName $name).LastTaskResult
+        $code = [BitConverter]::ToInt32([BitConverter]::GetBytes($raw), 0)
+        return [pscustomobject]@{ ExitCode = $code; TimedOut = $timedOut; Seconds = [int][Math]::Round($watch.Elapsed.TotalSeconds) }
+    }
+    finally { Unregister-ScheduledTask -TaskName $name -Confirm:$false -ErrorAction SilentlyContinue }
+}
+
+function global:Invoke-J365Package([string]$CommandLine, [switch]$AsUser)
 {
     # "Invoke-AppDeployToolkit.exe -DeploymentType Install" -> executable + arguments
     $exe = Join-Path $global:J365Test.PackageDir 'Invoke-AppDeployToolkit.exe'
     $arguments = ($CommandLine -replace '^\s*Invoke-AppDeployToolkit\.exe\s*', '').Trim()
-    Write-Host ('  ' + $CommandLine) -ForegroundColor Gray
-
-    $startInfo = New-Object System.Diagnostics.ProcessStartInfo
-    $startInfo.FileName = $exe
-    $startInfo.Arguments = $arguments
-    $startInfo.WorkingDirectory = $global:J365Test.PackageDir
-    $startInfo.UseShellExecute = $false
+    $system = $global:J365Test.AsSystem -and -not $AsUser
+    $who = 'as ' + $env:USERNAME
+    if ($system) { $who = 'as SYSTEM, like Intune' }
+    Write-Host ('  ' + $CommandLine + '   (' + $who + ')') -ForegroundColor Gray
     $started = Get-Date
-    $watch = [System.Diagnostics.Stopwatch]::StartNew()
-    $process = [System.Diagnostics.Process]::Start($startInfo)
     $timedOut = $false
 
-    # Only this process is awaited (not its descendants): an installer that leaves a helper running does not hold the test.
-    while (-not $process.WaitForExit(1000))
+    if ($system)
     {
-        $status = Get-J365LogStatus -Since $started.AddSeconds(-2)
-        Write-J365Line ('  Running {0:mm\:ss}  {1}' -f $watch.Elapsed, $status)
-        if ($watch.Elapsed.TotalMinutes -ge $global:J365Test.TimeoutMinutes)
-        {
-            $timedOut = $true
-            $null = & taskkill.exe /PID $process.Id /T /F 2>&1
-            break
-        }
+        $run = Invoke-J365AsSystem -Exe $exe -Arguments $arguments -Folder $global:J365Test.PackageDir
+        $timedOut = $run.TimedOut
+        $exitCode = $run.ExitCode
+        $seconds = $run.Seconds
     }
-    $watch.Stop()
+    else
+    {
+        $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+        $startInfo.FileName = $exe
+        $startInfo.Arguments = $arguments
+        $startInfo.WorkingDirectory = $global:J365Test.PackageDir
+        $startInfo.UseShellExecute = $false
+        $watch = [System.Diagnostics.Stopwatch]::StartNew()
+        $process = [System.Diagnostics.Process]::Start($startInfo)
+
+        # Only this process is awaited (not its descendants): an installer that leaves a helper running does not hold the test.
+        while (-not $process.WaitForExit(1000))
+        {
+            $status = Get-J365LogStatus -Since $started.AddSeconds(-2)
+            Write-J365Line ('  Running {0:mm\:ss}  {1}' -f $watch.Elapsed, $status)
+            if ($watch.Elapsed.TotalMinutes -ge $global:J365Test.TimeoutMinutes)
+            {
+                $timedOut = $true
+                $null = & taskkill.exe /PID $process.Id /T /F 2>&1
+                break
+            }
+        }
+        $watch.Stop()
+        $seconds = [int][Math]::Round($watch.Elapsed.TotalSeconds)
+        if (-not $timedOut) { $exitCode = $process.ExitCode }
+    }
     Write-J365Line ''
     Write-Host "`r" -NoNewline
 
-    $seconds = [int][Math]::Round($watch.Elapsed.TotalSeconds)
     if ($timedOut)
     {
         $code = 1460
@@ -201,7 +267,7 @@ function global:Invoke-J365Package([string]$CommandLine)
     }
     else
     {
-        $code = $process.ExitCode
+        $code = $exitCode
         $meaning = 'FAILED'
         switch ($code)
         {
@@ -263,11 +329,11 @@ function global:Save-J365Result([string]$Step, [bool]$Passed)
     catch { Write-Host ('  The result could not be saved to ' + $root + ': ' + $_.Exception.Message) -ForegroundColor Yellow }
 }
 
-function global:Test-Install
+function global:Test-Install([switch]$AsUser)
 {
     Write-Host ''
     Write-Host 'Installing (the same command line configured in Intune)' -ForegroundColor Cyan
-    Invoke-J365Package $global:J365Test.App.installCommandLine
+    Invoke-J365Package $global:J365Test.App.installCommandLine -AsUser:$AsUser
     Write-Host ''
     Write-Host 'Detection after installing (expected: detected)' -ForegroundColor Cyan
     Test-Detection
@@ -284,11 +350,11 @@ function global:Test-Install
     Save-J365Result -Step 'install' -Passed $passed
 }
 
-function global:Test-Uninstall
+function global:Test-Uninstall([switch]$AsUser)
 {
     Write-Host ''
     Write-Host 'Uninstalling (the same command line configured in Intune)' -ForegroundColor Cyan
-    Invoke-J365Package $global:J365Test.App.uninstallCommandLine
+    Invoke-J365Package $global:J365Test.App.uninstallCommandLine -AsUser:$AsUser
     Write-Host ''
     Write-Host 'Detection after uninstalling (expected: not detected)' -ForegroundColor Cyan
     Test-Detection
@@ -330,6 +396,8 @@ try
         ResultsRoot         = $ResultsRoot
         TimeoutMinutes      = $TimeoutMinutes
         KeepSmartAppControl = [bool]$KeepSmartAppControl
+        # Like Intune: SYSTEM for an app installed for the device, the signed-in user for an app installed for the user.
+        AsSystem            = ([string]$app.installExperience -ne 'user') -and -not $AsUser
         Detected            = $false
         ExitCode            = $null
         Seconds             = 0
@@ -367,6 +435,7 @@ try
     Write-Host 'Commands available in this window' -ForegroundColor White
     Write-Host '  Test-Install      installs again (versions already installed are removed first, when the package is set to do so)'
     Write-Host '  Test-Uninstall    runs the uninstall command and checks that the app is no longer detected'
+    if ($global:J365Test.AsSystem) { Write-Host '                    both run the package as SYSTEM, like Intune; add -AsUser to run it as the administrator' }
     Write-Host '  Test-Detection    runs the Intune detection script'
     Write-Host '  Show-Log          opens the last PSAppDeployToolkit log'
     Write-Host ''

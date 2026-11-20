@@ -861,8 +861,9 @@ namespace J365.IntunePSApp.Core
             var result = new RegistrationResult { TenantId = tenant, Admin = admin.Account, Certificate = certificate };
             progress?.Report(new SetupProgress(SetupStep.Permission, admin.Account));
             // Does the tenant have Intune? Without it every publication is refused, whatever the connection: said at once.
-            result.Plan = await IntuneSubscription.TryReadAsync(admin, ct);
-            if (result.Plan != IntunePlanState.Unknown) IntuneSubscription.NoteRead(tenant, result.Plan);
+            var reading = await IntuneSubscription.TryReadAsync(admin, ct);
+            result.Plan = reading.State;
+            if (reading.State != IntunePlanState.Unknown) IntuneSubscription.NoteRead(tenant, reading.State, reading.Plans);
             try { return await CreateRegistrationCoreAsync(g, result, progress, ct); }
             catch (GraphException ex) when (ex.Status is 401 or 403)
             {
@@ -986,11 +987,18 @@ namespace J365.IntunePSApp.Core
                 // A new certificate, added next to every key of the registration. It becomes the connection only once it
                 // obtained a token (ActivateCertificateAsync): until then the connection in use keeps working.
                 progress?.Report(new SetupProgress(SetupStep.Certificate));
-                var created = await Task.Run(() => AppCertificate.Create(label), ct);
+                int months = AppCertificate.Months(ConfigStore.Current.CertificateMonths);
+                var created = await Task.Run(() => AppCertificate.Create(label, months: months), ct);
                 string thumbprint = created.Thumbprint;
                 try
                 {
                     using (created) await UpdateKeysAsync(g, objectId, created, "", ct);
+                }
+                catch (GraphException ex) when (ex.Status == 400 && Regex.IsMatch(ex.Message, "lifetime|polic", RegexOptions.IgnoreCase))
+                {
+                    // An app management policy of the tenant limits how long the credentials of applications may last.
+                    DeleteLocalCertificate(thumbprint);
+                    throw new AuthException(T("Cert_ErrLifetimePolicy", months, ex.Message), "certificate_lifetime");
                 }
                 catch
                 {

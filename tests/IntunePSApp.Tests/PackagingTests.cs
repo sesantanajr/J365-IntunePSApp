@@ -75,6 +75,207 @@ namespace J365.IntunePSApp.Tests
             catch { valid = false; }
             Assert.False(valid);
         }
+
+        [Fact]
+        public void The_native_packager_and_the_check_say_how_far_they_are()
+        {
+            using var tmp = new TempFolder();
+            string src = SampleSource(tmp), output = Path.Combine(tmp.Path, "app.intunewin");
+            var built = new System.Collections.Generic.List<double>();
+            var validated = new System.Collections.Generic.List<double>();
+            IntuneWinBuilder.BuildNative(src, IntuneWinBuilder.SetupFile, output, default, built.Add);
+            Assert.True(IntuneWinBuilder.Validate(output, validated.Add).Valid);
+            foreach (var list in new[] { built, validated })
+            {
+                Assert.NotEmpty(list);
+                Assert.Equal(1, list[^1], 3);
+                Assert.All(list, v => Assert.InRange(v, 0, 1));
+                for (int i = 1; i < list.Count; i++) Assert.True(list[i] >= list[i - 1] - 1e-9, "the progress went back");
+            }
+        }
+
+        [Fact]
+        public void The_build_is_one_bar_that_never_goes_back()
+        {
+            var reports = new System.Collections.Generic.List<BuildProgressInfo>();
+            var bp = new BuildProgress(new SyncProgress<BuildProgressInfo>(reports.Add), new (string, double)[] { ("a", 1), ("b", 3), ("c", 0), ("d", 1) });
+            bp.Begin("a", "Copying the installer...");
+            Assert.Equal(0, reports[^1].Percent, 3);
+            Assert.Equal("Copying the installer", reports[^1].Step);
+            bp.Begin("b", "Creating the .intunewin file...");
+            Assert.Equal(20, reports[^1].Percent, 3);
+            // Within a step, by the bytes it went through (reports come at most every 100 ms).
+            var bytes = bp.Bytes(1000);
+            System.Threading.Thread.Sleep(150);
+            bytes(500);
+            Assert.Equal(50, reports[^1].Percent, 3);
+            // A step left out counts as done; a step started again does not lower the bar.
+            bp.Begin("d", "Checking");
+            Assert.Equal(80, reports[^1].Percent, 3);
+            bp.Begin("b", "Again");
+            Assert.Equal(80, reports[^1].Percent, 3);
+            bp.Complete("Finished");
+            Assert.Equal(100, reports[^1].Percent, 3);
+            Assert.Null(reports[^1].Remaining);
+        }
+
+        [Fact]
+        public void A_copy_with_progress_keeps_the_content_and_the_date()
+        {
+            using var tmp = new TempFolder();
+            string source = Path.Combine(tmp.Path, "setup.exe"), copy = Path.Combine(tmp.Path, "Files", "setup.exe");
+            var data = Enumerable.Range(0, 3 * 1048576 + 17).Select(i => (byte)(i * 7)).ToArray();
+            File.WriteAllBytes(source, data);
+            File.SetLastWriteTimeUtc(source, new DateTime(2024, 5, 6, 7, 8, 9, DateTimeKind.Utc));
+            long seen = 0;
+            BuildProgress.CopyFile(source, copy, n => seen += n, default);
+            Assert.Equal(data, File.ReadAllBytes(copy));
+            Assert.Equal(data.Length, seen);
+            Assert.Equal(File.GetLastWriteTimeUtc(source), File.GetLastWriteTimeUtc(copy));
+            Assert.Equal("45 s", BuildProgress.Duration(TimeSpan.FromSeconds(44.6)));
+            Assert.Equal("3 min 05 s", BuildProgress.Duration(TimeSpan.FromSeconds(185)));
+        }
+
+        [Fact]
+        public void The_texts_of_the_dialogs_are_read_from_the_tables_of_the_toolkit()
+        {
+            using var tmp = new TempFolder();
+            string strings = Path.Combine(tmp.Path, "Strings");
+            Directory.CreateDirectory(Path.Combine(strings, "pt-BR"));
+            Directory.CreateDirectory(Path.Combine(strings, "fr"));
+            // The syntax of the real tables: comments, both quotes, backtick escapes, typographic quotes for quotes.
+            File.WriteAllText(Path.Combine(strings, "strings.psd1"), "@{\n" +
+                "    # Comment with = and 'quotes'\n" +
+                "    CloseAppsPrompt = @{\n" +
+                "        Fluent = @{\n" +
+                "            DialogMessage = @{\n" +
+                "                Install = 'Please save your work before continuing as the following applications will be closed automatically.'\n" +
+                "            }\n" +
+                "            ButtonRightText = 'Defer'\n" +
+                "            CustomMessage = ''\n" +
+                "        }\n" +
+                "        Classic = @{ ButtonClose = \"Close `\"Programs`\"`nnow\"; ButtonDefer = 'It''s &Defer' }\n" +
+                "    }\n" +
+                "}\n# SIG # Begin signature block\n# MIIuaQYJ\n", new UTF8Encoding(false));
+            File.WriteAllText(Path.Combine(strings, "pt-BR", "strings.psd1"), "@{\n" +
+                "    CloseAppsPrompt = @{\n" +
+                "        Fluent = @{\n" +
+                "            DialogMessage = @{ Install = 'Por favor, salve seu trabalho antes de continuar.' }\n" +
+                "            ButtonRightText = ''\n" +
+                "        }\n" +
+                "        Classic = @{ ButtonClose = \"Clique em `“Fechar programas`”.\"; ButtonDefer = '&“Adiar”' }\n" +
+                "    }\n" +
+                "}\n", new UTF8Encoding(false));
+
+            var pt = PsadtStrings.Load(strings, "pt-BR");
+            Assert.Equal("pt-BR", pt.Culture);
+            Assert.Equal("Por favor, salve seu trabalho antes de continuar.", pt.Get("CloseAppsPrompt", "Fluent", "DialogMessage", "Install"));
+            // An empty text of the language keeps the English one, like the toolkit.
+            Assert.Equal("Defer", pt.Get("closeappsprompt", "fluent", "buttonrighttext"));
+            Assert.Equal("Clique em “Fechar programas”.", pt.Get("CloseAppsPrompt", "Classic", "ButtonClose"));
+            Assert.Equal("&“Adiar”", pt.Get("CloseAppsPrompt", "Classic", "ButtonDefer"));
+            Assert.Null(pt.Get("CloseAppsPrompt", "Fluent", "Missing"));
+
+            // pt-PT has no table of its own here, nor "pt": English. A language without a folder: English.
+            var en = PsadtStrings.Load(strings, "de-DE");
+            Assert.Equal("", en.Culture);
+            Assert.Equal("Close \"Programs\"\nnow", en.Get("CloseAppsPrompt", "Classic", "ButtonClose"));
+            Assert.Equal("It's &Defer", en.Get("CloseAppsPrompt", "Classic", "ButtonDefer"));
+            Assert.Null(PsadtStrings.Load(Path.Combine(tmp.Path, "none"), "pt-BR"));
+
+            // A doubled quote is one quote, the second of the pair (like PowerShell); a file cut short is a format error.
+            Assert.Equal("a’b", PsadtStrings.Parse("@{ K = 'a'’b' }")["K"]);
+            Assert.Equal("a'b", PsadtStrings.Parse("@{ K = 'a’'b' }")["K"]);
+            Assert.Throws<FormatException>(() => PsadtStrings.Parse("@{ K ="));
+            Assert.Throws<FormatException>(() => PsadtStrings.Parse("@{ K = 'open"));
+            Assert.Throws<FormatException>(() => PsadtStrings.Parse("@{ "));
+        }
+
+        [Fact]
+        public void The_preview_shows_what_the_toolkit_shows_at_each_moment_of_a_required_installation()
+        {
+            using var tmp = new TempFolder();
+            string strings = Path.Combine(tmp.Path, "Strings");
+            Directory.CreateDirectory(Path.Combine(strings, "pt-BR"));
+            File.WriteAllText(Path.Combine(strings, "strings.psd1"), "@{ CloseAppsPrompt = @{ Fluent = @{ ButtonRightText = 'Defer' } } }", new UTF8Encoding(false));
+            // The texts of PSAppDeployToolkit 4.1.8 in Portuguese.
+            File.WriteAllText(Path.Combine(strings, "pt-BR", "strings.psd1"), "@{\n CloseAppsPrompt = @{\n  Classic = @{\n" +
+                "   CountdownClose = @{ Install = 'OBSERVAÇÃO: O(s) programa(s) será(ão) fechado(s) automaticamente em:' }\n" +
+                "   DeferralsRemaining = 'Adiamentos restantes:'\n   ButtonClose = 'Fechar &Programas'\n   ButtonDefer = '&Adiar'\n   ButtonContinue = '&“Continuar”'\n  }\n" +
+                "  Fluent = @{\n   DialogMessage = @{ Install = 'Por favor, salve seu trabalho antes de continuar, pois os seguintes aplicativos serão fechados automaticamente.' }\n" +
+                "   DialogMessageNoProcesses = @{ Install = 'Selecione Instalar para continuar com a instalação.' }\n" +
+                "   AutomaticStartCountdown = 'Contagem regressiva para início automático'\n   DeferralsRemaining = 'Adiamentos restantes'\n" +
+                "   ButtonLeftText = @{ Install = 'Fechar Aplicativos e Instalar' }\n   ButtonLeftNoProcessesText = @{ Install = 'Instalar' }\n   ButtonRightText = 'Adiar'\n" +
+                "   Subtitle = @{ Install = '{Toolkit\\CompanyName} - Instalação do Aplicativo' }\n  }\n }\n}\n", new UTF8Encoding(false));
+            var table = PsadtStrings.Load(strings, "pt-BR");
+            var adobe = new WelcomePreviewInput
+            {
+                Mode = "Auto", AppName = "Adobe Acrobat Reader", AppVersion = "26.003.22110", Company = "Jornada 365",
+                Processes = new System.Collections.Generic.List<string> { "AcroRd32", "Acrobat", "AcroCEF" },
+                AllowDefer = true, DeferTimes = 3, CountdownSeconds = 300
+            };
+            Assert.Equal(new[] { WelcomeMoment.AppOpen, WelcomeMoment.AppClosed, WelcomeMoment.LastNotice }, WelcomePreview.Moments(adobe));
+
+            // An application of the list open: one row for all its programs, the deferrals left, Close Apps & Install on
+            // the left and Defer on the right; no countdown while the user can defer.
+            var open = WelcomePreview.Build(adobe, WelcomeMoment.AppOpen, table);
+            Assert.True(open.Shown);
+            Assert.Equal("Adobe Acrobat Reader 26.003.22110", open.Title);
+            Assert.Equal("Jornada 365 - Instalação do Aplicativo", open.Subtitle);
+            Assert.StartsWith("Por favor, salve seu trabalho", open.Message);
+            Assert.Equal("Adobe Acrobat Reader", open.AppName);
+            Assert.Equal("acrord32.exe", open.AppExe);
+            Assert.Equal(("Adiamentos restantes", "3"), (open.DeferralsLabel, open.DeferralsValue));
+            Assert.Null(open.CountdownLabel);
+            Assert.Equal(("Fechar Aplicativos e Instalar", "Adiar"), (open.MainButton, open.DeferButton));
+            Assert.Equal(("Fechar Programas", "Adiar", "“Continuar”"), (open.ClassicButtonClose, open.ClassicButtonDefer, open.ClassicButtonContinue));
+            Assert.Equal("Adiamentos restantes: 3", open.ClassicDeferrals);
+
+            // Nothing open: the dialog still appears in the automatic mode, to install now or defer.
+            var closed = WelcomePreview.Build(adobe, WelcomeMoment.AppClosed, table);
+            Assert.True(closed.Shown);
+            Assert.Equal("Selecione Instalar para continuar com a instalação.", closed.Message);
+            Assert.Null(closed.AppName);
+            Assert.Equal(("Instalar", "Adiar"), (closed.MainButton, closed.DeferButton));
+            Assert.Null(closed.ClassicButtonClose);
+
+            // Deferrals used up: no Defer, the countdown of the package, then the programs are closed.
+            var last = WelcomePreview.Build(adobe, WelcomeMoment.LastNotice, table);
+            Assert.Null(last.DeferButton);
+            Assert.Null(last.DeferralsLabel);
+            Assert.Equal(("Contagem regressiva para início automático", "0h 5m 0s"), (last.CountdownLabel, last.CountdownValue));
+            Assert.Equal("0:05:00", last.ClassicCountdownValue);
+            Assert.False(last.ClassicDeferEnabled);
+            Assert.Contains("5 min 00 s", last.Note);
+
+            // The discreet mode stays silent while nothing is open; the silent mode never shows it.
+            Assert.False(WelcomePreview.Build(new WelcomePreviewInput { Mode = "WhenNeeded", Processes = adobe.Processes, AllowDefer = true }, WelcomeMoment.AppClosed, table).Shown);
+            Assert.False(WelcomePreview.Build(new WelcomePreviewInput { Mode = "Silent", Processes = adobe.Processes, AllowDefer = true }, WelcomeMoment.AppOpen, table).Shown);
+
+            // Without deferral: the first notice already counts down, and with nothing open there is no dialog.
+            var noDefer = new WelcomePreviewInput { Mode = "Auto", AppName = "7-Zip", Processes = new System.Collections.Generic.List<string> { "7zFM" }, CountdownSeconds = 60 };
+            Assert.Equal(new[] { WelcomeMoment.AppOpen, WelcomeMoment.AppClosed }, WelcomePreview.Moments(noDefer));
+            var first = WelcomePreview.Build(noDefer, WelcomeMoment.LastNotice, table);
+            Assert.Equal("0h 1m 0s", first.CountdownValue);
+            Assert.Null(first.DeferButton);
+            Assert.False(WelcomePreview.Build(noDefer, WelcomeMoment.AppClosed, table).Shown);
+
+            // No program to close and no deferral: no welcome dialog at all.
+            var nothing = new WelcomePreviewInput { Mode = "Auto", AppName = "Tool" };
+            Assert.Equal(new[] { WelcomeMoment.AppClosed }, WelcomePreview.Moments(nothing));
+            Assert.False(WelcomePreview.Build(nothing, WelcomeMoment.AppOpen, table).Shown);
+
+            // Without the toolkit on this computer, the texts of this application stand in.
+            Assert.Equal(Loc.T("Prev_CloseAndInstall"), WelcomePreview.Build(adobe, WelcomeMoment.AppOpen, null).MainButton);
+        }
+
+        /// <summary>Reports at once, on the calling thread (Progress&lt;T&gt; posts them later).</summary>
+        private sealed class SyncProgress<T> : IProgress<T>
+        {
+            private readonly Action<T> _report;
+            public SyncProgress(Action<T> report) => _report = report;
+            public void Report(T value) => _report(value);
+        }
     }
 
     public class PackageBuilderTests

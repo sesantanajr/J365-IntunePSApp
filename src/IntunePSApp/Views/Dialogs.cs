@@ -626,9 +626,11 @@ namespace J365.IntunePSApp.Views
             var panel = new StackPanel();
             panel.Children.Add(new TextBlock { Text = noPlan ? T("Publish_NoPlanTitle") : T("Publish_RefusedTitle"), FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
             string why = noPlan ? IntuneDiagnosis.Causes(null, IntuneConnection.UsesCertificate)[0] : IntuneConnectUi.RefusalText(_refusal);
+            // What the answer rests on: the plan of Intune found in the tenant and its status.
+            if (noPlan && IntuneSubscription.FoundLine is { Length: > 0 } found) why += Environment.NewLine + found;
             panel.Children.Add(new TextBlock { Text = why, Style = S("MutedText"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) });
             var actions = new WrapPanel { Margin = new Thickness(0, 10, 0, 0) };
-            if (noPlan) actions.Children.Add(MakeButton(T("Settings_IntunePurchase"), "SecondaryButton", (s, e) => MainWindow.OpenUrl(IntuneSubscription.PurchaseUrl), 0));
+            if (noPlan) actions.Children.Add(MakeButton(T(IntuneSubscription.FixLabelKey), "SecondaryButton", (s, e) => MainWindow.OpenUrl(IntuneSubscription.FixUrl), 0));
             actions.Children.Add(MakeButton(noPlan ? T("Settings_IntuneCheckPlanAgain") : T("Settings_IntuneCheckPlan"), "SecondaryButton", async (s, e) => await CheckPlanAsync(), noPlan ? 8 : 0));
             if (actions.Children.Count > 0) panel.Children.Add(actions);
             return new Border { Background = Ui.Brush("WarningSoft"), CornerRadius = new CornerRadius(10), Padding = new Thickness(16, 12, 14, 12), Margin = new Thickness(0, 8, 0, 0), Child = panel };

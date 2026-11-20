@@ -2,6 +2,49 @@
 
 All notable changes to J365 IntunePSApp. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.4.5 - 2026-11-20
+
+### Why this version
+
+A test of the Adobe Acrobat Reader package in a real tenant raised three points. The preview of the welcome dialog did not show what a required installation shows: its sentences were the application's own, it listed every program of the package, and its buttons were in the wrong order. The generation of a package showed no progress, only a bar that moved without saying how far it was. And the publication failed again, now with the subscription checked: the Intune subscription of the tenant had expired or been suspended, and the application did not say which plan it found. This version shows the dialog the toolkit draws, the progress of every step, and the plans of the tenant with how to reactivate them. It also lets the package be validated in Windows Sandbox the way Intune runs it, and lets the validity of the certificate of the connection be chosen (at least six months).
+
+### Added
+
+- **Progress of the generation.** One bar for the whole build, with the step, the percentage, the time spent and an estimate of the time left. It also shows on the status bar and on the button of the application in the taskbar. The copy of the installer, the creation of the .intunewin (by the bytes for the built-in packager, by the files written for IntuneWinAppUtil), the check of the package and its hash say how far they are. When IntuneWinAppUtil fails, the built-in packager carries the bar on from where it stopped. A cancel waits for IntuneWinAppUtil to end before its files are removed.
+- **The preview is the dialog of the toolkit.** Its texts come from the string table of PSAppDeployToolkit, in the language of the dialogs. Its layout is the toolkit's:
+  - the accent sidebar and the card;
+  - one row per application (the toolkit groups the programs of an application), with the program under its name;
+  - *Remaining Deferrals 3*;
+  - the accent button on the left and *Defer* on the right.
+  Three moments of a required installation can be shown: an application of the list open; none open (in the automatic mode the dialog still appears, to install now or defer); and the last notice after the deferrals (no *Defer*, the countdown, then the programs are closed). When the dialog does not appear, the preview says why: the silent mode, the discreet mode with nothing open, or nothing to close and no deferral. The note says what happens in a required installation:
+  - the dialog appears at the bottom right of the screen, over the other windows, for the user signed in;
+  - with nobody signed in, the installation is silent;
+  - no answer within 55 minutes counts as a deferral.
+- **Test in Windows Sandbox like Intune.** The package of an app installed for the device runs as SYSTEM, through a scheduled task as the Intune Management Extension does. PSAppDeployToolkit then shows its dialogs to the signed-in user exactly as in a required installation, deferrals included. The task runs at normal priority, like the Intune Management Extension. A run stopped at the time limit ends with its installer and everything it started. `Test-Install -AsUser` runs it as the administrator of the sandbox, as before.
+- **The plans behind *Check the subscription*.** The result lists the plans of Intune found in the tenant, with their status and date, for example *Microsoft Intune Plan 1: suspended (assigned on 21/10/2026)*. It then says how to fix it: *Billing > Your products* for a subscription that ended (the button becomes *Reactivate in Microsoft 365*), and the *Marketplace* for a tenant without Intune. It also notes that a trial that ended usually cannot start again, and that the users of the devices need an Intune license as well. Settings and the publishing dialog say what was found.
+- **Validity of the certificate.** The connection window offers 6, 12 or 24 months for the certificate of the application, right under its option (12 by default, as before). The choice is remembered and used again to renew it. When a policy of the tenant limits how long the credentials of applications may last, Entra ID's refusal is explained, with a shorter validity to choose, and the certificate made for it does not stay on the computer.
+
+### Changed
+
+- **Publishing (`Publish-ToIntune.ps1`)**, after an independent review against Microsoft Graph and the IntuneWin32App module:
+  - The upload to Azure Storage retries up to 8 times, 5 to 30 s apart (or what Retry-After asks), and renews the upload address when it is old or refused. A renewal that fails counts as a failed attempt.
+  - The block list, which ends the upload, is retried the same way instead of failing the whole publication.
+  - Reads of Microsoft Graph are retried after a dropped network or an HTTP 500/502. A failed sign-in is reported at once instead, and a cancel is honoured while a retry waits.
+  - The *error* state of the content ends the wait at once.
+  - The creation of the app is not sent again after a time-out, which could create a second app. After a time-out or a service error, an app it created anyway is found and removed; a refusal created nothing, so then nothing is looked for.
+  - An update keeps the icon of the app when the package has none.
+  - The assignment waits until Intune reports the app as published.
+  - Delivery optimization is only set in the global cloud.
+  - When Intune keeps the install context of an existing app, the rest is still updated.
+- **Faster checks of large packages.** The check of the .intunewin reads its content once (HMAC, decryption and digest together), and the built-in packager encrypts in one pass.
+
+### Fixed
+
+- **Texts the package never shows.** The preview showed sentences of its own (*"Os seguintes aplicativos precisam ser fechados..."*, *"Você pode adiar a instalação mais 3 vez(es)"*).
+- **Every program of the package was listed.** The preview showed *Adobe Acrobat Reader (AcroRd32)* and four more rows, where the toolkit shows one row.
+- **The buttons were in the wrong order.**
+- **The preview did not follow the language of the dialogs or the countdown.**
+
 ## 2.4.4 - 2026-11-20
 
 ### Why this version
