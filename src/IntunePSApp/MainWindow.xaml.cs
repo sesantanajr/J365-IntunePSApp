@@ -84,8 +84,10 @@ namespace J365.IntunePSApp
         private void UpdateSidebarIntune()
         {
             bool signedIn = IntuneConnection.IsSignedIn, configured = IntuneConnection.IsConfigured;
-            SidebarIntuneText.Text = signedIn ? IntuneConnection.Account : configured ? T("Main_IntuneReady") : T("Main_IntuneNotConnected");
-            SidebarIntuneDot.SetResourceReference(Shape.FillProperty, signedIn ? "Success" : configured ? "Warning" : "SidebarMuted");
+            // A registration deleted in Entra ID, a certificate that cannot be used: Settings explains, the card points there.
+            bool problem = configured && (IntuneConnection.Problem.Length > 0 || (IntuneConnection.UsesCertificate && !signedIn));
+            SidebarIntuneText.Text = problem ? T("Main_IntuneProblem") : signedIn ? IntuneConnection.Account : configured ? T("Main_IntuneReady") : T("Main_IntuneNotConnected");
+            SidebarIntuneDot.SetResourceReference(Shape.FillProperty, problem ? "Danger" : signedIn ? "Success" : configured ? "Warning" : "SidebarMuted");
         }
 
         private void SidebarIntune_Click(object sender, RoutedEventArgs e)
@@ -179,6 +181,8 @@ namespace J365.IntunePSApp
                     UpdateToolsStatus();
                 }
                 await UpdateService.CheckAsync(false, CancellationToken.None);
+                // The registration still there and accepting this computer (deleted in Entra ID shows up at once).
+                await IntuneConnection.CheckAsync(CancellationToken.None);
                 // Logged once for support: a restricted PowerShell explains failures of the local tests and of publishing.
                 string mode = await Task.Run(() => PowerShellPolicy.LanguageMode);
                 if (PowerShellPolicy.IsRestricted) Log.Warn(T("Log_PowerShellRestricted", mode));

@@ -75,15 +75,10 @@
             </StackPanel>
           </DockPanel>
         </RadioButton>
-        <RadioButton x:Name="OptShell" Style="{StaticResource ChoiceCard}" GroupName="connectMethod" Margin="0,0,0,4" Checked="Method_Checked">
-          <DockPanel>
-            <Border Style="{StaticResource IconTile}" Background="{DynamicResource Subtle2}" VerticalAlignment="Top"><TextBlock Text="&#xE756;" Style="{StaticResource Icon}" Foreground="{DynamicResource Ink2}" FontSize="16" HorizontalAlignment="Center"/></Border>
-            <StackPanel Margin="14,0,0,0">
-              <TextBlock Text="{l:T Connect_OptShell}" Style="{StaticResource MethodTitle}"/>
-              <TextBlock Text="{l:T Connect_OptShellText}" Style="{StaticResource MutedText}" Margin="0,3,0,0"/>
-            </StackPanel>
-          </DockPanel>
-        </RadioButton>
+        <!-- A tenant that blocks the automatic setup: the same registration from Azure Cloud Shell -->
+        <Button Style="{StaticResource LinkButton}" HorizontalAlignment="Left" Margin="2,0,0,4" Click="ShellLink_Click">
+          <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE756;" Style="{StaticResource Icon}" FontSize="12" Margin="0,1,7,0"/><TextBlock Text="{l:T Connect_ShellLink}" TextWrapping="Wrap"/></StackPanel>
+        </Button>
 
         <!-- What the automatic setup needs, and what Microsoft will show -->
         <Border x:Name="AutoInfo" Style="{StaticResource Inset}" Margin="0,12,0,0" Padding="18,14">

@@ -45,12 +45,12 @@ namespace J365.IntunePSApp.Views
         private string _consentUrl;
         private string _errorDetails = "";
         private ConnectStepRow _current;
-        /// <summary>The sign-in of the current attempt worked (its session replaced the previous one).</summary>
-        private bool _signedIn;
         /// <summary>Why the last test of Intune failed, to explain it on the result page.</summary>
         private Exception _testFailure;
         /// <summary>A certificate the setup created that is not the connection yet (it becomes it once it obtains a token).</summary>
         private PendingCertificate _pending;
+        /// <summary>A connection with an account is replacing the certificate: only one that reads Intune may take its place.</summary>
+        private bool _replacingCertificate;
 
         /// <summary>True when the window closed with the application connected (signed in).</summary>
         public bool Connected => _succeeded;
@@ -150,7 +150,6 @@ namespace J365.IntunePSApp.Views
             {
                 case Page.Choose:
                     if (OptCode.IsChecked == true) ShowPage(Page.Code);
-                    else if (OptShell.IsChecked == true) ShowPage(Page.Shell);
                     else _ = RunAutoAsync(certificate: OptCert.IsChecked == true);
                     break;
                 case Page.Code: _ = ConnectWithCodeAsync(TxtCode.Text, TxtTenant.Text, TxtClient.Text, CodeError, Flow.Code); break;
@@ -186,6 +185,14 @@ namespace J365.IntunePSApp.Views
         }
 
         private void Pim_Click(object sender, RoutedEventArgs e) => MainWindow.OpenUrl(IntuneConnection.PimUrl);
+        private void ShellLink_Click(object sender, RoutedEventArgs e) => ShowPage(Page.Shell);
+
+        /// <summary>
+        /// One connection at a time: a connection with an account replaces the certificate of this computer once it works,
+        /// so the user agrees first. True when it may go on.
+        /// </summary>
+        private bool ConfirmReplaceCertificate()
+            => !IntuneConnection.UsesCertificate || Ui.Confirm(T("Connect_ReplaceCert"), T("Connect_Continue"), T("Common_Cancel"));
         private void OpenShell_Click(object sender, RoutedEventArgs e) => MainWindow.OpenUrl(IntuneConnection.CloudShellUrl);
 
         private void ShellKind_Checked(object sender, RoutedEventArgs e)
@@ -251,6 +258,8 @@ namespace J365.IntunePSApp.Views
 
         private async Task RunAutoAsync(bool certificate = false)
         {
+            if (!certificate && !ConfirmReplaceCertificate()) return;
+            _replacingCertificate = !certificate && IntuneConnection.UsesCertificate;
             _flow = certificate ? Flow.Cert : Flow.Auto;
             _consentUrl = null;
             _succeeded = false;
@@ -267,6 +276,7 @@ namespace J365.IntunePSApp.Views
             Advance(SetupStep.AdminSignIn);
             _cts = new CancellationTokenSource();
             _running = true;
+            IntuneConnection.RegistrationSnapshot previous = null;
             try
             {
                 var progress = new Progress<SetupProgress>(p =>
@@ -294,11 +304,21 @@ namespace J365.IntunePSApp.Views
                         cert.Detail = T(d.Hardware ? "Connect_CertTpm" : "Connect_CertSoftware", d.NotAfter.ToString("d", J365.IntunePSApp.Localization.Loc.Instance.Culture));
                     await ActivateAppAsync();
                 }
-                else await ActivateAndSignInAsync(newRegistration: !r.Reused, loginHint: r.Admin);
+                else
+                {
+                    // The registration becomes the connection of this computer once the user signed in with it; a cancel
+                    // or a failure leaves the connection in use as it was.
+                    previous = IntuneConnection.BeginTrial(r.TenantId, r.ClientId, r.TenantName);
+                    await ActivateAndSignInAsync(newRegistration: !r.Reused, loginHint: r.Admin);
+                }
             }
             catch (OperationCanceledException) when (_cts.IsCancellationRequested) { DiscardPending(); ShowCancelled(); }
             catch (Exception ex) { ShowFailure(ex); }
-            finally { _running = false; }
+            finally
+            {
+                _running = false;
+                if (previous != null) IntuneConnection.EndTrial(previous, keep: _succeeded);
+            }
         }
 
         /// <summary>Last steps of every way: the new registration becomes usable, the user signs in, Intune answers.</summary>
@@ -322,7 +342,6 @@ namespace J365.IntunePSApp.Views
                     await Task.Delay(TimeSpan.FromSeconds(20), ct);
                 }
             }
-            _signedIn = true;
             Row(SetupStep.UserSignIn).Detail = T("Connect_SignedInAs", IntuneConnection.Account);
             Advance(SetupStep.Test);
             try
@@ -341,6 +360,9 @@ namespace J365.IntunePSApp.Views
                 test.Detail = T("Connect_TestWarn", ex.Message);
                 _testFailure = ex;
             }
+            // The certificate is replaced only by a connection that reads Intune: otherwise it stays in use.
+            if (_replacingCertificate && _testFailure != null)
+                throw new AuthException(T("Connect_CertificateKept", _testFailure.Message), "certificate_kept");
             foreach (var row in _steps) if (row.State is "Pending" or "Working") row.State = "Done";
             ShowSuccess();
         }
@@ -374,7 +396,6 @@ namespace J365.IntunePSApp.Views
                     await Task.Delay(TimeSpan.FromSeconds(15), ct);
                 }
             }
-            _signedIn = true;
             Advance(SetupStep.Test);
             var test = Row(SetupStep.Test);
             const int tries = 6;
@@ -439,6 +460,8 @@ namespace J365.IntunePSApp.Views
                 error.Visibility = Visibility.Visible;
                 return;
             }
+            if (!ConfirmReplaceCertificate()) return;
+            _replacingCertificate = IntuneConnection.UsesCertificate;
             _flow = flow;
             _succeeded = false;
             _testFailure = null;
@@ -446,19 +469,19 @@ namespace J365.IntunePSApp.Views
             _consentUrl = $"{EntraAuth.LoginUrl}/{tenant}/adminconsent?client_id={client}";
             // Tried first and saved only once the sign-in works: a wrong code, a cancel or a failure leaves the connection
             // that was working (registration and session) as it was.
-            var previous = IntuneConnection.BeginTrial(tenant, client);
+            var previous = IntuneConnection.BeginTrial(tenant, client, tenant.Contains('.') ? tenant : "");
             BuildSteps(SetupStep.Activation, SetupStep.UserSignIn, SetupStep.Test);
             ShowPage(Page.Progress);
             _cts = new CancellationTokenSource();
             _running = true;
-            _signedIn = false;
             try { await ActivateAndSignInAsync(newRegistration: flow == Flow.Shell, loginHint: null); }
             catch (OperationCanceledException) when (_cts.IsCancellationRequested) { ShowCancelled(); }
             catch (Exception ex) { ShowFailure(ex); }
             finally
             {
                 _running = false;
-                IntuneConnection.EndTrial(previous, keep: _signedIn);
+                // Kept when the whole connection worked (a cancel during the test puts everything back, the session too).
+                IntuneConnection.EndTrial(previous, keep: _succeeded);
             }
         }
 
@@ -544,7 +567,7 @@ namespace J365.IntunePSApp.Views
         /// <summary>The likely causes of the failure, each with the action that fixes it.</summary>
         private void BuildCauses(string code, SetupStep step)
         {
-            var useShell = ("Connect_UseShell", (Action)(() => { OptShell.IsChecked = true; ShowPage(Page.Shell); }));
+            var useShell = ("Connect_UseShell", (Action)(() => ShowPage(Page.Shell)));
             var otherAccount = ("Connect_OtherAccount", (Action)(() => { TxtAdminHint.Text = ""; _ = RunAutoAsync(_flow == Flow.Cert); }));
             var openPim = ("Connect_OpenPim", (Action)(() => MainWindow.OpenUrl(IntuneConnection.PimUrl)));
             bool adminStep = step <= SetupStep.Certificate;
@@ -624,7 +647,6 @@ namespace J365.IntunePSApp.Views
             switch (page)
             {
                 case "shell":
-                    OptShell.IsChecked = true;
                     ShowPage(Page.Shell);
                     break;
                 case "progress":

@@ -430,8 +430,7 @@ namespace J365.IntunePSApp.Views
     /// </summary>
     public class PublishDialog : DialogWindow
     {
-        private readonly TextBox _tenant, _client, _group, _command;
-        private readonly CheckBox _deviceCode;
+        private readonly TextBox _group, _command;
         private readonly ComboBox _ifExists, _assign;
         private readonly StackPanel _groupPanel, _connection, _advanced, _matches;
         private readonly TextBlock _status, _existsNote;
@@ -494,38 +493,19 @@ namespace J365.IntunePSApp.Views
             _groupPanel.Children.Add(_group);
             root.Children.Add(_groupPanel);
 
-            // Advanced: the registration typed by hand and the script in its own PowerShell window (as in 2.2).
+            // Advanced: the script in its own PowerShell window, or its command to copy (automation), with the connection of
+            // this computer.
             _toggleAdvanced = MakeButton(T("Publish_ShowAdvanced"), "GhostButton", (s, e) => ToggleAdvanced(), 0);
             _toggleAdvanced.HorizontalAlignment = HorizontalAlignment.Left;
             _toggleAdvanced.Margin = new Thickness(-8, 14, 0, 0);
             root.Children.Add(_toggleAdvanced);
             _advanced = new StackPanel { Visibility = Visibility.Collapsed };
-            var ids = new Grid();
-            ids.ColumnDefinitions.Add(new ColumnDefinition());
-            ids.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(16) });
-            ids.ColumnDefinitions.Add(new ColumnDefinition());
-            var left = new StackPanel();
-            left.Children.Add(Label(T("Publish_Tenant")));
-            _tenant = new TextBox { Text = cfg.IntuneTenantId ?? "" };
-            left.Children.Add(_tenant);
-            left.Children.Add(Hint(T("Publish_TenantHint")));
-            var right = new StackPanel();
-            Grid.SetColumn(right, 2);
-            right.Children.Add(Label(T("Publish_Client")));
-            _client = new TextBox { Text = cfg.IntuneClientId ?? "" };
-            right.Children.Add(_client);
-            ids.Children.Add(left);
-            ids.Children.Add(right);
-            _advanced.Children.Add(ids);
-            _advanced.Children.Add(Hint(T("Publish_ClientHint")));
-            _deviceCode = new CheckBox { Style = S("Switch"), Content = T("Publish_DeviceCode"), Margin = new Thickness(0, 16, 0, 0) };
-            _advanced.Children.Add(_deviceCode);
             _advanced.Children.Add(Label(T("Publish_Command")));
             _command = new TextBox { IsReadOnly = true, FontFamily = Ui.Font("MonoFont"), FontSize = 12, TextWrapping = TextWrapping.Wrap, MinHeight = 58, VerticalContentAlignment = VerticalAlignment.Top };
             _advanced.Children.Add(_command);
             var advancedBar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 10, 0, 0) };
             advancedBar.Children.Add(MakeButton(T("Publish_RunWindow"), "SecondaryButton", (s, e) => RunInWindow(), 0));
-            advancedBar.Children.Add(MakeButton(T("Publish_CopyCommand"), "SecondaryButton", (s, e) => { if (Check(false) is PublishOptions o) Ui.CopyText(IntunePublisher.CommandLine(_script, o)); }));
+            advancedBar.Children.Add(MakeButton(T("Publish_CopyCommand"), "SecondaryButton", (s, e) => { if (Check() is PublishOptions o) Ui.CopyText(IntunePublisher.CommandLine(_script, o)); }));
             _advanced.Children.Add(advancedBar);
             root.Children.Add(_advanced);
 
@@ -546,18 +526,12 @@ namespace J365.IntunePSApp.Views
             // Small screens: the form scrolls instead of leaving the buttons out of reach.
             Content = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = root };
 
-            _tenant.TextChanged += (s, e) => UpdateCommand();
-            _client.TextChanged += (s, e) => UpdateCommand();
             _group.TextChanged += (s, e) => UpdateCommand();
-            _deviceCode.Checked += (s, e) => UpdateCommand();
-            _deviceCode.Unchecked += (s, e) => UpdateCommand();
             _ifExists.SelectionChanged += (s, e) => { _existsNote.Visibility = Visibility.Collapsed; _matches.Visibility = Visibility.Collapsed; UpdateCommand(); };
             _assign.SelectionChanged += (s, e) => UpdateCommand();
             Closed += (s, e) => _cts?.Cancel();
             UpdateCommand();
             RenderConnection();
-            // Not connected and nothing configured: the manual fields are where the user expects them.
-            if (!IntuneConnection.IsConfigured && (_tenant.Text.Length > 0 || _client.Text.Length > 0)) ToggleAdvanced();
         }
 
         private static string TagOf(ComboBox combo) => (combo.SelectedItem as ComboBoxItem)?.Tag as string ?? "";
@@ -587,19 +561,19 @@ namespace J365.IntunePSApp.Views
             var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             var icon = new TextBlock { Text = signedIn ? "" : "", Style = S("Icon"), FontSize = 18, Foreground = Ui.Brush(signedIn ? "Success" : "Brand"), Margin = new Thickness(0, 2, 12, 0), VerticalAlignment = VerticalAlignment.Top };
             DockPanel.SetDock(icon, Dock.Left);
-            // The certificate decides tenant and registration: the fields only show them.
-            _tenant.IsReadOnly = _client.IsReadOnly = IntuneConnection.UsesCertificate;
-            if (!signedIn && IntuneConnection.UsesCertificate)
+            if (IntuneConnection.IsConfigured && IntuneConnection.NeedsSetup)
             {
-                // The certificate cannot be used (expired, removed, its key gone): the way out is a new certificate.
-                var broken = AppCertificate.Describe(IntuneConnection.CertificateThumbprint);
-                text.Children.Add(new TextBlock { Text = T("Publish_CertBroken"), FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
+                // The registration is gone or disabled, or the certificate cannot be used: the way out is a new connection.
+                string problem = IntuneConnection.Problem;
+                var broken = problem.Length == 0 ? AppCertificate.Describe(IntuneConnection.CertificateThumbprint) : null;
+                text.Children.Add(new TextBlock { Text = problem.Length > 0 ? T("Settings_IntuneProblemTitle") : T("Publish_CertBroken"), FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
                 text.Children.Add(new TextBlock
                 {
-                    Text = broken != null && broken.Expired ? T("Settings_IntuneCertExpired", broken.NotAfter.ToString("d", J365.IntunePSApp.Localization.Loc.Instance.Culture)) : T("Auth_ErrCertMissing"),
+                    Text = problem.Length > 0 ? problem
+                        : broken != null && broken.Expired ? T("Settings_IntuneCertExpired", broken.NotAfter.ToString("d", J365.IntunePSApp.Localization.Loc.Instance.Culture)) : T("Auth_ErrCertMissing"),
                     Style = S("MutedText"), TextWrapping = TextWrapping.Wrap
                 });
-                buttons.Children.Add(MakeButton(T("Settings_IntuneUseCert"), "PrimaryButton", async (s, e) => await ConnectAsync(true), 0));
+                buttons.Children.Add(MakeButton(T("Settings_IntuneReconnect"), "PrimaryButton", async (s, e) => await ConnectAsync(true), 0));
             }
             else if (signedIn && IntuneConnection.UsesCertificate)
             {
@@ -638,7 +612,7 @@ namespace J365.IntunePSApp.Views
             dock.Children.Add(text);
             box.Child = dock;
             _connection.Children.Add(box);
-            _publish.Content = signedIn ? T("Publish_PublishNow") : T("Publish_SignInAndPublish");
+            _publish.Content = signedIn && !IntuneConnection.NeedsSetup ? T("Publish_PublishNow") : T("Publish_SignInAndPublish");
         }
 
         private void SetBusy(bool busy, string status = null)
@@ -666,9 +640,8 @@ namespace J365.IntunePSApp.Views
                 SetBusy(false);
                 if (IsLoaded)
                 {
-                    _tenant.Text = ConfigStore.Current.IntuneTenantId ?? "";
-                    _client.Text = ConfigStore.Current.IntuneClientId ?? "";
                     RenderConnection();
+                    UpdateCommand();
                 }
             }
         }
@@ -678,9 +651,9 @@ namespace J365.IntunePSApp.Views
             var assign = TagOf(_assign).Split('|');
             return new PublishOptions
             {
-                TenantId = _tenant.Text.Trim(),
-                ClientId = _client.Text.Trim(),
-                DeviceCode = _deviceCode.IsChecked == true,
+                // The connection of this computer: the command copied or run in a window uses it too.
+                TenantId = IntuneConnection.TenantId,
+                ClientId = IntuneConnection.ClientId,
                 IfExists = TagOf(_ifExists),
                 AssignIntent = assign[0],
                 AssignTo = assign.Length > 1 ? assign[1] : "AllUsers",
@@ -700,21 +673,15 @@ namespace J365.IntunePSApp.Views
             _command.Text = IntunePublisher.CommandLine(_script, o);
         }
 
-        /// <summary>The options when they are valid (optionally remembering tenant and client id); otherwise a message and null.</summary>
-        private PublishOptions Check(bool save)
+        /// <summary>The options when they are valid; otherwise a message and null.</summary>
+        private PublishOptions Check()
         {
             var o = Options();
             string problem = IntunePublisher.Check(o);
             if (problem != null)
             {
-                Ui.Warn(problem is "Publish_InvalidTenant" or "Publish_InvalidClient" && !IntuneConnection.IsConfigured ? T("Publish_SetupFirst") : T(problem));
+                Ui.Warn(problem is "Publish_InvalidTenant" or "Publish_InvalidClient" ? T("Publish_SetupFirst") : T(problem));
                 return null;
-            }
-            if (save && (o.TenantId != (ConfigStore.Current.IntuneTenantId ?? "") || o.ClientId != (ConfigStore.Current.IntuneClientId ?? "")))
-            {
-                // Through the connection: another registration ends the session of the previous one (and is a user connection).
-                IntuneConnection.SaveRegistration(o.TenantId, o.ClientId);
-                RenderConnection();
             }
             return o;
         }
@@ -736,14 +703,15 @@ namespace J365.IntunePSApp.Views
         private async Task PublishAsync()
         {
             if (_busy) return;
-            var o = Check(true);
-            if (o == null) return;
-            if (!IntuneConnection.IsSignedIn)
+            if (!IntuneConnection.IsSignedIn || IntuneConnection.NeedsSetup)
             {
-                // A certificate that cannot be used needs a new one; a user connection signs in again.
-                await ConnectAsync(IntuneConnection.UsesCertificate);
-                if (!IntuneConnection.IsSignedIn) return;
+                // Not connected, the registration gone, or a certificate that cannot be used: the connection window. A user
+                // connection without a session signs in again.
+                await ConnectAsync(IntuneConnection.NeedsSetup);
+                if (!IntuneConnection.IsSignedIn || IntuneConnection.NeedsSetup) return;
             }
+            var o = Check();
+            if (o == null) return;
             _cts = new CancellationTokenSource();
             if (o.IfExists == "Ask" && _matches.Visibility == Visibility.Visible)
             {
@@ -807,7 +775,7 @@ namespace J365.IntunePSApp.Views
         /// <summary>The publication in its own PowerShell window (it signs in by itself).</summary>
         private void RunInWindow()
         {
-            var o = Check(true);
+            var o = Check();
             if (o == null) return;
             bool broad = o.AssignIntent == "required" && o.AssignTo != "Group";
             if (broad && !Ui.Confirm(T("Publish_ConfirmBroad"), danger: true)) return;

@@ -40,7 +40,14 @@ You pick an application (from a database of 16,000+ apps, or your own `.msi` / `
 
 Anyone can use it: there is nothing to install, no script to write and no PowerShell knowledge required.
 
-## What is new in 2.4.2
+## What is new in 2.4.3
+
+- **One connection, one way in and one way out.** *Settings > Microsoft Intune* is one card with the state of the connection and only the actions that fit it. **Disconnect** is there whenever something is saved and clears the session, the certificate and the registration saved on this computer, so you can connect again from the beginning. A sign-in waiting for the browser can be cancelled.
+- **A registration deleted in Entra ID is found at once**, at start-up and before a browser opens (Entra ID shows its error there and never comes back to the application): Settings says the connection needs attention, with *Connect again* and *Disconnect*.
+- **Nothing changes until it works:** a new connection takes over only after its sign-in, or the first token of the certificate, succeeded; a cancel or a failure leaves the connection in use as it was.
+- **Less to choose from:** the card to type the registration, the extra certificate buttons and the ID fields of the publishing dialog are gone; the connection window keeps three ways (certificate, my account, an existing registration) and Azure Cloud Shell as a link.
+
+## What came in 2.4.2
 
 - **Connect with an app certificate: modern and without passwords.** *Connect to Intune > Automatic with an app certificate*: the registration *J365 IntunePSApp* gets the application permission `DeviceManagementApps.ReadWrite.All` and a certificate created on this computer, with its key in the TPM and never exportable. Publishing then needs no sign-in, and it no longer depends on the role, the PIM activation or the Intune license of an account. The connection with your own account (delegated) is still there. [How it works](docs/INTUNE-PUBLISH.md#connect-with-an-app-certificate-242-recommended).
 - **Publishing comes first.** The card of a generated package shows *Publish to Microsoft Intune* with the connection it will use and a *Publish now* (or *Connect and publish*) button; *Publish to Intune when done* opens the publication as soon as the package is generated. It is no longer labelled preview.
@@ -191,10 +198,10 @@ Every release is built by GitHub Actions from the tagged commit and carries chec
 
 ```powershell
 # 1. Checksum: compare with SHA256SUMS.txt of the release
-Get-FileHash .\J365-IntunePSApp-2.4.2-win-x64.zip -Algorithm SHA256
+Get-FileHash .\J365-IntunePSApp-2.4.3-win-x64.zip -Algorithm SHA256
 
 # 2. Provenance: proves the file was built by this repository's workflow (GitHub CLI)
-gh attestation verify .\J365-IntunePSApp-2.4.2-win-x64.zip --repo sesantanajr/J365-IntunePSApp
+gh attestation verify .\J365-IntunePSApp-2.4.3-win-x64.zip --repo sesantanajr/J365-IntunePSApp
 ```
 
 What the application itself verifies: the database installers (SHA256 from the winget manifest), the PSAppDeployToolkit module (Authenticode signature), IntuneWinAppUtil (Microsoft signature, otherwise discarded), every `.intunewin` it creates (HMAC and SHA256) and its own updates (SHA256 of the release zip and the version of the new executable). See [SECURITY.md](SECURITY.md).
@@ -236,7 +243,7 @@ Application logs: `IntunePSApp-Data\logs` next to the executable (portable) or `
 
 ## What was tested (and what was not)
 
-- **Automated:** 214 unit tests run on every push (generated scripts are parsed by Windows PowerShell 5.1, `.intunewin` round trip, both languages, project migration, validations, the detection script run against a real registry mark, the replacement of a running executable, the automatic tenant setup and the sign-in against a local Entra ID stand-in).
+- **Automated:** 254 unit tests run on every push (generated scripts are parsed by Windows PowerShell 5.1, `.intunewin` round trip, both languages, project migration, validations, the detection script run against a real registry mark, the replacement of a running executable, the automatic tenant setup and the sign-in against a local Entra ID stand-in).
 - **End to end, by the author:** packages built from the interface and from the command line in both languages; a generated package executed for real with a test installer (install, repair, uninstall, 22 actions including dependency and `.reg` import); first-run setup on an empty folder; per-user install and uninstall; database generation.
 - **In Windows Sandbox (2.1):** the 7-Zip MSI package was installed by the test script in a real sandbox (exit code 0, detected, 31 s; the same installation took about 150 s before the Smart App Control fix), and run as SYSTEM three times in a row: install on a clean Windows, install again over the existing version (the log shows it being listed and uninstalled first) and uninstall (no longer detected). Not exercised: enabling the Windows feature from the application (it needs a computer without it) and the test of an `.exe` installer.
 - **For 2.1.2:** a package built with the new code was run as SYSTEM in Windows Sandbox (install, install over the existing version, uninstall; an action failing on purpose was logged and the deployment still returned 0; user code with a here-string ran). Icon extraction was checked with two real MSI files (one carrying an `.ico`, one an `.exe`). The publishing script was run end to end, in Windows PowerShell 5.1 and PowerShell 7, against a local stand-in for Entra ID, Microsoft Graph and Azure Storage that verified the uploaded content (MAC, IV, digest), the retries, the update of an existing app, the assignment and the removal of an incomplete app.
@@ -244,6 +251,7 @@ Application logs: `IntunePSApp-Data\logs` next to the executable (portable) or `
 - **For 2.3:** a harmless per-user package was run on Windows in both display modes: the PSAppDeployToolkit log shows *"running in [Interactive] mode"* and the progress dialog created in *Automatic*, against *"changing deployment mode to [Silent]"* in *Discreet* (the old behaviour). The automatic setup was run against a local stand-in for Entra ID and Microsoft Graph that checks the registration (single tenant, public client, no secret, the one permission), the enterprise application created after a replication delay, the admin consent, the PKCE sign-in and the encrypted session; publishing inside the application was run against the Graph and Azure Storage stand-in with the session of the application (no browser), and the uploaded content was verified (MAC, IV, digest).
 - **For 2.4:** inside the real PSAppDeployToolkit 4.1.8 (per-user package, nothing elevated): with a newer version registered, the installation kept it, did not run the installer, wrote the mark and returned 0; with an entry that has no silent uninstaller, the uninstallation logged *"No applications found for removal"*, then failed with *"Still installed after the uninstallation"* (exit code 60001) and kept the mark. Publishing was run against the Graph and Azure Storage stand-in: an update of an existing app sent its only change after the content was committed (MAC, IV and digest verified); a failed commit left the app untouched; a cancel during the upload removed the app the run had created and recorded *cancelled*. The PowerShell expansion of typographic quotes was checked in Windows PowerShell 5.1. Every page was rendered in the light and the dark theme, in both languages.
 - **For 2.4.2:** the certificate connection was run against a stand-in for Entra ID and Microsoft Graph that checks every assertion as Entra ID does (key registered on the application, PS256 signature, audience, client, time), from the application and from `Publish-ToIntune.ps1` in Windows PowerShell 5.1; the key was created non-exportable and removed with the certificate. The stand-in also answers like Intune to the old search of earlier versions (HTTP 400) and to a refused account (HTTP 401 "Forbidden").
+- **For 2.4.3:** the case of a registration deleted in Entra ID was reproduced against the stand-in, which answers the device code and token requests with AADSTS700016 as Entra ID does: the check at start-up reports it, the sign-in stops before any browser opens, *Disconnect* clears the connection and the automatic setup connects again.
 - **Not verified yet:** the certificate connection and the Cloud Shell command against a real tenant (publishing with a user sign-in was used against a real tenant in 2.4.1, which found the problems fixed in 2.4.2). The database generator changes were compiled but the database was not regenerated locally. Feedback is welcome in the [issues](https://github.com/sesantanajr/J365-IntunePSApp/issues).
 
 As with any packaging tool: **always test a package with a pilot group before a broad deployment.**
@@ -301,7 +309,14 @@ Você escolhe um aplicativo (em um banco de dados com mais de 16.000 apps, ou o 
 
 Qualquer pessoa consegue usar: não há nada para instalar, nenhum script para escrever e não é preciso conhecer PowerShell.
 
-## Novidades da 2.4.2
+## Novidades da 2.4.3
+
+- **Uma conexão, uma entrada e uma saída.** *Configurações > Microsoft Intune* é um cartão só, com o estado da conexão e apenas as ações que cabem nele. **Desconectar** aparece sempre que há algo guardado e limpa a sessão, o certificado e o registro guardados neste computador, para você conectar de novo do zero. Um login esperando o navegador pode ser cancelado.
+- **Um registro excluído no Entra ID é percebido na hora**, ao abrir e antes de abrir o navegador (o Entra ID mostra o erro lá e nunca volta ao aplicativo): as Configurações dizem que a conexão precisa de atenção, com *Conectar de novo* e *Desconectar*.
+- **Nada muda até funcionar:** uma conexão nova só assume depois que o login, ou o primeiro token do certificado, deu certo; um cancelamento ou uma falha deixam a conexão em uso como estava.
+- **Menos para escolher:** saíram o cartão para digitar o registro, os botões extras do certificado e os campos de IDs da janela de publicação; a janela de conexão mantém três caminhos (certificado, minha conta, um registro que já existe) e o Azure Cloud Shell como link.
+
+## O que veio na 2.4.2
 
 - **Conectar com certificado do aplicativo: moderno e sem senha.** *Conectar ao Intune > Automático com certificado do aplicativo*: o registro *J365 IntunePSApp* recebe a permissão de aplicativo `DeviceManagementApps.ReadWrite.All` e um certificado criado neste computador, com a chave no TPM e nunca exportável. A partir daí a publicação não pede login e deixa de depender da função, da ativação no PIM e da licença do Intune de uma conta. A conexão com a sua própria conta (delegada) continua disponível. [Como funciona](docs/INTUNE-PUBLISH.md#conectar-com-certificado-do-aplicativo-242-recomendado).
 - **A publicação vem primeiro.** O cartão de um pacote gerado mostra *Publicar no Microsoft Intune* com a conexão que será usada e o botão *Publicar agora* (ou *Conectar e publicar*); *Publicar no Intune ao terminar* abre a publicação assim que o pacote é gerado. Deixou de ser prévia.
@@ -452,10 +467,10 @@ Cada versão é compilada pelo GitHub Actions a partir do commit marcado e traz 
 
 ```powershell
 # 1. Checksum: compare com o SHA256SUMS.txt da versão
-Get-FileHash .\J365-IntunePSApp-2.4.2-win-x64.zip -Algorithm SHA256
+Get-FileHash .\J365-IntunePSApp-2.4.3-win-x64.zip -Algorithm SHA256
 
 # 2. Procedência: prova que o arquivo foi compilado pelo workflow deste repositório (GitHub CLI)
-gh attestation verify .\J365-IntunePSApp-2.4.2-win-x64.zip --repo sesantanajr/J365-IntunePSApp
+gh attestation verify .\J365-IntunePSApp-2.4.3-win-x64.zip --repo sesantanajr/J365-IntunePSApp
 ```
 
 O que o próprio aplicativo verifica: os instaladores do banco de dados (SHA256 do manifesto do winget), o módulo do PSAppDeployToolkit (assinatura Authenticode), o IntuneWinAppUtil (assinatura da Microsoft, senão é descartado), cada `.intunewin` criado (HMAC e SHA256) e as próprias atualizações (SHA256 do zip da release e a versão do novo executável). Veja [SECURITY.md](SECURITY.md).
@@ -497,7 +512,7 @@ Logs do aplicativo: `IntunePSApp-Data\logs` ao lado do executável (portátil) o
 
 ## O que foi testado (e o que não foi)
 
-- **Automatizado:** 214 testes unitários rodam a cada push (os scripts gerados são analisados pelo Windows PowerShell 5.1, ida e volta do `.intunewin`, os dois idiomas, migração de projetos, validações, o script de detecção executado contra uma marca real no registro, a substituição de um executável em execução, a configuração automática do tenant e o login contra um substituto local do Entra ID).
+- **Automatizado:** 254 testes unitários rodam a cada push (os scripts gerados são analisados pelo Windows PowerShell 5.1, ida e volta do `.intunewin`, os dois idiomas, migração de projetos, validações, o script de detecção executado contra uma marca real no registro, a substituição de um executável em execução, a configuração automática do tenant e o login contra um substituto local do Entra ID).
 - **De ponta a ponta, pelo autor:** pacotes gerados pela interface e pela linha de comando nos dois idiomas; um pacote gerado executado de verdade com um instalador de teste (instalação, reparo, desinstalação, 22 ações incluindo dependência e importação de `.reg`); preparação da primeira execução em uma pasta vazia; instalação e desinstalação por usuário; geração do banco de dados.
 - **No Windows Sandbox (2.1):** o pacote MSI do 7-Zip foi instalado pelo script de teste em um sandbox real (código de saída 0, detectado, 31 s; a mesma instalação levava cerca de 150 s antes da correção do Smart App Control) e executado como SYSTEM três vezes seguidas: instalação em um Windows limpo, instalação por cima da versão existente (o log mostra ela sendo listada e desinstalada antes) e desinstalação (não é mais detectado). Não exercitado: a ativação do recurso do Windows pelo aplicativo (exige um computador sem ele) e o teste de um instalador `.exe`.
 - **Para a 2.1.2:** um pacote gerado com o código novo foi executado como SYSTEM no Windows Sandbox (instalação, instalação por cima da versão existente, desinstalação; uma ação que falha de propósito foi registrada e a implantação ainda retornou 0; código do usuário com here-string rodou). A extração de ícone foi conferida com dois arquivos MSI reais (um com `.ico`, outro com `.exe`). O script de publicação foi executado de ponta a ponta, no Windows PowerShell 5.1 e no PowerShell 7, contra um substituto local do Entra ID, do Microsoft Graph e do Azure Storage que conferiu o conteúdo enviado (MAC, IV, hash), as repetições, a atualização de um app existente, a atribuição e a remoção de um app incompleto.
@@ -505,6 +520,7 @@ Logs do aplicativo: `IntunePSApp-Data\logs` ao lado do executável (portátil) o
 - **Para a 2.3:** um pacote inofensivo por usuário foi executado no Windows nos dois modos de exibição: o log do PSAppDeployToolkit mostra *"running in [Interactive] mode"* e a janela de progresso criada no *Automático*, contra *"changing deployment mode to [Silent]"* no *Discreto* (o comportamento antigo). A configuração automática foi executada contra um substituto local do Entra ID e do Microsoft Graph que confere o registro (um único tenant, cliente público, sem segredo, a única permissão), o aplicativo empresarial criado após um atraso de replicação, o consentimento do administrador, o login PKCE e a sessão criptografada; a publicação dentro do aplicativo foi executada contra o substituto do Graph e do Azure Storage com a sessão do aplicativo (sem navegador), e o conteúdo enviado foi conferido (MAC, IV, hash).
 - **Para a 2.4:** dentro do PSAppDeployToolkit 4.1.8 real (pacote por usuário, nada elevado): com uma versão mais nova registrada, a instalação a manteve, não executou o instalador, gravou a marca e retornou 0; com uma entrada sem desinstalador silencioso, a desinstalação registrou *"No applications found for removal"*, depois falhou com *"Still installed after the uninstallation"* (código 60001) e manteve a marca. A publicação foi executada contra o substituto do Graph e do Azure Storage: a atualização de um app existente enviou a única alteração depois do conteúdo confirmado (MAC, IV e hash conferidos); uma confirmação com falha deixou o app intacto; um cancelamento durante o envio removeu o app criado pela execução e registrou *cancelled*. A expansão de aspas tipográficas foi conferida no Windows PowerShell 5.1. Todas as telas foram desenhadas nos temas claro e escuro, nos dois idiomas.
 - **Para a 2.4.2:** a conexão com certificado foi executada contra um substituto do Entra ID e do Microsoft Graph que confere cada declaração como o Entra ID faz (chave registrada no aplicativo, assinatura PS256, público, cliente, tempo), a partir do aplicativo e do `Publish-ToIntune.ps1` no Windows PowerShell 5.1; a chave foi criada não exportável e removida junto com o certificado. O substituto também responde como o Intune à busca antiga de versões anteriores (HTTP 400) e a uma conta recusada (HTTP 401 "Forbidden").
+- **Para a 2.4.3:** o caso de um registro excluído no Entra ID foi reproduzido contra o substituto, que responde às solicitações de código de dispositivo e de token com AADSTS700016 como o Entra ID: a verificação ao abrir o aponta, o login para antes de abrir qualquer navegador, *Desconectar* limpa a conexão e a configuração automática conecta de novo.
 - **Ainda não verificado:** a conexão com certificado e o comando do Cloud Shell contra um locatário real (a publicação com login de usuário foi usada contra um locatário real na 2.4.1, o que revelou os problemas corrigidos na 2.4.2). As alterações do gerador do banco de dados foram compiladas, mas o banco não foi regenerado localmente. Relatos são bem-vindos nas [issues](https://github.com/sesantanajr/J365-IntunePSApp/issues).
 
 Como em qualquer ferramenta de empacotamento: **sempre teste o pacote em um grupo piloto antes de uma implantação ampla.**

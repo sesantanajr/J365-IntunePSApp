@@ -122,6 +122,33 @@ namespace J365.IntunePSApp.Core
             }, ct);
         }
 
+        /// <summary>
+        /// Asks Entra ID whether the registration exists before a browser opens: for an unknown or deleted registration the
+        /// sign-in page shows its error and never comes back to the application, which would wait in vain. A device code
+        /// request answers at once (the code is not used). Only "not found", "disabled" and "tenant not found" stop here;
+        /// any other answer, or no answer, lets the sign-in go on.
+        /// </summary>
+        public static async Task CheckClientAsync(string tenant, string clientId, string scopes, CancellationToken ct)
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromSeconds(15));
+            HttpResponseMessage resp;
+            var form = new FormUrlEncodedContent(new Dictionary<string, string> { ["client_id"] = clientId, ["scope"] = scopes });
+            try { resp = await Http.Client.PostAsync($"{LoginUrl}/{Uri.EscapeDataString(tenant)}/oauth2/v2.0/devicecode", form, cts.Token); }
+            catch (Exception ex) when (ex is HttpRequestException || (ex is OperationCanceledException && !ct.IsCancellationRequested)) { return; }
+            using var response = resp;
+            if (resp.IsSuccessStatusCode) return;
+            string error = "", description = "";
+            try
+            {
+                var json = JsonNode.Parse(await resp.Content.ReadAsStringAsync(ct));
+                error = json?["error"]?.GetValue<string>() ?? "";
+                description = json?["error_description"]?.GetValue<string>() ?? "";
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException) { return; }
+            if (description.Contains("AADSTS700016") || description.Contains("AADSTS7000112") || description.Contains("AADSTS90002")) throw Explain(error, description);
+        }
+
         public static Task<TokenSet> RefreshAsync(string tenant, string clientId, string refreshToken, string scopes, CancellationToken ct)
             => TokenAsync(tenant, new Dictionary<string, string>
             {
@@ -276,6 +303,8 @@ namespace J365.IntunePSApp.Core
         public string TenantId { get; set; } = "";
         public string ClientId { get; set; } = "";
         public string Admin { get; set; } = "";
+        /// <summary>The tenant as people read it (the domain of the administrator).</summary>
+        public string TenantName { get; set; } = "";
         public bool Reused { get; set; }
         public bool ConsentGranted { get; set; }
         public string ConsentUrl { get; set; } = "";
@@ -344,37 +373,59 @@ namespace J365.IntunePSApp.Core
 
         private static string SessionFile => Path.Combine(AppPaths.Data, "intune-session.dat");
 
-        public static string TenantId => ConfigStore.Current.IntuneTenantId?.Trim() ?? "";
-        public static string ClientId => ConfigStore.Current.IntuneClientId?.Trim() ?? "";
+        public static string TenantId => _trial != null ? _trial.Tenant : ConfigStore.Current.IntuneTenantId?.Trim() ?? "";
+        public static string ClientId => _trial != null ? _trial.Client : ConfigStore.Current.IntuneClientId?.Trim() ?? "";
         public static bool IsConfigured => IntunePublisher.IsTenant(TenantId) && IntunePublisher.IsGuid(ClientId);
 
         /// <summary>
         /// Connected as the application with the certificate of this computer (app-only): publishing needs no user, so it
         /// does not depend on the role, the PIM activation or the Intune license of an account.
         /// </summary>
-        public static bool UsesCertificate
-        {
-            get
-            {
-                // The certificate belongs to one registration: another registration in Settings is a user connection.
-                var cfg = ConfigStore.Current;
-                return string.Equals(cfg.IntuneAuthMode, CertificateMode, StringComparison.OrdinalIgnoreCase) && CertificateThumbprint.Length > 0
-                    && string.Equals(cfg.IntuneCertificateClientId?.Trim(), ClientId, StringComparison.OrdinalIgnoreCase);
-            }
-        }
+        public static bool UsesCertificate => _trial == null && string.Equals(ConfigStore.Current.IntuneAuthMode, CertificateMode, StringComparison.OrdinalIgnoreCase) && CertificateThumbprint.Length > 0;
 
         public static string CertificateThumbprint => AppCertificate.Normalize(ConfigStore.Current.IntuneCertificateThumbprint);
 
         /// <summary>The tenant as people read it: its domain when the setup knew it, otherwise the tenant in Settings.</summary>
-        public static string TenantLabel => UsesCertificate && ConfigStore.Current.IntuneCertificateTenantName is { Length: > 0 } c ? c
+        public static string TenantLabel => _trial != null ? (_trial.TenantName.Length > 0 ? _trial.TenantName : TenantId)
             : ConfigStore.Current.IntuneTenantName is { Length: > 0 } n ? n : TenantId;
 
         /// <summary>
-        /// A usable certificate of this computer kept while a user connection is in use (after a code, the delegated setup
-        /// or another registration): <see cref="UseStoredCertificate"/> goes back to it without an administrator.
+        /// What the last use of the connection found wrong with the registration itself (deleted or disabled in Entra ID,
+        /// the tenant not found, the certificate no longer registered): Settings and the sidebar say so until the connection
+        /// works again or changes. Empty when nothing is known to be wrong.
         /// </summary>
-        public static bool HasStoredCertificate => !UsesCertificate && !string.IsNullOrWhiteSpace(ConfigStore.Current.IntuneCertificateClientId) && AppCertificate.IsUsable(CertificateThumbprint);
-        public static string StoredCertificateTenant => ConfigStore.Current.IntuneCertificateTenantName is { Length: > 0 } n ? n : ConfigStore.Current.IntuneCertificateTenantId ?? "";
+        public static string Problem => _problem.Length > 0 && _problemKey == ConnectionKey() ? _problem : "";
+
+        private static string _problem = "", _problemKey = "";
+
+        /// <summary>The connection a problem belongs to: a problem of a registration tried and dropped never shows on another.</summary>
+        private static string ConnectionKey() => $"{TenantId}|{ClientId}|{(UsesCertificate ? CertificateThumbprint : "")}".ToUpperInvariant();
+
+        /// <summary>
+        /// The connection cannot publish until it is made again: nothing configured, the registration gone or disabled, or
+        /// a certificate that cannot be used. (A user connection without a session only needs to sign in.)
+        /// </summary>
+        public static bool NeedsSetup => !IsConfigured || Problem.Length > 0 || (UsesCertificate && !IsSignedIn);
+
+        /// <summary>Remembers a failure that only a new connection fixes, so the interface can say so before the next try.</summary>
+        private static void Note(AuthException ex)
+        {
+            if (ex.Code is not ("AADSTS700016" or "AADSTS7000112" or "AADSTS90002" or "AADSTS700027")) return;
+            _problem = ex.Message;
+            _problemKey = ConnectionKey();
+            Changed?.Invoke();
+        }
+
+        private static void ClearProblem()
+        {
+            if (Problem.Length == 0) return;
+            _problem = "";
+            Changed?.Invoke();
+        }
+
+        /// <summary>A failure of the moment (network, proxy, a busy or failing server): the session is kept for the next try.</summary>
+        private static bool IsTransient(string code)
+            => code is "network" or "temporarily_unavailable" or "server_error" || code.StartsWith("HTTP ", StringComparison.Ordinal) || EntraAuth.IsNetworkFailure(code);
         /// <summary>The last token in use (to explain a refusal of Intune), or null.</summary>
         public static TokenSet LastToken { get { lock (Gate) return _current; } }
 
@@ -438,67 +489,65 @@ namespace J365.IntunePSApp.Core
             return IntunePublisher.IsTenant(tenant) && IntunePublisher.IsGuid(client);
         }
 
-        /// <summary>Saves an app registration typed by hand or pasted as a connection code.</summary>
-        public static void SaveRegistration(string tenant, string client)
-        {
-            var cfg = ConfigStore.Current;
-            bool changed = !string.Equals(cfg.IntuneClientId?.Trim(), client?.Trim(), StringComparison.OrdinalIgnoreCase);
-            cfg.IntuneTenantId = tenant?.Trim() ?? "";
-            cfg.IntuneClientId = client?.Trim() ?? "";
-            // A certificate belongs to the registration it was added to: another registration is a user connection (the
-            // certificate stays stored, "Use the certificate of this PC" goes back to it).
-            if (changed) LeaveCertificateMode();
-            ConfigStore.Save();
-            if (changed) SignOut(); else Changed?.Invoke();
-        }
-
-        /// <summary>The connection in use before a trial (<see cref="BeginTrial"/>), to put back.</summary>
+        /// <summary>
+        /// A registration being tried (<see cref="BeginTrial"/>). It lives in memory only: Settings keep the connection in
+        /// use until the trial is kept, so a save in the middle of it (or the application closed) never writes it.
+        /// </summary>
         public sealed class RegistrationSnapshot
         {
-            internal string Tenant = "", Client = "", Mode = "", TenantName = "";
+            internal string Tenant = "", Client = "", TenantName = "";
             /// <summary>The session file as it was (null: none), put back when the trial is not kept, even after a sign-in.</summary>
             internal byte[] Session;
         }
 
+        private static RegistrationSnapshot _trial;
+
         /// <summary>
-        /// Uses another app registration for the next sign-in without saving it or ending the current session (code, IDs,
-        /// Cloud Shell). <see cref="EndTrial"/> saves it once a sign-in with it worked, or puts the previous one back, so a
-        /// wrong code, a cancel or a failure leaves a working connection as it was. Returns the previous registration.
+        /// Uses another app registration for the next sign-in without saving it or ending the current session (the
+        /// automatic setup with an account, a code, IDs, Cloud Shell). <see cref="EndTrial"/> makes it the connection once
+        /// the whole connection worked, or drops it, so a wrong code, a cancel or a failure leaves the connection in use
+        /// as it was. Returns the trial, to end it.
         /// </summary>
-        public static RegistrationSnapshot BeginTrial(string tenant, string client)
+        public static RegistrationSnapshot BeginTrial(string tenant, string client, string tenantName = "")
         {
-            var cfg = ConfigStore.Current;
-            var previous = new RegistrationSnapshot
-            {
-                Tenant = cfg.IntuneTenantId ?? "", Client = cfg.IntuneClientId ?? "", Mode = cfg.IntuneAuthMode ?? "", TenantName = cfg.IntuneTenantName ?? ""
-            };
+            var trial = new RegistrationSnapshot { Tenant = tenant?.Trim() ?? "", Client = client?.Trim() ?? "", TenantName = tenantName?.Trim() ?? "" };
             lock (Gate)
             {
-                try { previous.Session = File.Exists(SessionFile) ? File.ReadAllBytes(SessionFile) : null; }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { previous.Session = null; }
+                try { trial.Session = File.Exists(SessionFile) ? File.ReadAllBytes(SessionFile) : null; }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { trial.Session = null; }
+                _trial = trial;
+                _current = null;
             }
-            cfg.IntuneTenantId = tenant?.Trim() ?? "";
-            cfg.IntuneClientId = client?.Trim() ?? "";
-            // A code or IDs connect a user (delegated); a certificate of this computer is not touched.
-            cfg.IntuneAuthMode = DelegatedMode;
-            cfg.IntuneTenantName = "";
-            return previous;
+            return trial;
         }
 
-        /// <summary>Ends <see cref="BeginTrial"/>: <paramref name="keep"/> (a sign-in with it worked) saves the new registration.</summary>
-        public static void EndTrial(RegistrationSnapshot previous, bool keep)
+        /// <summary>Ends <see cref="BeginTrial"/>: <paramref name="keep"/> makes the registration tried the connection of this computer.</summary>
+        public static void EndTrial(RegistrationSnapshot trial, bool keep)
         {
-            if (previous == null) return;
+            if (trial == null) return;
+            lock (Gate) if (ReferenceEquals(_trial, trial)) _trial = null;
             var cfg = ConfigStore.Current;
-            if (!keep)
+            if (keep)
             {
-                // Everything back as it was, the session included: a sign-in that happened during the trial is undone.
-                cfg.IntuneTenantId = previous.Tenant; cfg.IntuneClientId = previous.Client; cfg.IntuneAuthMode = previous.Mode; cfg.IntuneTenantName = previous.TenantName;
+                // One connection at a time: a certificate of the connection it replaces goes (the user agreed first).
+                if (AppCertificate.Normalize(cfg.IntuneCertificateThumbprint) is { Length: > 0 } old) DeleteLocalCertificate(old);
+                cfg.IntuneCertificateThumbprint = "";
+                cfg.IntuneAuthMode = DelegatedMode;
+                cfg.IntuneTenantId = trial.Tenant;
+                cfg.IntuneClientId = trial.Client;
+                cfg.IntuneTenantName = trial.TenantName;
+                lock (Gate) _usable = default;
+                _problem = "";
+                ConfigStore.Save();
+            }
+            else
+            {
+                // Nothing of the trial stays, the session included: a sign-in that happened during it is undone.
                 lock (Gate)
                 {
                     try
                     {
-                        if (previous.Session != null) File.WriteAllBytes(SessionFile, previous.Session);
+                        if (trial.Session != null) File.WriteAllBytes(SessionFile, trial.Session);
                         else if (File.Exists(SessionFile)) File.Delete(SessionFile);
                     }
                     catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
@@ -507,61 +556,27 @@ namespace J365.IntunePSApp.Core
                     _current = null;
                 }
             }
-            // Kept: the user connection is in use; a certificate of this computer stays stored.
-            ConfigStore.Save();
             Changed?.Invoke();
         }
 
         /// <summary>
-        /// Ends the connection of this computer: the session of the user, or the certificate (removed with its key; its
-        /// public part stays in the app registration until it expires or an administrator removes it).
+        /// Disconnects this computer: the session, the certificate with its key (its public part stays in the registration
+        /// until it expires or an administrator removes it) and the registration saved here. The next connection starts
+        /// from the beginning; the registration in Entra ID is not changed.
         /// </summary>
         public static void Disconnect()
-        {
-            if (UsesCertificate) RemoveCertificate(save: false);
-            ConfigStore.Save();
-            SignOut();
-        }
-
-        /// <summary>
-        /// Removes the certificate of this computer with its key (asked for by the user; its public part stays in the
-        /// registration until it expires or an administrator removes it).
-        /// </summary>
-        public static void RemoveCertificate(bool save = true)
         {
             var cfg = ConfigStore.Current;
             if (AppCertificate.Normalize(cfg.IntuneCertificateThumbprint) is { Length: > 0 } t) DeleteLocalCertificate(t);
             cfg.IntuneCertificateThumbprint = "";
-            cfg.IntuneCertificateClientId = "";
-            cfg.IntuneCertificateTenantId = "";
-            cfg.IntuneCertificateTenantName = "";
-            if (string.Equals(cfg.IntuneAuthMode, CertificateMode, StringComparison.OrdinalIgnoreCase)) cfg.IntuneAuthMode = DelegatedMode;
-            lock (Gate) { _current = null; _usable = default; }
-            if (!save) return;
+            cfg.IntuneAuthMode = DelegatedMode;
+            cfg.IntuneTenantId = "";
+            cfg.IntuneClientId = "";
+            cfg.IntuneTenantName = "";
+            lock (Gate) _usable = default;
             ConfigStore.Save();
-            Changed?.Invoke();
-        }
-
-        /// <summary>A user connection takes over; the certificate stays stored for <see cref="UseStoredCertificate"/>.</summary>
-        private static void LeaveCertificateMode()
-        {
-            ConfigStore.Current.IntuneAuthMode = DelegatedMode;
-            lock (Gate) _current = null;
-        }
-
-        /// <summary>Back to the certificate kept on this computer: its registration and tenant come back with it.</summary>
-        public static void UseStoredCertificate()
-        {
-            var cfg = ConfigStore.Current;
-            if (string.IsNullOrWhiteSpace(cfg.IntuneCertificateClientId) || !AppCertificate.IsUsable(CertificateThumbprint))
-                throw new AuthException(T("Auth_ErrCertMissing"), "certificate_missing");
-            cfg.IntuneTenantId = cfg.IntuneCertificateTenantId ?? "";
-            cfg.IntuneClientId = cfg.IntuneCertificateClientId ?? "";
-            cfg.IntuneTenantName = cfg.IntuneCertificateTenantName ?? "";
-            cfg.IntuneAuthMode = CertificateMode;
-            lock (Gate) { _current = null; _usable = default; }
-            ConfigStore.Save();
-            Changed?.Invoke();
+            _problem = "";
+            SignOut();
         }
 
         /// <summary>
@@ -578,11 +593,11 @@ namespace J365.IntunePSApp.Core
             cfg.IntuneTenantName = pending.TenantName;
             cfg.IntuneAuthMode = CertificateMode;
             cfg.IntuneCertificateThumbprint = pending.Thumbprint;
-            cfg.IntuneCertificateClientId = pending.ClientId;
-            cfg.IntuneCertificateTenantId = pending.TenantId;
-            cfg.IntuneCertificateTenantName = pending.TenantName;
             ConfigStore.Save();
             if (old.Length > 0 && old != AppCertificate.Normalize(pending.Thumbprint)) DeleteLocalCertificate(old);
+            // One connection at a time: a user session of the previous connection goes too.
+            DeleteSession();
+            _problem = "";
             lock (Gate)
             {
                 _current = token;
@@ -653,6 +668,12 @@ namespace J365.IntunePSApp.Core
 
         public static void SignOut()
         {
+            DeleteSession();
+            Changed?.Invoke();
+        }
+
+        private static void DeleteSession()
+        {
             lock (Gate)
             {
                 _saved = null;
@@ -660,7 +681,6 @@ namespace J365.IntunePSApp.Core
                 _loaded = true;
                 try { if (File.Exists(SessionFile)) File.Delete(SessionFile); } catch { }
             }
-            Changed?.Invoke();
         }
 
         /// <summary>Signs in (browser) with the registration in Settings and keeps the session.</summary>
@@ -668,8 +688,17 @@ namespace J365.IntunePSApp.Core
         {
             if (!IsConfigured) throw new AuthException(T("Auth_ErrNotConfigured"));
             if (UsesCertificate) return await AppTokenAsync(ct, force: true);
-            var t = await EntraAuth.SignInAsync(TenantId, ClientId, IntuneScopes, loginHint ?? Load()?.Account, ct);
+            TokenSet t;
+            try
+            {
+                // A deleted or unknown registration is found before the browser opens: its sign-in page would show the
+                // error and never come back to the application.
+                await EntraAuth.CheckClientAsync(TenantId, ClientId, IntuneScopes, ct);
+                t = await EntraAuth.SignInAsync(TenantId, ClientId, IntuneScopes, loginHint ?? Load()?.Account, ct);
+            }
+            catch (AuthException ex) { Note(ex); throw; }
             Save(t, TenantId, ClientId);
+            ClearProblem();
             Log.Ok(T("Log_IntuneSignedIn", t.Account, t.TenantId.Length > 0 ? t.TenantId : TenantId));
             return t;
         }
@@ -688,12 +717,14 @@ namespace J365.IntunePSApp.Core
                 if (string.IsNullOrEmpty(t.Account)) t.Claims["preferred_username"] = saved.Account;
                 if (string.IsNullOrEmpty(t.TenantId)) t.Claims["tid"] = saved.TenantId;
                 Save(t, TenantId, ClientId);
+                ClearProblem();
                 return t;
             }
-            catch (AuthException ex) when (ex.Code != "network")
+            catch (AuthException ex) when (!IsTransient(ex.Code))
             {
-                // Expired, revoked or blocked: the next action signs in again. A network failure keeps the session.
+                // Expired, revoked or blocked: the next action signs in again. A failure of the moment keeps the session.
                 SignOut();
+                Note(ex);
                 throw;
             }
         }
@@ -709,8 +740,11 @@ namespace J365.IntunePSApp.Core
             string key = AppTokenKey(TenantId, ClientId, CertificateThumbprint);
             lock (Gate)
                 if (!force && _current is { App: true } c && _appTokenKey == key && c.ExpiresUtc > DateTime.UtcNow.AddMinutes(5)) return c;
-            var t = await CertificateTokenAsync(TenantId, ClientId, CertificateThumbprint, ct);
+            TokenSet t;
+            try { t = await CertificateTokenAsync(TenantId, ClientId, CertificateThumbprint, ct); }
+            catch (AuthException ex) { Note(ex); throw; }
             lock (Gate) { _current = t; _appTokenKey = key; }
+            ClearProblem();
             return t;
         }
 
@@ -732,11 +766,40 @@ namespace J365.IntunePSApp.Core
         }
 
         /// <summary>
+        /// Checks the connection quietly (at start-up): the registration still exists and accepts this computer, so a
+        /// registration deleted in Entra ID shows up in Settings at once instead of at the next publication. A failure of
+        /// the network, or anything else, is left for the next real use.
+        /// </summary>
+        public static async Task CheckAsync(CancellationToken ct)
+        {
+            // A certificate that 2.4.2 kept beside a user connection: nothing reaches it any more, so it does not stay.
+            var cfg = ConfigStore.Current;
+            if (_trial == null && !string.Equals(cfg.IntuneAuthMode, CertificateMode, StringComparison.OrdinalIgnoreCase)
+                && AppCertificate.Normalize(cfg.IntuneCertificateThumbprint) is { Length: > 0 } leftover)
+            {
+                DeleteLocalCertificate(leftover);
+                cfg.IntuneCertificateThumbprint = "";
+                ConfigStore.Save();
+                Log.Info(T("Log_CertificateLeftover", leftover));
+            }
+            if (!IsConfigured) return;
+            try
+            {
+                if (UsesCertificate) { if (CertificateUsable()) await AppTokenAsync(ct); }
+                else if (IsSignedIn) await RenewAsync(ct);
+                else await EntraAuth.CheckClientAsync(TenantId, ClientId, IntuneScopes, ct);
+            }
+            catch (AuthException ex) { Note(ex); }
+            catch (Exception ex) when (ex is GraphException or HttpRequestException or OperationCanceledException or IOException) { }
+        }
+
+        /// <summary>
         /// Creates (or reuses) the app registration "J365 IntunePSApp" in the tenant of the administrator who signs in:
         /// public client with the loopback redirect, the delegated permission DeviceManagementApps.ReadWrite.All and the
         /// admin consent for the organisation. With <paramref name="certificate"/> the registration also gets the same
         /// permission as an application permission (granted by the administrator) and the public part of a certificate
-        /// created on this computer, so publishing runs as the application. Saves the connection in Settings.
+        /// created on this computer, so publishing runs as the application. Settings do not change here: the new
+        /// connection takes over once it is proven (<see cref="BeginTrial"/> for an account, ActivateCertificateAsync).
         /// </summary>
         public static async Task<RegistrationResult> CreateRegistrationAsync(IProgress<SetupProgress> progress, CancellationToken ct, string adminHint = null, bool certificate = false)
         {
@@ -864,6 +927,7 @@ namespace J365.IntunePSApp.Core
             result.ConsentUrl = $"{EntraAuth.LoginUrl}/{tenant}/adminconsent?client_id={appId}";
 
             string label = result.Admin.Contains('@') ? result.Admin[(result.Admin.IndexOf('@') + 1)..] : tenant;
+            result.TenantName = label;
             if (result.Certificate)
             {
                 // A new certificate, added next to every key of the registration. It becomes the connection only once it
@@ -886,16 +950,8 @@ namespace J365.IntunePSApp.Core
                 return result;
             }
 
-            // The user connection is saved now; a certificate of this computer stays stored ("Use the certificate of this PC").
-            var cfg = ConfigStore.Current;
-            cfg.IntuneTenantId = tenant;
-            cfg.IntuneClientId = appId;
-            cfg.IntuneAuthMode = DelegatedMode;
-            cfg.IntuneTenantName = label;
-            lock (Gate) _current = null;
-            ConfigStore.Save();
+            // The user connection takes over once the user signed in with it (BeginTrial / EndTrial).
             Log.Ok(T("Log_RegistrationReady", RegistrationName, appId, tenant));
-            Changed?.Invoke();
             return result;
         }
 
@@ -971,6 +1027,8 @@ namespace J365.IntunePSApp.Core
             var t = await RenewAsync(ct) ?? throw new AuthException(T("Auth_ErrNotSignedIn"));
             var g = new Graph(t.AccessToken);
             var list = await g.GetAsync("/beta/deviceAppManagement/mobileApps?$top=1&$select=id", ct);
+            // Intune answered: whatever was noted about this connection is past.
+            ClearProblem();
             return T("Auth_TestOk", Account, list?["value"]?.AsArray().Count ?? 0);
         }
 

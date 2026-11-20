@@ -2,6 +2,30 @@
 
 All notable changes to J365 IntunePSApp. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.4.3 - 2026-11-19
+
+### Why this version
+
+After the app registration was deleted in Entra ID, the application could neither sign in nor be disconnected: Entra ID showed its error in the browser and never came back to the application, which waited five minutes with every button disabled, and *Sign out* only appeared with an open session, so the saved registration could not be cleared to start over. The connection also had too many ways to be changed (the connection window, a card to type the registration, a certificate button, the fields of the publishing dialog), each with its own rules. This version makes the connection one thing, with one way in and one way out.
+
+### Changed
+
+- **One connection at a time, changed only when the new one works.** The automatic setup with an account, a connection code and Azure Cloud Shell try the registration and keep it once the sign-in worked; a cancel or a failure leaves the connection in use as it was, the session included. The certificate takes over after its first token. Replacing the certificate with a connection of an account asks first, and the certificate goes only when the new connection can read Intune: if Intune refuses the account (no active role, no license), the certificate stays in use and the window says so. A connection being tried lives in memory only, so a save in the middle of it, or the application closed, never writes it, and a problem found while trying a registration never shows on the connection put back.
+- **Settings > Microsoft Intune is one card with clear states:** not connected (*Connect to Intune*); a registration without a session (*Sign in*); connected with an account (*Test connection*, *Switch account*, *Copy connection code*, *Change connection*) or with the certificate (*Test connection*, *Copy connection code*, *Change connection*, *Renew the certificate* near its end); something wrong with the registration or the certificate (*Connect again*). **Disconnect** is there whenever anything is saved: it deletes the session, the certificate with its key and the registration saved on this computer, so a new connection starts from the beginning (the registration in Entra ID is not changed). While a sign-in waits for the browser, **Cancel**.
+- **Removed as redundant:** the card to type the registration in Settings (the connection window has *Use an existing registration*, with a code or the IDs), the *Connect with a certificate* and *Use the certificate of this PC* buttons (the certificate is the first way of the connection window), and the tenant, application ID and device code fields of the publishing dialog (it uses the connection of this computer; *Copy command* and *Run in a PowerShell window* stay).
+- The connection window shows three ways (with an app certificate, with my account, an existing registration); Azure Cloud Shell is a link under them, for tenants that block the automatic setup.
+
+### Added
+
+- **A deleted registration is found before a browser opens:** a quick question to Entra ID (a device code request that is not used) answers *"application not found"* at once, so the sign-in stops with the explanation instead of waiting on the error page of Entra ID.
+- **A check at start-up:** when the registration was deleted or disabled in Entra ID, or the certificate is no longer registered, Settings says *The connection needs attention* (with *Connect again* and *Disconnect*) and the card on the sidebar says *Check the connection*. A failure of the moment (network, proxy, a busy server) never drops a session. The publishing dialog and the card of a generated package offer *Connect again* in the same cases. A certificate that 2.4.2 kept beside a user connection (*Use the certificate of this PC*) is removed, since nothing reaches it any more.
+
+### Fixed
+
+- After the registration was deleted in Entra ID, there was no way to disconnect or to set the connection up again.
+- A sign-in started in Settings could not be cancelled.
+- A delegated setup whose sign-in was cancelled left a registration saved without a session.
+
 ## 2.4.2 - 2026-11-19
 
 ### Why this version

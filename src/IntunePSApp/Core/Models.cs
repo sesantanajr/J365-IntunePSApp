@@ -187,13 +187,6 @@ namespace J365.IntunePSApp.Core
         public string IntuneCertificateThumbprint { get; set; } = "";
         /// <summary>The tenant as people read it (the domain of the administrator who set the connection up).</summary>
         public string IntuneTenantName { get; set; } = "";
-        /// <summary>
-        /// The registration and tenant the certificate belongs to. The certificate stays stored while a user connection is in
-        /// use, so "Use the certificate of this PC" can go back to it without an administrator.
-        /// </summary>
-        public string IntuneCertificateClientId { get; set; } = "";
-        public string IntuneCertificateTenantId { get; set; } = "";
-        public string IntuneCertificateTenantName { get; set; } = "";
         /// <summary>Opens the publication to Intune as soon as a package is generated.</summary>
         public bool PublishAfterBuild { get; set; }
 

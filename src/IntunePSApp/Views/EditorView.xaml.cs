@@ -1122,9 +1122,9 @@ namespace J365.IntunePSApp.Views
         private void UpdatePublishCallout()
         {
             if (PublishCalloutText == null) return;
-            bool signedIn = IntuneConnection.IsSignedIn;
-            PublishCalloutText.Text = signedIn ? T("Ed_PublishCalloutConnected", IntuneConnection.Account, IntuneConnection.TenantLabel) : T("Ed_PublishCalloutNotConnected");
-            BtnPublishText.Text = signedIn ? T("Ed_PublishNow") : T("Ed_ConnectAndPublish");
+            bool ready = IntuneConnection.IsSignedIn && !IntuneConnection.NeedsSetup;
+            PublishCalloutText.Text = ready ? T("Ed_PublishCalloutConnected", IntuneConnection.Account, IntuneConnection.TenantLabel) : T("Ed_PublishCalloutNotConnected");
+            BtnPublishText.Text = ready ? T("Ed_PublishNow") : T("Ed_ConnectAndPublish");
         }
 
         private void PreviewScript_Click(object sender, RoutedEventArgs e)
@@ -1328,9 +1328,9 @@ namespace J365.IntunePSApp.Views
         private async void Publish_Click(object sender, RoutedEventArgs e)
         {
             if (_last == null || _publishRunning) return;
-            // Nothing set up yet, or a certificate that cannot be used: the connection comes first (the certificate is the
-            // recommended way). A user connection signs in again inside the publishing dialog.
-            if (!IntuneConnection.IsSignedIn && (!IntuneConnection.IsConfigured || IntuneConnection.UsesCertificate) && !ConnectWindow.Run(Window.GetWindow(this))) return;
+            // Nothing set up yet, the registration gone, or a certificate that cannot be used: the connection comes first
+            // (the certificate is the recommended way). A user connection without a session signs in again in the dialog.
+            if (IntuneConnection.NeedsSetup && !ConnectWindow.Run(Window.GetWindow(this))) return;
             string intune = _last.IntuneFolder;
             if (string.IsNullOrEmpty(intune) || !File.Exists(Path.Combine(intune, PackageLayout.MetadataFile))) { MainWindow.Current.Toast(T("Ed_OldPackage"), "warn"); return; }
             string script;

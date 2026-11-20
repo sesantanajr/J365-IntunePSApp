@@ -37,6 +37,8 @@ namespace J365.IntunePSApp.Tests
         /// <summary>The keyCredentials of the application: a key of another tool, then whatever the setup sends.</summary>
         public List<JsonNode> KeyCredentials { get; } = new List<JsonNode>();
         public List<JsonNode> RoleAssignments { get; } = new List<JsonNode>();
+        /// <summary>Registrations deleted in Entra ID: the device code and token endpoints answer AADSTS700016 for them.</summary>
+        public HashSet<string> DeletedClients { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         public int ValidAssertions { get; private set; }
         public string LastAssertionAlg { get; private set; } = "";
         /// <summary>The token given to the application (certificate): a JWT with the application permission.</summary>
@@ -153,9 +155,19 @@ namespace J365.IntunePSApp.Tests
                 ctx.Response.Close();
                 return;
             }
-            if (path.EndsWith("/oauth2/v2.0/token"))
+            if (path.EndsWith("/oauth2/v2.0/devicecode") || path.EndsWith("/oauth2/v2.0/token"))
             {
                 var form = body.Split('&').Select(p => p.Split('=', 2)).ToDictionary(p => WebUtility.UrlDecode(p[0]), p => WebUtility.UrlDecode(p.Length > 1 ? p[1] : ""));
+                if (DeletedClients.Contains(form.GetValueOrDefault("client_id", "")))
+                {
+                    Reply(ctx, 400, new { error = "unauthorized_client", error_description = $"AADSTS700016: Application with identifier '{form["client_id"]}' was not found in the directory 'Contoso'. This can happen if the application has not been installed by the administrator of the tenant." });
+                    return;
+                }
+                if (path.EndsWith("/devicecode"))
+                {
+                    Reply(ctx, 200, new { device_code = "mock-device-code", user_code = "ABCD-EFGH", verification_uri = "https://microsoft.com/devicelogin", expires_in = 900, interval = 5, message = "mock" });
+                    return;
+                }
                 if (form["grant_type"] == "client_credentials")
                 {
                     string error = CheckAssertion(Base + path, form);
@@ -279,6 +291,16 @@ namespace J365.IntunePSApp.Tests
             }
         }
 
+        /// <summary>The automatic setup with an account, as the connection window runs it: the registration, then a sign-in that is kept.</summary>
+        private static async Task<RegistrationResult> ConnectWithAccountAsync()
+        {
+            var r = await IntuneConnection.CreateRegistrationAsync(null, CancellationToken.None);
+            var trial = IntuneConnection.BeginTrial(r.TenantId, r.ClientId, r.TenantName);
+            await IntuneConnection.SignInAsync(CancellationToken.None);
+            IntuneConnection.EndTrial(trial, keep: true);
+            return r;
+        }
+
         [Fact]
         public Task Automatic_setup_creates_the_registration_grants_consent_and_signs_in() => WithMockAsync(async mock =>
         {
@@ -288,8 +310,9 @@ namespace J365.IntunePSApp.Tests
             Assert.Equal("admin@contoso.onmicrosoft.com", r.Admin);
             Assert.True(r.ConsentGranted);
             Assert.False(r.Reused);
-            Assert.Equal(EntraMock.TenantGuid, ConfigStore.Current.IntuneTenantId);
-            Assert.Equal(EntraMock.NewAppId, ConfigStore.Current.IntuneClientId);
+            Assert.Equal("contoso.onmicrosoft.com", r.TenantName);
+            // Nothing in Settings changes until a sign-in with the new registration worked.
+            Assert.NotEqual(EntraMock.NewAppId, ConfigStore.Current.IntuneClientId);
 
             // The admin sign-in used Microsoft Graph Command Line Tools with PKCE, for the two setup permissions only.
             var authorize = mock.Last("GET", "/login/organizations/oauth2/v2.0/authorize");
@@ -316,8 +339,14 @@ namespace J365.IntunePSApp.Tests
             Assert.Equal("AllPrincipals", (string)grant["consentType"]);
             Assert.Equal("DeviceManagementApps.ReadWrite.All", (string)grant["scope"]);
 
-            // Then the user signs in with the new registration; the session is kept encrypted.
+            // Then the user signs in with the new registration (a trial, as the connection window does): kept, it is the
+            // connection of this computer, and the session is kept encrypted.
+            var trial = IntuneConnection.BeginTrial(r.TenantId, r.ClientId, r.TenantName);
             var t = await IntuneConnection.SignInAsync(CancellationToken.None);
+            IntuneConnection.EndTrial(trial, keep: true);
+            Assert.Equal(EntraMock.TenantGuid, ConfigStore.Current.IntuneTenantId);
+            Assert.Equal(EntraMock.NewAppId, ConfigStore.Current.IntuneClientId);
+            Assert.Equal("contoso.onmicrosoft.com", IntuneConnection.TenantLabel);
             Assert.True(IntuneConnection.IsSignedIn);
             Assert.Equal("admin@contoso.onmicrosoft.com", IntuneConnection.Account);
             Assert.Contains("client_id=" + EntraMock.NewAppId, mock.Last("GET", $"/login/{EntraMock.TenantGuid}/oauth2/v2.0/authorize").Path);
@@ -343,7 +372,7 @@ namespace J365.IntunePSApp.Tests
             var r = await IntuneConnection.CreateRegistrationAsync(null, CancellationToken.None);
             Assert.False(r.ConsentGranted);
             Assert.EndsWith($"/{EntraMock.TenantGuid}/adminconsent?client_id={EntraMock.NewAppId}", r.ConsentUrl);
-            Assert.Equal(EntraMock.NewAppId, ConfigStore.Current.IntuneClientId);
+            Assert.Equal(EntraMock.NewAppId, r.ClientId);
         }, m => m.DenyConsent = true);
 
         [Fact]
@@ -361,8 +390,7 @@ namespace J365.IntunePSApp.Tests
         public Task A_registration_that_is_tried_and_fails_leaves_the_working_connection_as_it_was() => WithMockAsync(async mock =>
         {
             // A working connection: the registration of the setup, signed in.
-            await IntuneConnection.CreateRegistrationAsync(null, CancellationToken.None);
-            await IntuneConnection.SignInAsync(CancellationToken.None);
+            await ConnectWithAccountAsync();
             Assert.True(IntuneConnection.IsSignedIn);
             string tenant = ConfigStore.Current.IntuneTenantId, client = ConfigStore.Current.IntuneClientId;
             string file = Path.Combine(AppPaths.Data, "intune-session.dat");
@@ -479,30 +507,34 @@ namespace J365.IntunePSApp.Tests
                 Assert.Equal(thumbprint, IntuneConnection.CertificateThumbprint);
                 Assert.True(IntuneConnection.IsSignedIn);
 
-                // Another registration typed or pasted: a user connection takes over, the certificate stays on this computer
-                // and one click goes back to it, without an administrator.
-                IntuneConnection.SaveRegistration(EntraMock.TenantGuid, "99999999-0000-0000-0000-000000000000");
+                // A connection with an account replaces the certificate only once it works: a trial that is not kept
+                // changes nothing...
+                var trial = IntuneConnection.BeginTrial(EntraMock.TenantGuid, EntraMock.NewAppId, "contoso.onmicrosoft.com");
                 Assert.False(IntuneConnection.UsesCertificate);
-                Assert.True(IntuneConnection.HasStoredCertificate);
-                Assert.True(AppCertificate.Exists(thumbprint));
-                IntuneConnection.UseStoredCertificate();
+                IntuneConnection.EndTrial(trial, keep: false);
                 Assert.True(IntuneConnection.UsesCertificate);
-                Assert.Equal(EntraMock.NewAppId, IntuneConnection.ClientId);
+                Assert.True(AppCertificate.Exists(thumbprint));
+                Assert.True(IntuneConnection.IsSignedIn);
+                // ...a kept one removes the certificate of this computer (one connection at a time).
+                trial = IntuneConnection.BeginTrial(EntraMock.TenantGuid, EntraMock.NewAppId, "contoso.onmicrosoft.com");
+                await IntuneConnection.SignInAsync(CancellationToken.None);
+                IntuneConnection.EndTrial(trial, keep: true);
+                Assert.False(IntuneConnection.UsesCertificate);
+                Assert.Null(AppCertificate.Find(thumbprint));
                 Assert.True(IntuneConnection.IsSignedIn);
 
-                // Removed from this computer with its key, when the user asks: back to the user connection.
+                // Disconnect clears everything saved here; the next connection starts from the beginning.
                 IntuneConnection.Disconnect();
-                Assert.False(IntuneConnection.UsesCertificate);
-                Assert.False(IntuneConnection.HasStoredCertificate);
+                Assert.False(IntuneConnection.IsConfigured);
                 Assert.False(IntuneConnection.IsSignedIn);
-                Assert.Null(AppCertificate.Find(thumbprint));
+                Assert.False(File.Exists(Path.Combine(AppPaths.Data, "intune-session.dat")));
             }
             finally
             {
                 foreach (var t in created) AppCertificate.Delete(t);
                 var cfg = ConfigStore.Current;
                 cfg.IntuneAuthMode = IntuneConnection.DelegatedMode;
-                cfg.IntuneCertificateThumbprint = cfg.IntuneCertificateClientId = cfg.IntuneCertificateTenantId = cfg.IntuneCertificateTenantName = "";
+                cfg.IntuneCertificateThumbprint = "";
                 cfg.IntuneTenantName = "";
                 AppCertificate.UseTpm = true;
             }
@@ -530,10 +562,90 @@ namespace J365.IntunePSApp.Tests
         }, m => m.DenyConsent = true);
 
         [Fact]
+        public Task A_deleted_registration_is_found_before_the_browser_opens_and_Disconnect_starts_over() => WithMockAsync(async mock =>
+        {
+            await ConnectWithAccountAsync();
+            Assert.True(IntuneConnection.IsSignedIn);
+
+            // The registration is deleted in Entra ID, and the session is gone (signed out, or expired).
+            mock.DeletedClients.Add(EntraMock.NewAppId);
+            IntuneConnection.SignOut();
+            Assert.True(IntuneConnection.IsConfigured);
+
+            // The check at start-up finds it, before anything is tried.
+            await IntuneConnection.CheckAsync(CancellationToken.None);
+            Assert.Contains("AADSTS700016", IntuneConnection.Problem);
+
+            // A sign-in stops before a browser opens: Entra ID would show its error there and never come back.
+            int Authorizations() { lock (mock.Calls) return mock.Calls.Count(c => c.Path.Contains($"/{EntraMock.TenantGuid}/oauth2/v2.0/authorize")); }
+            int before = Authorizations();
+            var ex = await Assert.ThrowsAsync<AuthException>(() => IntuneConnection.SignInAsync(CancellationToken.None));
+            Assert.Equal("AADSTS700016", ex.Code);
+            Assert.Equal(before, Authorizations());
+
+            // Disconnect clears the connection; the automatic setup then creates a new registration and connects again.
+            IntuneConnection.Disconnect();
+            Assert.False(IntuneConnection.IsConfigured);
+            Assert.Equal("", IntuneConnection.Problem);
+            mock.DeletedClients.Clear();
+            await ConnectWithAccountAsync();
+            Assert.True(IntuneConnection.IsSignedIn);
+            Assert.Equal("", IntuneConnection.Problem);
+        });
+
+        [Fact]
+        public Task A_failed_trial_leaves_no_problem_on_the_connection_it_puts_back() => WithMockAsync(async mock =>
+        {
+            await ConnectWithAccountAsync();
+            const string deleted = "11111111-2222-3333-4444-555555555555";
+            mock.DeletedClients.Add(deleted);
+
+            // A code of a registration that was deleted: the trial notes the problem of that registration...
+            var trial = IntuneConnection.BeginTrial(EntraMock.TenantGuid, deleted);
+            Assert.Equal(deleted, IntuneConnection.ClientId);
+            // ...and lives in memory only: a save in the middle of it keeps the connection in use in the settings.
+            ConfigStore.Save();
+            Assert.Equal(EntraMock.NewAppId, ConfigStore.Current.IntuneClientId);
+            await Assert.ThrowsAsync<AuthException>(() => IntuneConnection.SignInAsync(CancellationToken.None));
+            Assert.Contains("AADSTS700016", IntuneConnection.Problem);
+
+            // Dropped: the connection in use comes back as it was, without the problem of the registration tried.
+            IntuneConnection.EndTrial(trial, keep: false);
+            Assert.Equal(EntraMock.NewAppId, IntuneConnection.ClientId);
+            Assert.Equal("", IntuneConnection.Problem);
+            Assert.True(IntuneConnection.IsSignedIn);
+            Assert.False(IntuneConnection.NeedsSetup);
+        });
+
+        [Fact]
+        public async Task A_certificate_left_beside_a_user_connection_by_2_4_2_is_removed_at_start_up()
+        {
+            AppCertificate.UseTpm = false;
+            var cert = AppCertificate.Create("contoso.com");
+            var cfg = ConfigStore.Current;
+            string mode = cfg.IntuneAuthMode;
+            try
+            {
+                cfg.IntuneAuthMode = IntuneConnection.DelegatedMode;
+                cfg.IntuneCertificateThumbprint = cert.Thumbprint;
+                await IntuneConnection.CheckAsync(CancellationToken.None);
+                Assert.Null(AppCertificate.Find(cert.Thumbprint));
+                Assert.Equal("", cfg.IntuneCertificateThumbprint);
+            }
+            finally
+            {
+                AppCertificate.Delete(cert.Thumbprint);
+                cert.Dispose();
+                cfg.IntuneAuthMode = mode;
+                cfg.IntuneCertificateThumbprint = "";
+                AppCertificate.UseTpm = true;
+            }
+        }
+
+        [Fact]
         public Task A_refusal_of_Intune_is_cleaned_up_and_explained() => WithMockAsync(async mock =>
         {
-            await IntuneConnection.CreateRegistrationAsync(null, CancellationToken.None);
-            await IntuneConnection.SignInAsync(CancellationToken.None);
+            await ConnectWithAccountAsync();
             mock.IntuneRefuses = true;
             var ex = await Assert.ThrowsAsync<GraphException>(() => IntuneConnection.TestAsync(CancellationToken.None));
             Assert.Equal(401, ex.Status);
