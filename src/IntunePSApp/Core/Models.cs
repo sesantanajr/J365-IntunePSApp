@@ -178,6 +178,24 @@ namespace J365.IntunePSApp.Core
         public string PreferredLocale { get; set; } = System.Globalization.CultureInfo.CurrentUICulture.Name is { Length: > 0 } culture ? culture : "en-US";
         public string IntuneTenantId { get; set; } = "";
         public string IntuneClientId { get; set; } = "";
+        /// <summary>
+        /// How this computer connects to Intune: "delegated" (a user signs in) or "certificate" (the app registration
+        /// itself, app-only, with a certificate of this computer).
+        /// </summary>
+        public string IntuneAuthMode { get; set; } = "delegated";
+        /// <summary>Thumbprint of the certificate of the certificate mode. Its key stays in the TPM or in the Windows key store.</summary>
+        public string IntuneCertificateThumbprint { get; set; } = "";
+        /// <summary>The tenant as people read it (the domain of the administrator who set the connection up).</summary>
+        public string IntuneTenantName { get; set; } = "";
+        /// <summary>
+        /// The registration and tenant the certificate belongs to. The certificate stays stored while a user connection is in
+        /// use, so "Use the certificate of this PC" can go back to it without an administrator.
+        /// </summary>
+        public string IntuneCertificateClientId { get; set; } = "";
+        public string IntuneCertificateTenantId { get; set; } = "";
+        public string IntuneCertificateTenantName { get; set; } = "";
+        /// <summary>Opens the publication to Intune as soon as a package is generated.</summary>
+        public bool PublishAfterBuild { get; set; }
 
         public PackageSettings NewPackage()
         {

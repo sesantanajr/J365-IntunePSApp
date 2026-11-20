@@ -1,14 +1,28 @@
-# Publish to Intune (preview)
+# Publish to Intune
 
-*Português: [abaixo](#publicar-no-intune-prévia).*
+*Português: [abaixo](#publicar-no-intune).*
 
-## Connect to Intune (2.4): three ways, every step explained
+## Connect with an app certificate (2.4.2, recommended)
 
-*Settings > Microsoft Intune > Connect to Intune* (also on the sidebar card and in the publishing dialog) opens a window with three ways in:
+*Connect to Intune > Automatic with an app certificate* (or *Settings > Microsoft Intune > Connect with a certificate*) connects this computer **as the application** instead of a user:
+
+1. An administrator signs in once: **Global Administrator** or **Privileged Role Administrator**, because granting an *application permission* of Microsoft Graph takes one of them. *Microsoft Graph Command Line Tools* asks, besides the two permissions of the setup, for `AppRoleAssignment.ReadWrite.All`, used only to grant the permission below.
+2. The registration **J365 IntunePSApp** gets `DeviceManagementApps.ReadWrite.All` also as an **application permission**, with the admin consent (an app role assignment of Microsoft Graph). The delegated permission stays, so technicians can still connect with their own accounts.
+3. A **certificate** is created on this computer for your Windows user: RSA 2048, valid for one year, its key **in the TPM** when the computer has one (otherwise in the Windows key store) and **never exportable**. Only its public part goes to the registration (*Certificates & secrets*, named `J365 IntunePSApp - <computer>`); keys of other tools are sent back unchanged.
+4. The application asks Microsoft for a token with a short assertion signed by that key (PS256, as Microsoft recommends) and reads one app from Intune to prove it works. A new key and a new permission take a minute or two to reach every server: the window waits and tries again.
+
+From then on publishing needs **no sign-in, no password and no secret**, and it does not depend on the role, the PIM activation or the Intune license of an account. In Intune and Entra ID the actor is the application *J365 IntunePSApp*.
+
+**Good to know.** The application permission lets the registration manage every app of Intune, so keep track of the computers that hold a certificate. *Settings > Microsoft Intune* shows the certificate (thumbprint, expiry, TPM or key store); *Remove the certificate from this PC* deletes it with its key, and an administrator can remove any key in the Entra admin center (*App registrations > J365 IntunePSApp > Certificates & secrets*) or the application permission (*API permissions*). A month before the expiry the application asks to connect again: the new certificate is added next to the one in use, which keeps working until the new one obtained a token and is then removed from this computer (its public part stays listed until it expires). Switching to a user connection (a code, your account, another registration) keeps the certificate on this computer: *Use the certificate of this PC* goes back to it without an administrator. With Microsoft Entra Workload ID, Conditional Access for workload identities can also limit where the registration signs in from. The script works the same way by hand: `.\Publish-ToIntune.ps1 -TenantId <tenant> -ClientId <id> -CertificateThumbprint <thumbprint>`.
+
+## Connect to Intune: four ways, every step explained
+
+*Settings > Microsoft Intune > Connect to Intune* (also on the sidebar card, in the publishing dialog and on the card of a generated package) opens a window with four ways in:
 
 | Way | When | What happens |
 |---|---|---|
-| **Automatic setup** (recommended) | You, or someone next to you, has an administrator role | You sign in as an administrator; the registration **J365 IntunePSApp** is created and approved (details in the next section); then you sign in with your own account and the application reads one app from Intune to prove it works. |
+| **Automatic with an app certificate** (recommended, 2.4.2) | An administrator who can grant application permissions | See the section above: the application connects by itself afterwards, with no sign-in. |
+| **Automatic with my account** (delegated) | You, or someone next to you, has an administrator role | You sign in as an administrator; the registration **J365 IntunePSApp** is created and approved (details below); then you sign in with your own account and the application reads one app from Intune to prove it works. Publishing uses the Intune role of that account. |
 | **Use an existing registration** | An administrator already connected the tenant | Paste the **connection code** the administrator copied (*Settings > Microsoft Intune > Copy connection code*, a line like `J365-CONNECT tenant=... client=...`), or type the tenant and the application ID. Each technician then signs in with their own account. |
 | **Create it with Azure Cloud Shell** | The automatic setup is blocked in your tenant | The window shows a Bash (or PowerShell) command for [shell.azure.com](https://shell.azure.com). It creates the same registration with the **Azure CLI**, which is already authorised in every tenant, so **no consent screen** appears. Its last line is a connection code: paste it back into the window. |
 
@@ -48,9 +62,9 @@ Prefer to create the registration yourself? The manual steps below still work: t
 
 Every generated package includes `Intune\Publish-ToIntune.ps1`. It creates (or updates) the Windows app (Win32) in your tenant from `intune-app.json` and the `.intunewin` file: name, description, command lines, detection script, requirements, icon and content. By default the app is created **without assignments**, so nothing reaches devices until you assign it.
 
-Since version 2.1.2 the script talks to **Microsoft Graph directly**. No PowerShell module is installed and nothing is stored: you sign in with your own account, in the browser.
+Since version 2.1.2 the script talks to **Microsoft Graph directly**. No PowerShell module is installed and nothing is stored: you sign in with your own account, in the browser, or (2.4.2) the application signs in by itself with the certificate of this computer (`-CertificateThumbprint`).
 
-> **Why still "preview".** Every step of the script was run against a local stand-in for Entra ID, Microsoft Graph and Azure Storage that checks what is sent, including the cryptographic integrity of the uploaded content. It has **not** been run against a real tenant by the author yet. The manual steps of `Intune-Instructions.html` remain the reference path. Start with `-ValidateOnly`, publish a small package to a test tenant first, and please report results in the issues.
+> **What was tested.** Publishing has been used against real tenants since 2.4.1: that is how the lookup of earlier versions (fixed in 2.4.2) and the refusals of Intune (now explained) were found. Every step of the script also runs against a local stand-in for Entra ID, Microsoft Graph and Azure Storage that checks what is sent, the cryptographic integrity of the content and, since 2.4.2, the signature of the certificate assertion (also from Windows PowerShell 5.1). The certificate connection itself has not been run against a real tenant by the author yet. Start with `-ValidateOnly`, publish a small package to a test tenant first, and please report results in the issues.
 
 ## What you need
 
@@ -124,21 +138,37 @@ Afterwards: open the link (or the [Intune admin center](https://intune.microsoft
 | `AADSTS700016` / `AADSTS90002` | Wrong application (client) ID or wrong tenant. |
 | `AADSTS53003` | Conditional Access blocked the sign-in. With `-DeviceCode`, use the browser sign-in instead. |
 | "The sign-in was not completed within 5 minutes" | The browser window was closed. Run the script again. |
-| `HTTP 403` from Microsoft Graph | Your account has no Intune role that can manage apps. |
+| `HTTP 401` or `HTTP 403` (`Forbidden`) from Intune | Microsoft Graph accepted the sign-in and **Intune** refused it. With your account: an Intune role must be **active** now (Intune Administrator or Global Administrator; with PIM, activate it), your account needs an Intune license unless *Allow access to unlicensed admins* is on (*Intune admin center > Tenant administration > Roles > Administrator licensing*), and the tenant needs an active Intune subscription. The app certificate depends on none of the roles or licenses of an account. The application lists these causes with the error. |
+| `AADSTS700027` (certificate) | The public part of the certificate of this computer is not in the registration, or it was added a moment ago: wait a minute, or connect with the certificate again. |
+| `AADSTS700024` | The clock of this computer is wrong: correct the date and time of Windows. |
 | "An app named ... already exists" | Use `-IfExists Update` or `-IfExists CreateNew`. Intune shows only one of two apps with the same name in the Company Portal. |
 | "The .intunewin file does not match the SHA256" | The file changed after it was generated: generate the package again. |
 
 ---
 
-# Publicar no Intune (prévia)
+# Publicar no Intune
 
-## Conectar ao Intune (2.4): três caminhos, cada etapa explicada
+## Conectar com certificado do aplicativo (2.4.2, recomendado)
 
-*Configurações > Microsoft Intune > Conectar ao Intune* (também no cartão da barra lateral e na janela de publicação) abre uma janela com três caminhos:
+*Conectar ao Intune > Automático com certificado do aplicativo* (ou *Configurações > Microsoft Intune > Conectar com certificado*) conecta este computador **como o aplicativo**, e não como um usuário:
+
+1. Um administrador entra uma vez: **Administrador Global** ou **Administrador de Funções Privilegiadas**, porque conceder uma *permissão de aplicativo* do Microsoft Graph exige uma delas. O *Microsoft Graph Command Line Tools* pede, além das duas permissões da configuração, `AppRoleAssignment.ReadWrite.All`, usada só para conceder a permissão abaixo.
+2. O registro **J365 IntunePSApp** recebe `DeviceManagementApps.ReadWrite.All` também como **permissão de aplicativo**, com o consentimento do administrador (uma atribuição de função de aplicativo do Microsoft Graph). A permissão delegada continua, então os técnicos ainda podem conectar com a própria conta.
+3. Um **certificado** é criado neste computador para o seu usuário do Windows: RSA 2048, válido por um ano, com a chave **no TPM** quando o computador tem um (senão no armazenamento de chaves do Windows) e **nunca exportável**. Só a parte pública vai para o registro (*Certificados e segredos*, com o nome `J365 IntunePSApp - <computador>`); as chaves de outras ferramentas voltam sem alteração.
+4. O aplicativo pede o token à Microsoft com uma declaração curta assinada por essa chave (PS256, como a Microsoft recomenda) e lê um app do Intune para provar que funciona. Uma chave e uma permissão novas levam um ou dois minutos para chegar a todos os servidores: a janela aguarda e tenta de novo.
+
+A partir daí a publicação **não pede login, senha nem segredo** e não depende da função, da ativação no PIM nem da licença do Intune de uma conta. No Intune e no Entra ID o autor é o aplicativo *J365 IntunePSApp*.
+
+**Bom saber.** A permissão de aplicativo deixa o registro gerenciar todos os apps do Intune, então acompanhe os computadores que têm um certificado. *Configurações > Microsoft Intune* mostra o certificado (impressão digital, validade, TPM ou armazenamento de chaves); *Remover o certificado deste PC* apaga o certificado e a chave, e um administrador pode remover qualquer chave no centro de administração do Entra (*Registros de aplicativo > J365 IntunePSApp > Certificados e segredos*) ou a permissão de aplicativo (*Permissões de API*). Um mês antes de expirar, o aplicativo pede para conectar de novo: o certificado novo é adicionado ao lado do que está em uso, que continua funcionando até o novo obter um token e só então é removido deste computador (a parte pública dele fica listada até expirar). Trocar para uma conexão de usuário (um código, a sua conta, outro registro) mantém o certificado neste computador: *Usar o certificado deste PC* volta a ele sem precisar de administrador. Com o Microsoft Entra Workload ID, o Acesso Condicional para identidades de carga de trabalho também pode limitar de onde o registro entra. O script funciona do mesmo jeito manualmente: `.\Publish-ToIntune.ps1 -TenantId <tenant> -ClientId <id> -CertificateThumbprint <impressão digital>`.
+
+## Conectar ao Intune: quatro caminhos, cada etapa explicada
+
+*Configurações > Microsoft Intune > Conectar ao Intune* (também no cartão da barra lateral, na janela de publicação e no cartão de um pacote gerado) abre uma janela com quatro caminhos:
 
 | Caminho | Quando | O que acontece |
 |---|---|---|
-| **Configuração automática** (recomendado) | Você, ou alguém ao seu lado, tem uma função de administrador | Você entra como administrador; o registro **J365 IntunePSApp** é criado e aprovado (detalhes na próxima seção); depois você entra com a sua própria conta e o aplicativo lê um app do Intune para provar que funciona. |
+| **Automático com certificado do aplicativo** (recomendado, 2.4.2) | Um administrador que pode conceder permissões de aplicativo | Veja a seção acima: depois o aplicativo conecta sozinho, sem login. |
+| **Automático com a minha conta** (delegada) | Você, ou alguém ao seu lado, tem uma função de administrador | Você entra como administrador; o registro **J365 IntunePSApp** é criado e aprovado (detalhes abaixo); depois você entra com a sua própria conta e o aplicativo lê um app do Intune para provar que funciona. A publicação usa a função do Intune dessa conta. |
 | **Usar um registro que já existe** | Um administrador já conectou o tenant | Cole o **código de conexão** que o administrador copiou (*Configurações > Microsoft Intune > Copiar código de conexão*, uma linha como `J365-CONNECT tenant=... client=...`), ou informe o tenant e o ID do aplicativo. Cada técnico então entra com a própria conta. |
 | **Criar pelo Azure Cloud Shell** | A configuração automática é bloqueada no seu tenant | A janela mostra um comando Bash (ou PowerShell) para o [shell.azure.com](https://shell.azure.com). Ele cria o mesmo registro com o **Azure CLI**, que já é autorizado em todo tenant, então **nenhuma tela de permissão** aparece. A última linha é um código de conexão: cole-a de volta na janela. |
 
@@ -178,9 +208,9 @@ Prefere criar o registro você mesmo? Os passos manuais abaixo continuam valendo
 
 Todo pacote gerado inclui o `Intune\Publish-ToIntune.ps1`. Ele cria (ou atualiza) o aplicativo do Windows (Win32) no seu locatário a partir do `intune-app.json` e do arquivo `.intunewin`: nome, descrição, comandos, script de detecção, requisitos, ícone e conteúdo. Por padrão o aplicativo é criado **sem atribuições**, então nada chega aos dispositivos até você atribuir.
 
-Desde a versão 2.1.2 o script fala **direto com o Microsoft Graph**. Nenhum módulo do PowerShell é instalado e nada é guardado: você entra com a sua própria conta, no navegador.
+Desde a versão 2.1.2 o script fala **direto com o Microsoft Graph**. Nenhum módulo do PowerShell é instalado e nada é guardado: você entra com a sua própria conta, no navegador, ou (2.4.2) o aplicativo entra sozinho com o certificado deste computador (`-CertificateThumbprint`).
 
-> **Por que ainda é "prévia".** Todos os passos do script foram executados contra um substituto local do Entra ID, do Microsoft Graph e do Azure Storage que confere o que é enviado, inclusive a integridade criptográfica do conteúdo. O autor **ainda não** executou contra um locatário real. O passo a passo manual do `Intune-Instructions.html` continua sendo o caminho de referência. Comece pelo `-ValidateOnly`, publique primeiro um pacote pequeno em um locatário de teste e conte como foi nas issues.
+> **O que foi testado.** A publicação é usada contra locatários reais desde a 2.4.1: foi assim que apareceram a busca de versões anteriores (corrigida na 2.4.2) e as recusas do Intune (agora explicadas). Todos os passos do script também rodam contra um substituto local do Entra ID, do Microsoft Graph e do Azure Storage que confere o que é enviado, a integridade criptográfica do conteúdo e, desde a 2.4.2, a assinatura da declaração do certificado (também a partir do Windows PowerShell 5.1). A conexão com certificado em si ainda não foi executada pelo autor contra um locatário real. Comece pelo `-ValidateOnly`, publique primeiro um pacote pequeno em um locatário de teste e conte como foi nas issues.
 
 ## O que você precisa
 
@@ -254,6 +284,8 @@ Depois: abra o link (ou o [centro de administração do Intune](https://intune.m
 | `AADSTS700016` / `AADSTS90002` | ID do aplicativo (cliente) errado ou locatário errado. |
 | `AADSTS53003` | O Acesso Condicional bloqueou o login. Com `-DeviceCode`, use o login pelo navegador. |
 | "The sign-in was not completed within 5 minutes" | A janela do navegador foi fechada. Execute o script de novo. |
-| `HTTP 403` do Microsoft Graph | A sua conta não tem uma função do Intune que gerencie aplicativos. |
+| `HTTP 401` ou `HTTP 403` (`Forbidden`) do Intune | O Microsoft Graph aceitou o login e o **Intune** recusou. Com a sua conta: uma função do Intune precisa estar **ativa** agora (Administrador do Intune ou Administrador Global; com PIM, ative-a), a sua conta precisa de licença do Intune a menos que *Permitir acesso a administradores sem licença* esteja ligado (*centro de administração do Intune > Administração de locatários > Funções > Licenciamento de administrador*), e o tenant precisa de uma assinatura ativa do Intune. O certificado do aplicativo não depende de função nem de licença de uma conta. O aplicativo lista essas causas junto com o erro. |
+| `AADSTS700027` (certificado) | A parte pública do certificado deste computador não está no registro, ou foi adicionada agora: aguarde um minuto, ou refaça a conexão com certificado. |
+| `AADSTS700024` | O relógio deste computador está errado: corrija a data e a hora do Windows. |
 | "An app named ... already exists" | Use `-IfExists Update` ou `-IfExists CreateNew`. O Intune mostra só um de dois apps com o mesmo nome no Portal da Empresa. |
 | "The .intunewin file does not match the SHA256" | O arquivo mudou depois de gerado: gere o pacote novamente. |

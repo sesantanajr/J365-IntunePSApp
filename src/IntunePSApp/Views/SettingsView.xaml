@@ -317,12 +317,15 @@
                   </StackPanel>
                   <StackPanel Grid.Column="4">
                     <TextBlock Text="{l:T Settings_IntunePermissionLabel}" Style="{StaticResource Overline}"/>
-                    <TextBlock Text="DeviceManagementApps.ReadWrite.All" FontFamily="{StaticResource MonoFont}" FontSize="12.5" Foreground="{DynamicResource Ink2}" TextTrimming="CharacterEllipsis" Margin="0,4,0,0"/>
+                    <TextBlock x:Name="IntunePermissionValue" Text="DeviceManagementApps.ReadWrite.All" FontFamily="{StaticResource MonoFont}" FontSize="12.5" Foreground="{DynamicResource Ink2}" TextTrimming="CharacterEllipsis" Margin="0,4,0,0"/>
                   </StackPanel>
                 </Grid>
                 <WrapPanel Margin="0,14,0,0">
                   <Button x:Name="BtnIntuneSetup" Style="{StaticResource PrimaryButton}" Margin="0,0,8,8" Click="IntuneSetup_Click">
                     <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE945;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock x:Name="BtnIntuneSetupText" Text="{l:T Settings_IntuneConnect}"/></StackPanel>
+                  </Button>
+                  <Button x:Name="BtnIntuneCert" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8" Click="IntuneCert_Click" ToolTip="{l:T Settings_IntuneUseCertTip}">
+                    <StackPanel Orientation="Horizontal"><TextBlock Text="&#xEB95;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock x:Name="BtnIntuneCertText" Text="{l:T Settings_IntuneUseCert}"/></StackPanel>
                   </Button>
                   <Button x:Name="BtnIntuneSignIn" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8" Click="IntuneSignIn_Click" Content="{l:T Publish_SignIn}"/>
                   <Button x:Name="BtnIntuneTest" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8" Click="IntuneTest_Click" Content="{l:T Settings_IntuneTest}"/>

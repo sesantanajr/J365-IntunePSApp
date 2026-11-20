@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
 using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json.Nodes;
 using System.Threading;
@@ -31,6 +32,18 @@ namespace J365.IntunePSApp.Tests
         public string Base { get; }
         public bool DenyConsent { get; set; }
         public bool ExistingRegistration { get; set; }
+        /// <summary>Intune answers every read with its 401 "Forbidden" (a user without an active Intune role, for example).</summary>
+        public bool IntuneRefuses { get; set; }
+        /// <summary>The keyCredentials of the application: a key of another tool, then whatever the setup sends.</summary>
+        public List<JsonNode> KeyCredentials { get; } = new List<JsonNode>();
+        public List<JsonNode> RoleAssignments { get; } = new List<JsonNode>();
+        public int ValidAssertions { get; private set; }
+        public string LastAssertionAlg { get; private set; } = "";
+        /// <summary>The token given to the application (certificate): a JWT with the application permission.</summary>
+        public string AppToken { get; } = Jwt(new { tid = TenantGuid, idtyp = "app", roles = new[] { "DeviceManagementApps.ReadWrite.All" } });
+
+        /// <summary>The 401 of Intune for a caller it refuses: its own error as JSON inside the message of Graph.</summary>
+        public const string IntuneForbidden = "{\"error\":{\"code\":\"Forbidden\",\"message\":\"{\\r\\n  \\\"_version\\\": 3,\\r\\n  \\\"Message\\\": \\\"An error has occurred - Operation ID (for customer support): 00000000-0000-0000-0000-000000000000 - Activity ID: 184af700-7dff-44d6-ba38-5af761eb24d3 - Url: https://proxy.msua08.manage.microsoft.com/AppLifecycle_2611/StatelessAppMetadataFEService/deviceAppManagement/mobileApps?api-version=5026-08-19\\\"\\r\\n}\"}}";
         public List<(string Method, string Path, string Body)> Calls { get; } = new List<(string, string, string)>();
         public const string NewAppId = "aaaaaaaa-1111-2222-3333-444444444444";
         public const string TenantGuid = "bbbbbbbb-1111-2222-3333-444444444444";
@@ -44,7 +57,56 @@ namespace J365.IntunePSApp.Tests
             Base = $"http://localhost:{port}";
             _listener.Prefixes.Add(Base + "/");
             _listener.Start();
+            // A certificate that another tool added to the registration: the setup must send it back unchanged.
+            using (var rsa = RSA.Create(2048))
+            {
+                using var other = new CertificateRequest("CN=Other tool", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1).CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1));
+                KeyCredentials.Add(new JsonObject
+                {
+                    ["keyId"] = "11111111-0000-0000-0000-000000000000", ["displayName"] = "Other tool", ["type"] = "AsymmetricX509Cert", ["usage"] = "Verify",
+                    ["key"] = Convert.ToBase64String(other.RawData), ["endDateTime"] = DateTimeOffset.UtcNow.AddYears(1).ToString("o")
+                });
+            }
             Task.Run(LoopAsync);
+        }
+
+        private static byte[] FromBase64Url(string s)
+        {
+            s = s.Replace('-', '+').Replace('_', '/');
+            return Convert.FromBase64String(s.PadRight(s.Length + (4 - s.Length % 4) % 4, '='));
+        }
+
+        private static string Base64Url(byte[] data) => Convert.ToBase64String(data).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+        /// <summary>
+        /// Checks a client assertion as Entra ID does: a key registered on the application (x5t#S256), the signature
+        /// (PS256 or RS256), the audience (the token endpoint), issuer and subject (the client) and the time window.
+        /// Null when it is valid, otherwise the AADSTS error.
+        /// </summary>
+        private string CheckAssertion(string audience, Dictionary<string, string> form)
+        {
+            if (form.GetValueOrDefault("client_assertion_type") != "urn:ietf:params:oauth:client-assertion-type:jwt-bearer") return "AADSTS7000216: client_assertion_type missing";
+            var parts = form.GetValueOrDefault("client_assertion", "").Split('.');
+            if (parts.Length != 3) return "AADSTS50027: invalid JWT";
+            var header = JsonNode.Parse(FromBase64Url(parts[0]));
+            var payload = JsonNode.Parse(FromBase64Url(parts[1]));
+            string alg = (string)header["alg"], x5t = (string)header["x5t#S256"];
+            string key;
+            lock (KeyCredentials) key = KeyCredentials.Select(k => (string)k["key"]).FirstOrDefault(k => Base64Url(SHA256.HashData(Convert.FromBase64String(k))) == x5t);
+            if (key == null) return "AADSTS700027: The certificate with identifier used to sign the client assertion is not registered on application.";
+            using var cert = X509CertificateLoader.LoadCertificate(Convert.FromBase64String(key));
+            using var rsa = cert.GetRSAPublicKey();
+            var padding = alg == "PS256" ? RSASignaturePadding.Pss : alg == "RS256" ? RSASignaturePadding.Pkcs1 : null;
+            if (padding == null || !rsa.VerifyData(Encoding.ASCII.GetBytes(parts[0] + "." + parts[1]), FromBase64Url(parts[2]), HashAlgorithmName.SHA256, padding))
+                return "AADSTS700027: Client assertion failed signature validation.";
+            if ((string)payload["aud"] != audience) return "AADSTS700021: wrong audience " + (string)payload["aud"];
+            if ((string)payload["iss"] != form["client_id"] || (string)payload["sub"] != form["client_id"]) return "AADSTS700023: wrong issuer or subject";
+            long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            if ((long)payload["exp"] < now || (long)payload["nbf"] > now + 5 || (long)payload["exp"] - now > 3600) return "AADSTS700024: Client assertion is not within its valid time range.";
+            if (form.GetValueOrDefault("scope") != Base + "/.default") return "AADSTS70011: wrong scope " + form.GetValueOrDefault("scope");
+            ValidAssertions++;
+            LastAssertionAlg = alg;
+            return null;
         }
 
         private static string Jwt(object claims)
@@ -94,6 +156,13 @@ namespace J365.IntunePSApp.Tests
             if (path.EndsWith("/oauth2/v2.0/token"))
             {
                 var form = body.Split('&').Select(p => p.Split('=', 2)).ToDictionary(p => WebUtility.UrlDecode(p[0]), p => WebUtility.UrlDecode(p.Length > 1 ? p[1] : ""));
+                if (form["grant_type"] == "client_credentials")
+                {
+                    string error = CheckAssertion(Base + path, form);
+                    if (error != null) Reply(ctx, 401, new { error = "invalid_client", error_description = error });
+                    else Reply(ctx, 200, new { token_type = "Bearer", access_token = AppToken, expires_in = 3599 });
+                    return;
+                }
                 if (form["grant_type"] == "authorization_code")
                 {
                     string expected = Convert.ToBase64String(SHA256.HashData(Encoding.ASCII.GetBytes(form["code_verifier"]))).TrimEnd('=').Replace('+', '-').Replace('/', '_');
@@ -106,14 +175,36 @@ namespace J365.IntunePSApp.Tests
                 });
                 return;
             }
-            if (req.Headers["Authorization"] != "Bearer mock-access") { Reply(ctx, 401, new { error = new { code = "InvalidAuthenticationToken", message = "no token" } }); return; }
+            string auth = req.Headers["Authorization"];
+            if (auth != "Bearer mock-access" && auth != "Bearer " + AppToken) { Reply(ctx, 401, new { error = new { code = "InvalidAuthenticationToken", message = "no token" } }); return; }
 
             if (path.StartsWith("/v1.0/servicePrincipals(appId="))
-                Reply(ctx, 200, new { id = "graph-sp", oauth2PermissionScopes = new[] { new { id = "scope-user-read", value = "User.Read" }, new { id = "scope-intune-apps", value = "DeviceManagementApps.ReadWrite.All" } } });
+                Reply(ctx, 200, new
+                {
+                    id = "graph-sp",
+                    oauth2PermissionScopes = new[] { new { id = "scope-user-read", value = "User.Read" }, new { id = "scope-intune-apps", value = "DeviceManagementApps.ReadWrite.All" } },
+                    appRoles = new[] { new { id = "role-user-read", value = "User.Read.All" }, new { id = "role-intune-apps", value = "DeviceManagementApps.ReadWrite.All" } }
+                });
+            else if (req.HttpMethod == "GET" && path.StartsWith("/v1.0/applications/"))
+            {
+                lock (KeyCredentials) Reply(ctx, 200, new JsonObject { ["keyCredentials"] = new JsonArray(KeyCredentials.Select(k => k.DeepClone()).ToArray()) });
+            }
+            else if (path.StartsWith("/v1.0/servicePrincipals/") && path.EndsWith("/appRoleAssignments"))
+            {
+                if (req.HttpMethod == "GET") lock (RoleAssignments) Reply(ctx, 200, new JsonObject { ["value"] = new JsonArray(RoleAssignments.Select(a => a.DeepClone()).ToArray()) });
+                else if (DenyConsent) Reply(ctx, 403, new { error = new { code = "Authorization_RequestDenied", message = "Insufficient privileges to complete the operation." } });
+                else { lock (RoleAssignments) RoleAssignments.Add(JsonNode.Parse(body)); Reply(ctx, 201, new { id = "assignment-1" }); }
+            }
             else if (req.HttpMethod == "GET" && path == "/v1.0/applications")
                 Reply(ctx, 200, ExistingRegistration ? (object)new { value = new[] { new { id = "app-obj-0", appId = NewAppId, displayName = "J365 IntunePSApp", tags = new[] { "J365IntunePSApp" } } } } : new { value = Array.Empty<object>() });
             else if (req.HttpMethod == "POST" && path == "/v1.0/applications") Reply(ctx, 201, new { id = "app-obj-1", appId = NewAppId });
-            else if (req.HttpMethod == "PATCH" && path.StartsWith("/v1.0/applications/")) Reply(ctx, 204, null);
+            else if (req.HttpMethod == "PATCH" && path.StartsWith("/v1.0/applications/"))
+            {
+                // keyCredentials is replaced as a whole, as in Microsoft Graph.
+                if (JsonNode.Parse(body)?["keyCredentials"] is JsonArray keys)
+                    lock (KeyCredentials) { KeyCredentials.Clear(); KeyCredentials.AddRange(keys.Select(k => k.DeepClone())); }
+                Reply(ctx, 204, null);
+            }
             else if (req.HttpMethod == "GET" && path == "/v1.0/servicePrincipals") Reply(ctx, 200, new { value = Array.Empty<object>() });
             else if (req.HttpMethod == "POST" && path == "/v1.0/servicePrincipals")
             {
@@ -129,6 +220,13 @@ namespace J365.IntunePSApp.Tests
             }
             else if (req.HttpMethod == "GET" && path == "/beta/deviceAppManagement/mobileApps")
             {
+                if (IntuneRefuses) { Reply(ctx, 401, IntuneForbidden); return; }
+                // As in Intune: a property of Win32 apps cannot be selected on the list of every app.
+                if (query.Contains("$select=") && query.Contains("displayVersion"))
+                {
+                    Reply(ctx, 400, new { error = new { code = "BadRequest", message = "Parsing OData Select and Expand failed: Could not find a property named 'displayVersion' on type 'microsoft.graph.mobileApp'." } });
+                    return;
+                }
                 // The Win32 apps of the tenant: two versions of 7-Zip and another application.
                 Reply(ctx, 200, new { value = new[]
                 {
@@ -269,11 +367,15 @@ namespace J365.IntunePSApp.Tests
             string tenant = ConfigStore.Current.IntuneTenantId, client = ConfigStore.Current.IntuneClientId;
             string file = Path.Combine(AppPaths.Data, "intune-session.dat");
 
-            // Another registration is tried (a pasted code) and its sign-in does not complete.
+            // Another registration is tried (a pasted code); even a sign-in during the trial is undone when it is not kept.
+            byte[] session = File.ReadAllBytes(file);
             var previous = IntuneConnection.BeginTrial("fabrikam.onmicrosoft.com", "11111111-2222-3333-4444-555555555555");
             Assert.Equal("11111111-2222-3333-4444-555555555555", IntuneConnection.ClientId);
             Assert.False(IntuneConnection.IsSignedIn);
+            await IntuneConnection.SignInAsync(CancellationToken.None);
+            Assert.True(IntuneConnection.IsSignedIn);
             IntuneConnection.EndTrial(previous, keep: false);
+            Assert.Equal(session, File.ReadAllBytes(file));
 
             // Everything as it was: registration, session file and account.
             Assert.Equal(tenant, ConfigStore.Current.IntuneTenantId);
@@ -299,6 +401,196 @@ namespace J365.IntunePSApp.Tests
                 Assert.True(EntraAuth.IsNetworkFailure(ex.Code));
             }
             finally { Environment.SetEnvironmentVariable("J365_LOGIN_URL", null); }
+        }
+
+        [Fact]
+        public Task The_certificate_setup_grants_the_application_permission_and_connects_without_a_user() => WithMockAsync(async mock =>
+        {
+            AppCertificate.UseTpm = false;
+            var created = new List<string>();
+            try
+            {
+                var r = await IntuneConnection.CreateRegistrationAsync(null, CancellationToken.None, certificate: true);
+                string thumbprint = r.CertificateThumbprint;
+                created.Add(thumbprint);
+                Assert.True(r.ConsentGranted);
+                Assert.True(r.RoleGranted);
+                Assert.Equal(40, thumbprint.Length);
+                // Created and registered, but not the connection until it obtained a token.
+                Assert.NotNull(r.Pending);
+                Assert.False(IntuneConnection.UsesCertificate);
+
+                // The admin sign-in asked to grant the application permission.
+                Assert.Contains("AppRoleAssignment.ReadWrite.All", mock.Last("GET", "/login/organizations/oauth2/v2.0/authorize").Path);
+                // The registration lists the delegated and the application permission.
+                var access = JsonNode.Parse(mock.Last("POST", "/v1.0/applications").Body)["requiredResourceAccess"][0]["resourceAccess"].AsArray();
+                Assert.Contains(access, a => (string)a["id"] == "scope-intune-apps" && (string)a["type"] == "Scope");
+                Assert.Contains(access, a => (string)a["id"] == "role-intune-apps" && (string)a["type"] == "Role");
+                // The app role of Microsoft Graph went to the enterprise application (admin consent of an application permission).
+                var role = JsonNode.Parse(mock.Last("POST", "/v1.0/servicePrincipals/sp-1/appRoleAssignments").Body);
+                Assert.Equal("role-intune-apps", (string)role["appRoleId"]);
+                Assert.Equal("graph-sp", (string)role["resourceId"]);
+                Assert.Equal("sp-1", (string)role["principalId"]);
+
+                // Only the public part went to Entra ID; the key of another tool was sent back unchanged.
+                var keys = JsonNode.Parse(mock.Last("PATCH", "/v1.0/applications/app-obj-1").Body)["keyCredentials"].AsArray();
+                Assert.Equal(2, keys.Count);
+                Assert.Contains(keys, k => (string)k["displayName"] == "Other tool");
+                using (var cert = AppCertificate.Find(thumbprint))
+                {
+                    Assert.NotNull(cert);
+                    Assert.Contains(keys, k => (string)k["key"] == Convert.ToBase64String(cert.RawData) && (string)k["type"] == "AsymmetricX509Cert" && (string)k["usage"] == "Verify");
+                    // The key cannot leave this computer.
+                    Assert.ThrowsAny<CryptographicException>(() => cert.Export(X509ContentType.Pfx));
+                }
+
+                // The first token (an assertion signed with the key, PS256, checked by the mock) makes it the connection.
+                await IntuneConnection.ActivateCertificateAsync(r.Pending, CancellationToken.None);
+                Assert.True(IntuneConnection.UsesCertificate);
+                Assert.Equal(thumbprint, IntuneConnection.CertificateThumbprint);
+                Assert.Equal("contoso.onmicrosoft.com", IntuneConnection.TenantLabel);
+                Assert.True(IntuneConnection.IsSignedIn);
+                Assert.Contains("contoso.onmicrosoft.com", IntuneConnection.Account);
+                Assert.Contains("contoso.onmicrosoft.com", await IntuneConnection.TestAsync(CancellationToken.None));
+                Assert.Equal(1, mock.ValidAssertions);
+                Assert.Equal("PS256", mock.LastAssertionAlg);
+                Assert.True(IntuneConnection.LastToken.App);
+                var apps = await IntuneConnection.FindRelatedAppsAsync("7-Zip", CancellationToken.None);
+                Assert.Equal(new[] { "app-1", "app-2" }, apps.Select(a => a.Id).ToArray());
+                Assert.Equal(1, mock.ValidAssertions);   // the token is reused while it is valid
+
+                // A renewal: the new certificate is added next to the one in use, which keeps working until the new one
+                // obtained a token; only then is the previous one removed from this computer.
+                var renewal = await IntuneConnection.CreateRegistrationAsync(null, CancellationToken.None, certificate: true);
+                created.Add(renewal.CertificateThumbprint);
+                Assert.Equal(thumbprint, IntuneConnection.CertificateThumbprint);
+                Assert.True(IntuneConnection.IsSignedIn);
+                Assert.Equal(3, mock.KeyCredentials.Count);
+                await IntuneConnection.ActivateCertificateAsync(renewal.Pending, CancellationToken.None);
+                Assert.Null(AppCertificate.Find(thumbprint));
+                thumbprint = renewal.CertificateThumbprint;
+                Assert.Equal(thumbprint, IntuneConnection.CertificateThumbprint);
+
+                // A renewal that is abandoned (cancelled, failed) leaves the connection as it was.
+                var abandoned = await IntuneConnection.CreateRegistrationAsync(null, CancellationToken.None, certificate: true);
+                created.Add(abandoned.CertificateThumbprint);
+                IntuneConnection.DiscardCertificate(abandoned.Pending);
+                Assert.Null(AppCertificate.Find(abandoned.CertificateThumbprint));
+                Assert.Equal(thumbprint, IntuneConnection.CertificateThumbprint);
+                Assert.True(IntuneConnection.IsSignedIn);
+
+                // Another registration typed or pasted: a user connection takes over, the certificate stays on this computer
+                // and one click goes back to it, without an administrator.
+                IntuneConnection.SaveRegistration(EntraMock.TenantGuid, "99999999-0000-0000-0000-000000000000");
+                Assert.False(IntuneConnection.UsesCertificate);
+                Assert.True(IntuneConnection.HasStoredCertificate);
+                Assert.True(AppCertificate.Exists(thumbprint));
+                IntuneConnection.UseStoredCertificate();
+                Assert.True(IntuneConnection.UsesCertificate);
+                Assert.Equal(EntraMock.NewAppId, IntuneConnection.ClientId);
+                Assert.True(IntuneConnection.IsSignedIn);
+
+                // Removed from this computer with its key, when the user asks: back to the user connection.
+                IntuneConnection.Disconnect();
+                Assert.False(IntuneConnection.UsesCertificate);
+                Assert.False(IntuneConnection.HasStoredCertificate);
+                Assert.False(IntuneConnection.IsSignedIn);
+                Assert.Null(AppCertificate.Find(thumbprint));
+            }
+            finally
+            {
+                foreach (var t in created) AppCertificate.Delete(t);
+                var cfg = ConfigStore.Current;
+                cfg.IntuneAuthMode = IntuneConnection.DelegatedMode;
+                cfg.IntuneCertificateThumbprint = cfg.IntuneCertificateClientId = cfg.IntuneCertificateTenantId = cfg.IntuneCertificateTenantName = "";
+                cfg.IntuneTenantName = "";
+                AppCertificate.UseTpm = true;
+            }
+        });
+
+        [Fact]
+        public Task Without_the_right_to_grant_it_the_application_permission_is_reported_with_the_consent_link() => WithMockAsync(async mock =>
+        {
+            AppCertificate.UseTpm = false;
+            RegistrationResult r = null;
+            try
+            {
+                r = await IntuneConnection.CreateRegistrationAsync(null, CancellationToken.None, certificate: true);
+                Assert.False(r.RoleGranted);
+                Assert.EndsWith($"/adminconsent?client_id={EntraMock.NewAppId}", r.ConsentUrl);
+                // The certificate is in place: the consent link is the only thing left to do.
+                Assert.True(AppCertificate.Exists(r.CertificateThumbprint));
+            }
+            finally
+            {
+                if (r?.Pending != null) IntuneConnection.DiscardCertificate(r.Pending);
+                if (r != null) Assert.False(AppCertificate.Exists(r.CertificateThumbprint));
+                AppCertificate.UseTpm = true;
+            }
+        }, m => m.DenyConsent = true);
+
+        [Fact]
+        public Task A_refusal_of_Intune_is_cleaned_up_and_explained() => WithMockAsync(async mock =>
+        {
+            await IntuneConnection.CreateRegistrationAsync(null, CancellationToken.None);
+            await IntuneConnection.SignInAsync(CancellationToken.None);
+            mock.IntuneRefuses = true;
+            var ex = await Assert.ThrowsAsync<GraphException>(() => IntuneConnection.TestAsync(CancellationToken.None));
+            Assert.Equal(401, ex.Status);
+            Assert.Equal("Forbidden", ex.Code);
+            // The ids for support stay; the internal address of Intune does not.
+            Assert.Contains("Activity ID: 184af700-7dff-44d6-ba38-5af761eb24d3", ex.Message);
+            Assert.DoesNotContain("Url:", ex.Message);
+            Assert.True(IntuneDiagnosis.IsRefusal(ex));
+            // A user without an active Intune role: the role (PIM), the license, and the certificate as the way around.
+            var causes = IntuneDiagnosis.Causes(IntuneConnection.LastToken, certificate: false);
+            Assert.Contains(J365.IntunePSApp.Localization.Loc.T("Diag_RoleMissing"), causes);
+            Assert.Contains(J365.IntunePSApp.Localization.Loc.T("Diag_UnlicensedAdmins"), causes);
+            Assert.Equal(J365.IntunePSApp.Localization.Loc.T("Diag_UseCertificate"), causes.Last());
+            // The application: its permission and the tenant, never a role or a license of a user.
+            var app = new TokenSet { App = true, Claims = TokenSet.ReadClaims(mock.AppToken) };
+            Assert.Equal(new[] { J365.IntunePSApp.Localization.Loc.T("Diag_TenantLicense") }, IntuneDiagnosis.Causes(app, certificate: true));
+        });
+
+        [Fact]
+        public async Task The_publishing_script_signs_in_with_the_certificate_in_Windows_PowerShell()
+        {
+            // The functions of Publish-ToIntune.ps1 that sign in, run in Windows PowerShell 5.1 against the mock, which
+            // checks the assertion the script signs (PS256, key of the certificate, audience, client, time).
+            using var mock = new EntraMock();
+            AppCertificate.UseTpm = false;
+            var cert = AppCertificate.Create("contoso.com");
+            try
+            {
+                lock (mock.KeyCredentials) mock.KeyCredentials.Add(new JsonObject { ["displayName"] = "J365 IntunePSApp - TEST", ["key"] = AppCertificate.PublicKeyBase64(cert) });
+                string script = PackageBuilder.CompanionScript(PackageLayout.PublishScript);
+                var functions = new[] { "ConvertTo-Base64Url", "Invoke-Http", "ConvertTo-FormBody", "Get-SignInHelp", "Set-Token", "Invoke-TokenRequest", "Connect-WithCertificate" }
+                    .Select(name => System.Text.RegularExpressions.Regex.Match(script, @"(?ms)^function " + name + @"\b.*?^\}\r?$").Value).ToList();
+                Assert.All(functions, f => Assert.False(string.IsNullOrEmpty(f)));
+                string code = "$ErrorActionPreference = 'Stop'\r\n"
+                    + $"$TenantId = '{EntraMock.TenantGuid}'; $ClientId = '{EntraMock.NewAppId}'; $CertificateThumbprint = '{cert.Thumbprint}'\r\n"
+                    + $"$LoginUrl = '{mock.Base}/login'; $GraphUrl = '{mock.Base}'; $script:Token = $null\r\n"
+                    + string.Join("\r\n", functions)
+                    // An error is printed too, so a failure shows its reason.
+                    + "\r\ntry { Connect-WithCertificate; 'TOKEN=' + $script:Token.AccessToken } catch { 'ERROR: ' + $_.Exception.Message }\r\n";
+                string file = Path.Combine(Path.GetTempPath(), "j365-cert-" + Guid.NewGuid().ToString("N") + ".ps1");
+                File.WriteAllText(file, code, new UTF8Encoding(true));
+                try
+                {
+                    var run = await Task.Run(() => ToolsService.RunPowerShell(ToolsService.PowerShellStartInfo($"-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"{file}\""), 60000));
+                    Assert.False(run.TimedOut);
+                    Assert.Contains("TOKEN=" + mock.AppToken, run.Output);
+                    Assert.Equal(1, mock.ValidAssertions);
+                    Assert.Equal("PS256", mock.LastAssertionAlg);
+                }
+                finally { File.Delete(file); }
+            }
+            finally
+            {
+                AppCertificate.Delete(cert.Thumbprint);
+                cert.Dispose();
+                AppCertificate.UseTpm = true;
+            }
         }
 
         [Fact]

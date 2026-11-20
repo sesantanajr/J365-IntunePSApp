@@ -1,21 +1,20 @@
-## J365 IntunePSApp 2.4.1
+## J365 IntunePSApp 2.4.2
 
 Package any Windows application for Microsoft Intune in minutes, with no scripting. Built on [PSAppDeployToolkit](https://psappdeploytoolkit.com). Created by [Sérgio Sant'Ana Junior](https://www.linkedin.com/in/sergiosantanacloud/) - [Jornada 365](https://jornada365.cloud).
 
-### Why 2.4.1
+### Why 2.4.2
 
-On Windows 11 with **Smart App Control** on, 2.4.0 was blocked with *"we couldn't verify its publisher"*. Smart App Control asks Microsoft's cloud service about every program and, when the file is unknown, accepts it only with a valid digital signature; there is no exception for one application, and every new version is a new, unknown file. Code signing is the only fix, and this version makes it ready:
+Publishing from the application failed in a real tenant: the search for earlier versions asked Intune for a property that only Windows (Win32) apps have (*"Could not find a property named 'displayVersion'"*), and then Intune refused the account itself (HTTP 401 *"Forbidden"*: an Intune role not active in PIM, or no Intune license). This version fixes the search, explains every refusal and adds a modern connection with no user and no secret.
 
-- **Signing in the release workflow** with SignPath (free for open-source projects through SignPath Foundation) or Azure Artifact Signing: the executable **and the PowerShell scripts embedded in it** are signed before the release is zipped, hashed and attested, and a release with signing configured stops unless every signature is valid and timestamped.
-- **`tools/Sign-Release.ps1`** signs a published release with a certificate of the author's computer (Certum Open Source in SimplySign, any OV/EV token) or a company's internal authority (`.pfx`, for App Control allow-lists).
-- **Code signing policy** published ([CODE_SIGNING_POLICY.md](https://github.com/sesantanajr/J365-IntunePSApp/blob/main/CODE_SIGNING_POLICY.md)) and [docs/SIGNING.md](https://github.com/sesantanajr/J365-IntunePSApp/blob/main/docs/SIGNING.md) rewritten: how Smart App Control decides, the ways to sign, and what to do until a release is signed.
-- **Settings > About** shows whether the executable is signed and by whom. The update inside the application accepts any publisher of the project, so the signing service can change.
-- The local tests and publishing explain a PowerShell restricted by App Control instead of failing obscurely.
-- **Fixes from a review of 2.4.0**: *keep a newer version* compared with the minimum version of the detection instead of the version of the package (a copy older than the package could be kept); connecting with a code, IDs or Cloud Shell no longer ends a working connection before the new one works; a package with unsaved changes is never replaced or closed without a question; a damaged toolkit copy is installed again; environment variables reach the signed-in user right away.
+- **Connect with an app certificate** (recommended): the registration *J365 IntunePSApp* gets `DeviceManagementApps.ReadWrite.All` as an application permission and a certificate created on this computer, its key in the **TPM** and never exportable. Publishing needs no sign-in and no longer depends on the role, PIM or Intune license of an account. The connection with your own account is still there.
+- **Publishing comes first**: the card of a generated package shows *Publish to Microsoft Intune* with *Publish now* (or *Connect and publish*), and *Publish to Intune when done* opens the publication right after the build. No longer a preview.
+- **Fixed**: the search for earlier versions; a failed search no longer blocks the publication; a network failure no longer signs you out.
+- **Refusals of Intune explained**: role and PIM, license or *Allow access to unlicensed admins*, subscription of the tenant, consent, and the certificate as the way around.
+- `Publish-ToIntune.ps1 -CertificateThumbprint` publishes as the application by hand too.
 
-Until a release carries a signature: use the application on a computer where Smart App Control is off (company-managed devices usually are), or see the options in docs/SIGNING.md. SmartScreen alone still offers *More info > Run anyway*.
+How the certificate connection works and what to know: [docs/INTUNE-PUBLISH.md](https://github.com/sesantanajr/J365-IntunePSApp/blob/main/docs/INTUNE-PUBLISH.md). Full list: [CHANGELOG.md](https://github.com/sesantanajr/J365-IntunePSApp/blob/main/CHANGELOG.md).
 
-Full list: [CHANGELOG.md](https://github.com/sesantanajr/J365-IntunePSApp/blob/main/CHANGELOG.md).
+On Windows 11 with **Smart App Control** on, an unsigned release is blocked: see [docs/SIGNING.md](https://github.com/sesantanajr/J365-IntunePSApp/blob/main/docs/SIGNING.md).
 
 ### Download
 
@@ -29,17 +28,18 @@ Verify: `Get-FileHash <file> -Algorithm SHA256` and `gh attestation verify <file
 
 ---
 
-## J365 IntunePSApp 2.4.1 (Português)
+## J365 IntunePSApp 2.4.2 (Português)
 
 Empacote qualquer aplicativo Windows para o Microsoft Intune em minutos, sem escrever scripts. Baseado no [PSAppDeployToolkit](https://psappdeploytoolkit.com). Criado por [Sérgio Sant'Ana Junior](https://www.linkedin.com/in/sergiosantanacloud/) - [Jornada 365](https://jornada365.cloud).
 
-**Por que a 2.4.1:** no Windows 11 com o **Controle Inteligente de Aplicativos** ligado, a 2.4.0 foi bloqueada com *"não conseguimos verificar seu fornecedor"*. Ele consulta o serviço de nuvem da Microsoft sobre cada programa e, quando o arquivo é desconhecido, só o aceita com uma assinatura digital válida; não há exceção para um aplicativo, e cada versão nova é um arquivo novo e desconhecido. A assinatura de código é a única solução, e esta versão a deixa pronta:
+**Por que a 2.4.2:** a publicação pelo aplicativo falhou num locatário real: a busca de versões anteriores pedia ao Intune uma propriedade que só os apps do Windows (Win32) têm (*"Could not find a property named 'displayVersion'"*), e depois o Intune recusou a própria conta (HTTP 401 *"Forbidden"*: função do Intune não ativa no PIM, ou sem licença do Intune). Esta versão corrige a busca, explica cada recusa e traz uma conexão moderna, sem usuário e sem segredo.
 
-- **Assinatura no workflow de release** com o SignPath (gratuito para código aberto pela SignPath Foundation) ou o Azure Artifact Signing: o executável **e os scripts PowerShell embutidos nele** são assinados antes de a versão ser compactada, ter os hashes calculados e ser atestada, e uma versão com assinatura configurada para se alguma assinatura não for válida e com carimbo de tempo.
-- **`tools/Sign-Release.ps1`** assina uma versão publicada com um certificado do computador do autor (Certum Open Source no SimplySign, qualquer token OV/EV) ou da autoridade interna de uma empresa (`.pfx`, para listas de permissão do Controle de Aplicativos).
-- **Política de assinatura de código** publicada ([CODE_SIGNING_POLICY.md](https://github.com/sesantanajr/J365-IntunePSApp/blob/main/CODE_SIGNING_POLICY.md)) e o [docs/SIGNING.md](https://github.com/sesantanajr/J365-IntunePSApp/blob/main/docs/SIGNING.md) reescrito: como o Controle Inteligente de Aplicativos decide, os caminhos para assinar e o que fazer enquanto a versão não estiver assinada.
-- **Configurações > Sobre** mostra se o executável está assinado e por quem. A atualização dentro do aplicativo aceita qualquer editor do projeto, então o serviço de assinatura pode mudar.
-- Os testes locais e a publicação explicam um PowerShell restrito pelo Controle de Aplicativos, em vez de falhar sem explicação.
-- **Correções de uma revisão da 2.4.0**: *manter versão mais nova* comparava com a versão mínima da detecção em vez da versão do pacote (uma cópia mais antiga que o pacote podia ser mantida); conectar com código, IDs ou Cloud Shell não encerra mais uma conexão que funciona antes de a nova funcionar; um pacote com alterações não salvas nunca é substituído nem fechado sem pergunta; uma cópia danificada do toolkit é instalada de novo; variáveis de ambiente chegam na hora ao usuário conectado.
+- **Conectar com certificado do aplicativo** (recomendado): o registro *J365 IntunePSApp* recebe `DeviceManagementApps.ReadWrite.All` como permissão de aplicativo e um certificado criado neste computador, com a chave no **TPM** e nunca exportável. A publicação não pede login e deixa de depender da função, do PIM e da licença do Intune de uma conta. A conexão com a sua própria conta continua disponível.
+- **A publicação vem primeiro**: o cartão de um pacote gerado mostra *Publicar no Microsoft Intune* com *Publicar agora* (ou *Conectar e publicar*), e *Publicar no Intune ao terminar* abre a publicação logo depois da geração. Deixou de ser prévia.
+- **Corrigido**: a busca de versões anteriores; uma busca que falha não bloqueia mais a publicação; uma falha de rede não desconecta mais.
+- **Recusas do Intune explicadas**: função e PIM, licença ou *Permitir acesso a administradores sem licença*, assinatura do tenant, consentimento, e o certificado como alternativa.
+- `Publish-ToIntune.ps1 -CertificateThumbprint` também publica como o aplicativo manualmente.
 
-Enquanto a versão não tiver assinatura: use o aplicativo num computador em que o Controle Inteligente de Aplicativos esteja desligado (dispositivos gerenciados por empresas costumam estar), ou veja as opções no docs/SIGNING.md. Só com o SmartScreen continua valendo *Mais informações > Executar assim mesmo*.
+Como funciona a conexão com certificado e o que saber: [docs/INTUNE-PUBLISH.md](https://github.com/sesantanajr/J365-IntunePSApp/blob/main/docs/INTUNE-PUBLISH.md#publicar-no-intune). Lista completa: [CHANGELOG.md](https://github.com/sesantanajr/J365-IntunePSApp/blob/main/CHANGELOG.md).
+
+No Windows 11 com o **Controle Inteligente de Aplicativos** ligado, uma versão sem assinatura é bloqueada: veja o [docs/SIGNING.md](https://github.com/sesantanajr/J365-IntunePSApp/blob/main/docs/SIGNING.md).

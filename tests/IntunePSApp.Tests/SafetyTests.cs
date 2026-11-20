@@ -169,6 +169,68 @@ namespace J365.IntunePSApp.Tests
         }
 
         [Theory]
+        [InlineData("Microsoft Graph answered HTTP 401 (Forbidden) to GET /deviceAppManagement/mobileApps: An error has occurred", true)]
+        [InlineData("Microsoft Graph answered HTTP 403 (Forbidden) to POST /deviceAppManagement/mobileApps: An error has occurred", true)]
+        [InlineData("Microsoft Graph answered HTTP 401 (InvalidAuthenticationToken) to GET /x: Access token has expired", false)]
+        [InlineData("Microsoft Graph answered HTTP 400 (BadRequest) to GET /x: Parsing OData Select and Expand failed", false)]
+        [InlineData("Sign-in failed: AADSTS50076", false)]
+        [InlineData("", false)]
+        public void Refusals_of_Intune_are_told_apart_from_sign_in_errors(string text, bool refusal) => Assert.Equal(refusal, IntuneDiagnosis.IsRefusal(text));
+
+        [Fact]
+        public void The_error_of_Intune_keeps_its_sentence_and_ids_but_not_its_internal_address()
+        {
+            string intune = "{\r\n  \"_version\": 3,\r\n  \"Message\": \"An error has occurred - Operation ID (for customer support): 00000000-0000-0000-0000-000000000000 - Activity ID: 184af700-7dff-44d6-ba38-5af761eb24d3 - Url: https://proxy.msua08.manage.microsoft.com/AppLifecycle_2611/StatelessAppMetadataFEService/deviceAppManagement/mobileApps?api-version=5026-08-19\",\r\n  \"CustomApiErrorPhrase\": \"\",\r\n  \"RetryAfter\": null\r\n}";
+            Assert.Equal("An error has occurred - Operation ID (for customer support): 00000000-0000-0000-0000-000000000000 - Activity ID: 184af700-7dff-44d6-ba38-5af761eb24d3", GraphException.CleanMessage(intune));
+            Assert.Equal("Plain message", GraphException.CleanMessage("Plain message"));
+            Assert.Null(GraphException.CleanMessage(""));
+        }
+
+        [Fact]
+        public void The_client_assertion_is_a_PS256_JWT_signed_with_a_key_that_cannot_be_exported()
+        {
+            AppCertificate.UseTpm = false;
+            var cert = AppCertificate.Create("contoso.com");
+            try
+            {
+                Assert.Equal(AppCertificate.CommonName, cert.GetNameInfo(System.Security.Cryptography.X509Certificates.X509NameType.SimpleName, false));
+                Assert.InRange((cert.NotAfter - DateTime.Now).TotalDays, 360, 366);
+                Assert.True(AppCertificate.IsUsable(cert.Thumbprint));
+                Assert.False(AppCertificate.Describe(cert.Thumbprint).Hardware);
+                Assert.ThrowsAny<System.Security.Cryptography.CryptographicException>(() => cert.Export(System.Security.Cryptography.X509Certificates.X509ContentType.Pfx));
+
+                string jwt = AppCertificate.ClientAssertion(cert, "https://login.example/tenant/oauth2/v2.0/token", "client-1");
+                var parts = jwt.Split('.');
+                Assert.Equal(3, parts.Length);
+                byte[] Bytes(string s) { s = s.Replace('-', '+').Replace('_', '/'); return Convert.FromBase64String(s.PadRight(s.Length + (4 - s.Length % 4) % 4, '=')); }
+                var header = System.Text.Json.Nodes.JsonNode.Parse(Bytes(parts[0]));
+                var payload = System.Text.Json.Nodes.JsonNode.Parse(Bytes(parts[1]));
+                Assert.Equal("PS256", (string)header["alg"]);
+                Assert.Equal(Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(cert.RawData)).TrimEnd('=').Replace('+', '-').Replace('/', '_'), (string)header["x5t#S256"]);
+                Assert.Equal("https://login.example/tenant/oauth2/v2.0/token", (string)payload["aud"]);
+                Assert.Equal("client-1", (string)payload["iss"]);
+                Assert.Equal("client-1", (string)payload["sub"]);
+                Assert.InRange((long)payload["exp"] - DateTimeOffset.UtcNow.ToUnixTimeSeconds(), 500, 610);
+                using var rsa = System.Security.Cryptography.X509Certificates.RSACertificateExtensions.GetRSAPublicKey(cert);
+                Assert.True(rsa.VerifyData(Encoding.ASCII.GetBytes(parts[0] + "." + parts[1]), Bytes(parts[2]), System.Security.Cryptography.HashAlgorithmName.SHA256, System.Security.Cryptography.RSASignaturePadding.Pss));
+            }
+            finally
+            {
+                AppCertificate.Delete(cert.Thumbprint);
+                Assert.Null(AppCertificate.Find(cert.Thumbprint));
+                cert.Dispose();
+                AppCertificate.UseTpm = true;
+            }
+        }
+
+        [Theory]
+        [InlineData("ab cd ef 01 23 45 67 89 ab cd ef 01 23 45 67 89 ab cd ef 01", "ABCDEF0123456789ABCDEF0123456789ABCDEF01")]
+        [InlineData("not a thumbprint", "")]
+        [InlineData("ABCDEF", "")]
+        [InlineData(null, "")]
+        public void Thumbprints_are_normalized_or_refused(string text, string expected) => Assert.Equal(expected, AppCertificate.Normalize(text));
+
+        [Theory]
         [InlineData("network", true)]
         [InlineData("HttpRequestException", true)]
         [InlineData("TaskCanceledException", true)]

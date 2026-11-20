@@ -587,10 +587,38 @@ namespace J365.IntunePSApp.Views
             var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             var icon = new TextBlock { Text = signedIn ? "" : "", Style = S("Icon"), FontSize = 18, Foreground = Ui.Brush(signedIn ? "Success" : "Brand"), Margin = new Thickness(0, 2, 12, 0), VerticalAlignment = VerticalAlignment.Top };
             DockPanel.SetDock(icon, Dock.Left);
-            if (signedIn)
+            // The certificate decides tenant and registration: the fields only show them.
+            _tenant.IsReadOnly = _client.IsReadOnly = IntuneConnection.UsesCertificate;
+            if (!signedIn && IntuneConnection.UsesCertificate)
+            {
+                // The certificate cannot be used (expired, removed, its key gone): the way out is a new certificate.
+                var broken = AppCertificate.Describe(IntuneConnection.CertificateThumbprint);
+                text.Children.Add(new TextBlock { Text = T("Publish_CertBroken"), FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
+                text.Children.Add(new TextBlock
+                {
+                    Text = broken != null && broken.Expired ? T("Settings_IntuneCertExpired", broken.NotAfter.ToString("d", J365.IntunePSApp.Localization.Loc.Instance.Culture)) : T("Auth_ErrCertMissing"),
+                    Style = S("MutedText"), TextWrapping = TextWrapping.Wrap
+                });
+                buttons.Children.Add(MakeButton(T("Settings_IntuneUseCert"), "PrimaryButton", async (s, e) => await ConnectAsync(true), 0));
+            }
+            else if (signedIn && IntuneConnection.UsesCertificate)
+            {
+                // The application publishes with the certificate of this computer: nothing to sign in.
+                var cert = AppCertificate.Describe(IntuneConnection.CertificateThumbprint);
+                text.Children.Add(new TextBlock { Text = T("Publish_ConnectedCert"), FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
+                text.Children.Add(new TextBlock { Text = T("Publish_ConnectedCertHint", IntuneConnection.TenantLabel, cert == null ? "?" : cert.NotAfter.ToString("d", J365.IntunePSApp.Localization.Loc.Instance.Culture)), Style = S("MutedText"), TextWrapping = TextWrapping.Wrap });
+                buttons.Children.Add(MakeButton(T("Publish_ChangeConnection"), "SecondaryButton", async (s, e) => await ConnectAsync(true), 0));
+            }
+            else if (signedIn)
             {
                 text.Children.Add(new TextBlock { Text = T("Publish_ConnectedAs", IntuneConnection.Account), FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
                 text.Children.Add(new TextBlock { Text = T("Publish_ConnectedHint", IntuneConnection.SessionTenant.Length > 0 ? IntuneConnection.SessionTenant : IntuneConnection.TenantId), Style = S("MutedText"), TextWrapping = TextWrapping.Wrap });
+                // A user connection depends on the role of the account (PIM): the certificate does not.
+                text.Children.Add(new TextBlock { Text = T("Publish_DelegatedHint"), Style = S("Hint"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) });
+                var useCert = MakeButton(T("Publish_UseCert"), "LinkButton", async (s, e) => await ConnectAsync(true), 0);
+                useCert.HorizontalAlignment = HorizontalAlignment.Left;
+                useCert.Margin = new Thickness(0, 2, 0, 0);
+                text.Children.Add(useCert);
                 buttons.Children.Add(MakeButton(T("Publish_SwitchAccount"), "SecondaryButton", async (s, e) => await ConnectAsync(false), 0));
             }
             else if (IntuneConnection.IsConfigured)
@@ -656,7 +684,9 @@ namespace J365.IntunePSApp.Views
                 IfExists = TagOf(_ifExists),
                 AssignIntent = assign[0],
                 AssignTo = assign.Length > 1 ? assign[1] : "AllUsers",
-                GroupId = _group.Text.Trim()
+                GroupId = _group.Text.Trim(),
+                // The command copied or run in a window connects the same way as the application.
+                CertificateThumbprint = IntuneConnection.UsesCertificate ? IntuneConnection.CertificateThumbprint : ""
             };
         }
 
@@ -682,9 +712,8 @@ namespace J365.IntunePSApp.Views
             }
             if (save && (o.TenantId != (ConfigStore.Current.IntuneTenantId ?? "") || o.ClientId != (ConfigStore.Current.IntuneClientId ?? "")))
             {
-                ConfigStore.Current.IntuneTenantId = o.TenantId;
-                ConfigStore.Current.IntuneClientId = o.ClientId;
-                ConfigStore.Save();
+                // Through the connection: another registration ends the session of the previous one (and is a user connection).
+                IntuneConnection.SaveRegistration(o.TenantId, o.ClientId);
                 RenderConnection();
             }
             return o;
@@ -711,7 +740,8 @@ namespace J365.IntunePSApp.Views
             if (o == null) return;
             if (!IntuneConnection.IsSignedIn)
             {
-                await ConnectAsync(false);
+                // A certificate that cannot be used needs a new one; a user connection signs in again.
+                await ConnectAsync(IntuneConnection.UsesCertificate);
                 if (!IntuneConnection.IsSignedIn) return;
             }
             _cts = new CancellationTokenSource();
@@ -754,10 +784,16 @@ namespace J365.IntunePSApp.Views
                     }
                     o.IfExists = "Fail";   // nothing with this name: create (and stop if one appears meanwhile)
                 }
+                catch (OperationCanceledException) { SetBusy(false); return; }
                 catch (Exception ex)
                 {
                     SetBusy(false);
-                    Ui.Error(T("Auth_Failed", ex.Message));
+                    // A refusal of Intune would stop the publication as well: it is explained. Any other failure of the
+                    // lookup only means that the user says what to do with an app of the same name.
+                    if (IntuneDiagnosis.IsRefusal(ex))
+                        Ui.Error(T("Auth_Failed", ex.Message) + Environment.NewLine + Environment.NewLine + IntuneDiagnosis.Explain(IntuneConnection.LastToken, IntuneConnection.UsesCertificate));
+                    else if (ex is AuthException) Ui.Error(T("Auth_Failed", ex.Message));
+                    else Ui.Warn(T("Publish_LookupFailed", ex.Message));
                     RenderConnection();
                     return;
                 }

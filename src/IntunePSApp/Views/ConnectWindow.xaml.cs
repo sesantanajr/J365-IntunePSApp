@@ -34,7 +34,7 @@ namespace J365.IntunePSApp.Views
     public partial class ConnectWindow : DialogWindow
     {
         private enum Page { Choose, Code, Shell, Progress, Result }
-        private enum Flow { Auto, Code, Shell }
+        private enum Flow { Auto, Cert, Code, Shell }
 
         private readonly ObservableCollection<ConnectStepRow> _steps = new ObservableCollection<ConnectStepRow>();
         private Page _page;
@@ -47,6 +47,10 @@ namespace J365.IntunePSApp.Views
         private ConnectStepRow _current;
         /// <summary>The sign-in of the current attempt worked (its session replaced the previous one).</summary>
         private bool _signedIn;
+        /// <summary>Why the last test of Intune failed, to explain it on the result page.</summary>
+        private Exception _testFailure;
+        /// <summary>A certificate the setup created that is not the connection yet (it becomes it once it obtains a token).</summary>
+        private PendingCertificate _pending;
 
         /// <summary>True when the window closed with the application connected (signed in).</summary>
         public bool Connected => _succeeded;
@@ -55,15 +59,18 @@ namespace J365.IntunePSApp.Views
         {
             InitializeComponent();
             StepList.ItemsSource = _steps;
-            TxtAdminHint.Text = IntuneConnection.Account;
+            TxtAdminHint.Text = IntuneConnection.UserAccount;
             TxtScript.Text = ConnectScripts.Bash;
             if (start == "code") OptCode.IsChecked = true;
+            else if (start == "delegated") OptAuto.IsChecked = true;
             Closing += (s, e) =>
             {
                 if (!_running) return;
                 if (!Ui.Confirm(T("Connect_ConfirmStop"), T("Connect_Stop"), T("Common_No"))) { e.Cancel = true; return; }
                 _cts?.Cancel();
             };
+            // A new certificate that never became the connection does not stay on the computer.
+            Closed += (s, e) => DiscardPending();
             ShowPage(Page.Choose);
         }
 
@@ -82,6 +89,7 @@ namespace J365.IntunePSApp.Views
         private void ShowPage(Page page)
         {
             _page = page;
+            PageScroll?.ScrollToTop();
             PageChoose.Visibility = page == Page.Choose ? Visibility.Visible : Visibility.Collapsed;
             PageCode.Visibility = page == Page.Code ? Visibility.Visible : Visibility.Collapsed;
             PageShell.Visibility = page == Page.Shell ? Visibility.Visible : Visibility.Collapsed;
@@ -96,7 +104,7 @@ namespace J365.IntunePSApp.Views
                     SetHeader("", T("Connect_Title"), T("Connect_Subtitle"), "BrandSoft", "BrandText");
                     BtnPrimary.Content = T("Connect_Continue");
                     BtnSecondary.Content = T("Common_Cancel");
-                    AutoInfo.Visibility = OptAuto.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+                    AutoInfo.Visibility = OptAuto.IsChecked == true || OptCert.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
                     break;
                 case Page.Code:
                     SetHeader("", T("Connect_OptCode"), T("Connect_CodeSubtitle"), "InfoSoft", "Info");
@@ -130,7 +138,10 @@ namespace J365.IntunePSApp.Views
 
         private void Method_Checked(object sender, RoutedEventArgs e)
         {
-            if (AutoInfo != null) AutoInfo.Visibility = OptAuto.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+            // Both automatic ways sign in an administrator first; the certificate needs a role that grants app permissions.
+            bool automatic = OptAuto?.IsChecked == true || OptCert?.IsChecked == true;
+            if (AutoInfo != null) AutoInfo.Visibility = automatic ? Visibility.Visible : Visibility.Collapsed;
+            if (TxtReq1 != null) TxtReq1.Text = T(OptCert?.IsChecked == true ? "Connect_Req1Cert" : "Connect_Req1");
         }
 
         private void Primary_Click(object sender, RoutedEventArgs e)
@@ -140,14 +151,16 @@ namespace J365.IntunePSApp.Views
                 case Page.Choose:
                     if (OptCode.IsChecked == true) ShowPage(Page.Code);
                     else if (OptShell.IsChecked == true) ShowPage(Page.Shell);
-                    else _ = RunAutoAsync();
+                    else _ = RunAutoAsync(certificate: OptCert.IsChecked == true);
                     break;
                 case Page.Code: _ = ConnectWithCodeAsync(TxtCode.Text, TxtTenant.Text, TxtClient.Text, CodeError, Flow.Code); break;
                 case Page.Shell: _ = ConnectWithCodeAsync(TxtShellResult.Text, null, null, ShellError, Flow.Shell); break;
                 case Page.Result:
                     if (_succeeded) { DialogResult = true; return; }
                     // Try again: the same way as before.
-                    if (_flow == Flow.Auto) _ = RunAutoAsync();
+                    // A new certificate that did not activate in time: only its sign-in and the test run again.
+                    if (_flow == Flow.Cert && _pending != null) _ = RetryActivationAsync();
+                    else if (_flow is Flow.Auto or Flow.Cert) _ = RunAutoAsync(_flow == Flow.Cert);
                     else ShowPage(_flow == Flow.Shell ? Page.Shell : Page.Code);
                     break;
             }
@@ -216,6 +229,7 @@ namespace J365.IntunePSApp.Views
             SetupStep.Registration => T("Connect_S_Registration", IntuneConnection.RegistrationName),
             SetupStep.ServicePrincipal => T("Connect_S_ServicePrincipal"),
             SetupStep.Consent => T("Connect_S_Consent"),
+            SetupStep.Certificate => T("Connect_S_Certificate"),
             SetupStep.Activation => T("Connect_S_Activation"),
             SetupStep.UserSignIn => T("Connect_S_UserSignIn"),
             _ => T("Connect_S_Test")
@@ -235,13 +249,19 @@ namespace J365.IntunePSApp.Views
 
         private ConnectStepRow Row(SetupStep step) => _steps.FirstOrDefault(r => r.Step == step);
 
-        private async Task RunAutoAsync()
+        private async Task RunAutoAsync(bool certificate = false)
         {
-            _flow = Flow.Auto;
+            _flow = certificate ? Flow.Cert : Flow.Auto;
             _consentUrl = null;
             _succeeded = false;
-            BuildSteps(SetupStep.AdminSignIn, SetupStep.Permission, SetupStep.Registration, SetupStep.ServicePrincipal, SetupStep.Consent,
-                       SetupStep.Activation, SetupStep.UserSignIn, SetupStep.Test);
+            _testFailure = null;
+            DiscardPending();
+            if (certificate)
+                BuildSteps(SetupStep.AdminSignIn, SetupStep.Permission, SetupStep.Registration, SetupStep.ServicePrincipal, SetupStep.Consent,
+                           SetupStep.Certificate, SetupStep.Activation, SetupStep.Test);
+            else
+                BuildSteps(SetupStep.AdminSignIn, SetupStep.Permission, SetupStep.Registration, SetupStep.ServicePrincipal, SetupStep.Consent,
+                           SetupStep.Activation, SetupStep.UserSignIn, SetupStep.Test);
             ShowPage(Page.Progress);
             // Marked now, not when the first progress report arrives: a failure before it names the right step.
             Advance(SetupStep.AdminSignIn);
@@ -255,21 +275,28 @@ namespace J365.IntunePSApp.Views
                     if (p.Step == SetupStep.Permission && p.Detail.Length > 0 && Row(SetupStep.AdminSignIn) is ConnectStepRow admin) admin.Detail = T("Connect_SignedInAs", p.Detail);
                     Advance(p.Step, p.Step == SetupStep.ServicePrincipal ? "" : detail);
                 });
-                var r = await IntuneConnection.CreateRegistrationAsync(progress, _cts.Token, TxtAdminHint.Text.Trim());
+                var r = await IntuneConnection.CreateRegistrationAsync(progress, _cts.Token, TxtAdminHint.Text.Trim(), certificate);
                 if (Row(SetupStep.Registration) is ConnectStepRow reg) reg.Detail = (r.Reused ? T("Connect_Reused") : T("Connect_Created")) + "  ·  " + r.ClientId;
                 var consent = Row(SetupStep.Consent);
-                if (r.ConsentGranted) consent.State = "Done";
+                if (r.ConsentGranted && (!certificate || r.RoleGranted)) consent.State = "Done";
                 else
                 {
                     // Created, but the administrator may not approve permissions of Microsoft Graph: a Global
                     // Administrator does it with the link (the sign-in below then asks nothing).
                     consent.State = "Warning";
-                    consent.Detail = T("Connect_ConsentMissingDetail");
+                    consent.Detail = certificate && !r.RoleGranted ? T("Connect_RoleMissingDetail") : T("Connect_ConsentMissingDetail");
                     _consentUrl = r.ConsentUrl;
                 }
-                await ActivateAndSignInAsync(newRegistration: !r.Reused, loginHint: r.Admin);
+                if (certificate)
+                {
+                    _pending = r.Pending;
+                    if (Row(SetupStep.Certificate) is ConnectStepRow cert && AppCertificate.Describe(r.CertificateThumbprint) is { } d)
+                        cert.Detail = T(d.Hardware ? "Connect_CertTpm" : "Connect_CertSoftware", d.NotAfter.ToString("d", J365.IntunePSApp.Localization.Loc.Instance.Culture));
+                    await ActivateAppAsync();
+                }
+                else await ActivateAndSignInAsync(newRegistration: !r.Reused, loginHint: r.Admin);
             }
-            catch (OperationCanceledException) when (_cts.IsCancellationRequested) { ShowCancelled(); }
+            catch (OperationCanceledException) when (_cts.IsCancellationRequested) { DiscardPending(); ShowCancelled(); }
             catch (Exception ex) { ShowFailure(ex); }
             finally { _running = false; }
         }
@@ -312,9 +339,92 @@ namespace J365.IntunePSApp.Views
                 var test = Row(SetupStep.Test);
                 test.State = "Warning";
                 test.Detail = T("Connect_TestWarn", ex.Message);
+                _testFailure = ex;
             }
             foreach (var row in _steps) if (row.State is "Pending" or "Working") row.State = "Done";
             ShowSuccess();
+        }
+
+        /// <summary>
+        /// Last steps of the certificate: the new key and the application permission reach every server of Entra ID and
+        /// Intune (a minute or two for a new registration), then a read of Intune proves the connection.
+        /// </summary>
+        private async Task ActivateAppAsync()
+        {
+            var ct = _cts.Token;
+            Advance(SetupStep.Activation, T("Connect_ActivationAppWait"));
+            for (int attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    // The new certificate becomes the connection only once it obtained a token; the one in use until
+                    // then (a renewal) keeps working if this never happens.
+                    if (_pending != null)
+                    {
+                        await IntuneConnection.ActivateCertificateAsync(_pending, ct);
+                        _pending = null;
+                    }
+                    else await IntuneConnection.SignInAsync(ct);
+                    break;
+                }
+                catch (AuthException ex) when (attempt < 8 && ex.Code is "AADSTS700027" or "AADSTS700016" or "AADSTS7000112")
+                {
+                    // A key added a moment ago is not known yet by every sign-in server.
+                    _current.Detail = T("Connect_ActivationRetry");
+                    await Task.Delay(TimeSpan.FromSeconds(15), ct);
+                }
+            }
+            _signedIn = true;
+            Advance(SetupStep.Test);
+            var test = Row(SetupStep.Test);
+            const int tries = 6;
+            for (int attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    await IntuneConnection.TestAsync(ct);
+                    test.State = "Done";
+                    test.Detail = T("Connect_TestOk");
+                    break;
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                catch (Exception ex) when (attempt < tries && IntuneDiagnosis.IsRefusal(ex))
+                {
+                    // A new application permission takes a little while to reach Intune: each try asks for a new token.
+                    test.Detail = T("Connect_TestRetry", attempt, tries - 1);
+                    await Task.Delay(TimeSpan.FromSeconds(20), ct);
+                    try { await IntuneConnection.SignInAsync(ct); } catch (AuthException) { }
+                }
+                catch (Exception ex)
+                {
+                    test.State = "Warning";
+                    test.Detail = T("Connect_TestWarn", ex.Message);
+                    _testFailure = ex;
+                    break;
+                }
+            }
+            foreach (var row in _steps) if (row.State is "Pending" or "Working") row.State = "Done";
+            ShowSuccess();
+        }
+
+        /// <summary>"Try again" after a new certificate did not activate: its sign-in and the test run again, nothing is recreated.</summary>
+        private async Task RetryActivationAsync()
+        {
+            ShowPage(Page.Progress);
+            _cts = new CancellationTokenSource();
+            _running = true;
+            _testFailure = null;
+            try { await ActivateAppAsync(); }
+            catch (OperationCanceledException) when (_cts.IsCancellationRequested) { DiscardPending(); ShowCancelled(); }
+            catch (Exception ex) { ShowFailure(ex); }
+            finally { _running = false; }
+        }
+
+        private void DiscardPending()
+        {
+            if (_pending == null) return;
+            IntuneConnection.DiscardCertificate(_pending);
+            _pending = null;
         }
 
         // ------------------------------------------------------------------ existing registration (code, IDs, Cloud Shell)
@@ -331,6 +441,8 @@ namespace J365.IntunePSApp.Views
             }
             _flow = flow;
             _succeeded = false;
+            _testFailure = null;
+            DiscardPending();
             _consentUrl = $"{EntraAuth.LoginUrl}/{tenant}/adminconsent?client_id={client}";
             // Tried first and saved only once the sign-in works: a wrong code, a cancel or a failure leaves the connection
             // that was working (registration and session) as it was.
@@ -361,7 +473,7 @@ namespace J365.IntunePSApp.Views
             ResultIcon.SetResourceReference(TextBlock.ForegroundProperty, "Success");
             ResultTitle.Text = T("Connect_DoneTitle");
             bool warning = _steps.Any(r => r.State == "Warning");
-            ResultText.Text = warning ? T("Connect_DoneWithWarnings") : T("Connect_DoneText");
+            ResultText.Text = warning ? T("Connect_DoneWithWarnings") : IntuneConnection.UsesCertificate ? T("Connect_DoneCertText") : T("Connect_DoneText");
             SuccessDetails.Visibility = Visibility.Visible;
             DetailAccount.Text = IntuneConnection.Account;
             DetailTenant.Text = IntuneConnection.SessionTenant.Length > 0 ? IntuneConnection.SessionTenant : IntuneConnection.TenantId;
@@ -369,6 +481,19 @@ namespace J365.IntunePSApp.Views
             Causes.Children.Clear();
             if (!string.IsNullOrEmpty(_consentUrl) && _steps.Any(r => r.Step == SetupStep.Consent && r.State == "Warning"))
                 AddCause(T("Connect_CauseConsentTitle"), T("Connect_CauseConsentText"), ("Connect_OpenConsentLink", () => MainWindow.OpenUrl(_consentUrl)), ("Connect_CopyConsentLink", () => Ui.CopyText(_consentUrl)));
+            if (_testFailure != null && IntuneDiagnosis.IsRefusal(_testFailure))
+            {
+                // Connected, but Intune refused: what to check, and the way that does not depend on the account.
+                bool certificate = IntuneConnection.UsesCertificate;
+                var actions = certificate
+                    ? new (string, Action)[0]
+                    : new (string, Action)[]
+                    {
+                        ("Connect_OpenPim", () => MainWindow.OpenUrl(IntuneConnection.PimUrl)),
+                        ("Connect_UseCertificate", () => { OptCert.IsChecked = true; _ = RunAutoAsync(certificate: true); })
+                    };
+                AddCause(T("Connect_CauseIntuneTitle"), IntuneDiagnosis.Explain(IntuneConnection.LastToken, certificate), actions);
+            }
             CausesTitle.Visibility = Causes.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             SetHeader("", T("Connect_DoneHeader"), IntuneConnection.Account, "SuccessSoft", "Success");
             BtnPrimary.Content = T("Connect_Finish");
@@ -420,9 +545,9 @@ namespace J365.IntunePSApp.Views
         private void BuildCauses(string code, SetupStep step)
         {
             var useShell = ("Connect_UseShell", (Action)(() => { OptShell.IsChecked = true; ShowPage(Page.Shell); }));
-            var otherAccount = ("Connect_OtherAccount", (Action)(() => { TxtAdminHint.Text = ""; _ = RunAutoAsync(); }));
+            var otherAccount = ("Connect_OtherAccount", (Action)(() => { TxtAdminHint.Text = ""; _ = RunAutoAsync(_flow == Flow.Cert); }));
             var openPim = ("Connect_OpenPim", (Action)(() => MainWindow.OpenUrl(IntuneConnection.PimUrl)));
-            bool adminStep = step <= SetupStep.Consent;
+            bool adminStep = step <= SetupStep.Certificate;
             switch (code)
             {
                 case "cancel" when adminStep:
@@ -493,8 +618,9 @@ namespace J365.IntunePSApp.Views
         /// <summary>Draws a page with sample content for the screenshots (--snapshot). Nothing is sent anywhere.</summary>
         internal void SnapshotPage(string page)
         {
+            // The recommended way, with the certificate.
             void AllSteps() => BuildSteps(SetupStep.AdminSignIn, SetupStep.Permission, SetupStep.Registration, SetupStep.ServicePrincipal, SetupStep.Consent,
-                                          SetupStep.Activation, SetupStep.UserSignIn, SetupStep.Test);
+                                          SetupStep.Certificate, SetupStep.Activation, SetupStep.Test);
             switch (page)
             {
                 case "shell":
@@ -522,13 +648,14 @@ namespace J365.IntunePSApp.Views
                     foreach (var row in _steps) row.State = "Done";
                     Row(SetupStep.AdminSignIn).Detail = T("Connect_SignedInAs", SampleAccount);
                     Row(SetupStep.Registration).Detail = T("Connect_Created") + "  ·  " + SampleClient;
-                    Row(SetupStep.UserSignIn).Detail = T("Connect_SignedInAs", SampleAccount);
+                    Row(SetupStep.Certificate).Detail = T("Connect_CertTpm", new DateTime(2027, 11, 19).ToString("d", J365.IntunePSApp.Localization.Loc.Instance.Culture));
                     Row(SetupStep.Test).Detail = T("Connect_TestOk");
                     ShowSuccess(log: false);
-                    DetailAccount.Text = SampleAccount;
+                    ResultText.Text = T("Connect_DoneCertText");
+                    DetailAccount.Text = T("Intune_CertIdentity", "contoso.com");
                     DetailTenant.Text = SampleTenant;
                     DetailClient.Text = SampleClient;
-                    HeaderText.Text = SampleAccount;
+                    HeaderText.Text = T("Intune_CertIdentity", "contoso.com");
                     break;
             }
         }

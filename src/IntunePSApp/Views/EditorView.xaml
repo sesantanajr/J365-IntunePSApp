@@ -544,9 +544,24 @@
                   <TextBox x:Name="ResultUninstall" Grid.Row="1" Grid.Column="1" IsReadOnly="True" Style="{StaticResource Mono}" Margin="0,3"/>
                   <Button Grid.Row="1" Grid.Column="2" Style="{StaticResource IconButton}" ToolTip="{l:T Common_Copy}" Tag="uninstall" Click="Copy_Click" Margin="6,0,0,0"><TextBlock Text="&#xE8C8;" Style="{StaticResource Icon}" FontSize="13"/></Button>
                 </Grid>
-                <WrapPanel Margin="0,16,0,0">
-                  <Button Style="{StaticResource PrimaryButton}" Click="OpenFolder_Click" Margin="0,0,8,8">
-                    <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE838;" Style="{StaticResource Icon}" Foreground="White" Margin="0,0,8,0"/><TextBlock Text="{l:T Common_OpenFolder}"/></StackPanel>
+                <!-- The next step, highlighted: publish to Intune with the connection of this computer -->
+                <Border x:Name="PublishCallout" CornerRadius="12" Padding="16,14" Margin="0,16,0,0" Background="{DynamicResource BrandSoft}" BorderBrush="{DynamicResource InfoLine}" BorderThickness="1">
+                  <DockPanel>
+                    <Button x:Name="BtnPublish" DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Click="Publish_Click" VerticalAlignment="Center" Margin="14,0,0,0" ToolTip="{l:T Ed_PublishTip}">
+                      <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE898;" Style="{StaticResource Icon}" Foreground="White" Margin="0,0,8,0"/><TextBlock x:Name="BtnPublishText" Text="{l:T Ed_PublishNow}"/></StackPanel>
+                    </Button>
+                    <Border DockPanel.Dock="Left" Width="42" Height="42" CornerRadius="12" Background="{DynamicResource CardBg}" Margin="0,0,14,0" VerticalAlignment="Center">
+                      <TextBlock Text="&#xE753;" Style="{StaticResource Icon}" FontSize="19" Foreground="{DynamicResource Brand}" HorizontalAlignment="Center"/>
+                    </Border>
+                    <StackPanel VerticalAlignment="Center">
+                      <TextBlock Text="{l:T Ed_PublishCalloutTitle}" Style="{StaticResource H3}"/>
+                      <TextBlock x:Name="PublishCalloutText" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                    </StackPanel>
+                  </DockPanel>
+                </Border>
+                <WrapPanel Margin="0,14,0,0">
+                  <Button Style="{StaticResource SecondaryButton}" Click="OpenFolder_Click" Margin="0,0,8,8">
+                    <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE838;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock Text="{l:T Common_OpenFolder}"/></StackPanel>
                   </Button>
                   <Button Style="{StaticResource SecondaryButton}" Click="OpenInstructions_Click" Margin="0,0,8,8">
                     <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8A5;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock Text="{l:T Ed_Instructions}"/></StackPanel>
@@ -559,9 +574,6 @@
                   </Button>
                   <Button x:Name="BtnSandbox" Style="{StaticResource SecondaryButton}" Click="Sandbox_Click" Margin="0,0,8,8" ToolTip="{l:T Ed_SandboxTip}">
                     <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE7F8;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock Text="{l:T Ed_Sandbox}"/></StackPanel>
-                  </Button>
-                  <Button x:Name="BtnPublish" Style="{StaticResource SecondaryButton}" Click="Publish_Click" Margin="0,0,8,8" ToolTip="{l:T Ed_PublishTip}">
-                    <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE898;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock Text="{l:T Ed_Publish}"/></StackPanel>
                   </Button>
                 </WrapPanel>
                 <!-- Result of the Windows Sandbox test, read from Sandbox\Results\result.json -->
@@ -619,15 +631,17 @@
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
-                <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
-                  <Button x:Name="BtnGenerate2" Style="{StaticResource PrimaryButton}" Padding="26,11" FontSize="14.5" Click="Generate_Click">
+                <!-- Wraps on narrow windows instead of cutting the switches off -->
+                <WrapPanel Margin="0,14,0,0">
+                  <Button x:Name="BtnGenerate2" Style="{StaticResource PrimaryButton}" Padding="26,11" FontSize="14.5" Click="Generate_Click" Margin="0,0,10,8">
                     <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE768;" Style="{StaticResource Icon}" Foreground="White" Margin="0,0,10,0"/><TextBlock Text="{l:T Ed_Generate}"/></StackPanel>
                   </Button>
-                  <Button Style="{StaticResource SecondaryButton}" Margin="10,0,0,0" Click="PreviewScript_Click">
+                  <Button Style="{StaticResource SecondaryButton}" Margin="0,0,18,8" Click="PreviewScript_Click" VerticalAlignment="Center">
                     <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE943;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock Text="{l:T Ed_PreviewScript}"/></StackPanel>
                   </Button>
-                  <CheckBox x:Name="ChkNative" Style="{StaticResource Switch}" Content="{l:T Ed_Native}" Margin="18,0,0,0" VerticalAlignment="Center"/>
-                </StackPanel>
+                  <CheckBox x:Name="ChkPublishAfter" Style="{StaticResource Switch}" Content="{l:T Ed_PublishAfterBuild}" ToolTip="{l:T Ed_PublishAfterBuildTip}" Margin="0,0,18,8" VerticalAlignment="Center"/>
+                  <CheckBox x:Name="ChkNative" Style="{StaticResource Switch}" Content="{l:T Ed_Native}" Margin="0,0,18,8" VerticalAlignment="Center"/>
+                </WrapPanel>
               </StackPanel>
             </Border>
 

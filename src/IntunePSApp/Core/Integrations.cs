@@ -237,6 +237,8 @@ namespace J365.IntunePSApp.Core
         public string GroupId { get; set; } = "";
         /// <summary>Intune app to update with this package (a previous version); empty: looked up by name.</summary>
         public string AppId { get; set; } = "";
+        /// <summary>Certificate of this computer: the script connects as the application (app-only) instead of a user.</summary>
+        public string CertificateThumbprint { get; set; } = "";
     }
 
     /// <summary>Intune\publish-result.json, written by Publish-ToIntune.ps1 on every exit path.</summary>
@@ -280,6 +282,7 @@ namespace J365.IntunePSApp.Core
         {
             if (!IsTenant(o.TenantId)) return "Publish_InvalidTenant";
             if (!IsGuid(o.ClientId)) return "Publish_InvalidClient";
+            if (!string.IsNullOrWhiteSpace(o.CertificateThumbprint) && AppCertificate.Normalize(o.CertificateThumbprint).Length == 0) return "Publish_InvalidCertificate";
             if (o.AssignIntent != "none")
             {
                 if (o.AssignTo == "Group" && !IsGuid(o.GroupId)) return "Publish_InvalidGroup";
@@ -293,7 +296,8 @@ namespace J365.IntunePSApp.Core
         public static string Arguments(string publishScript, PublishOptions o, bool pause = false)
         {
             var sb = new StringBuilder($"-NoProfile -ExecutionPolicy Bypass -File \"{publishScript}\" -TenantId \"{o.TenantId.Trim()}\" -ClientId \"{o.ClientId.Trim()}\"");
-            if (o.DeviceCode) sb.Append(" -DeviceCode");
+            if (AppCertificate.Normalize(o.CertificateThumbprint) is { Length: > 0 } thumbprint) sb.Append(" -CertificateThumbprint ").Append(thumbprint);
+            else if (o.DeviceCode) sb.Append(" -DeviceCode");
             if (o.IfExists is "Fail" or "Update" or "CreateNew") sb.Append(" -IfExists ").Append(o.IfExists);
             if (o.AssignIntent is "available" or "required")
             {

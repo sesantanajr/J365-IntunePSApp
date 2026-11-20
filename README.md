@@ -40,7 +40,17 @@ You pick an application (from a database of 16,000+ apps, or your own `.msi` / `
 
 Anyone can use it: there is nothing to install, no script to write and no PowerShell knowledge required.
 
-## What is new in 2.4
+## What is new in 2.4.2
+
+- **Connect with an app certificate: modern and without passwords.** *Connect to Intune > Automatic with an app certificate*: the registration *J365 IntunePSApp* gets the application permission `DeviceManagementApps.ReadWrite.All` and a certificate created on this computer, with its key in the TPM and never exportable. Publishing then needs no sign-in, and it no longer depends on the role, the PIM activation or the Intune license of an account. The connection with your own account (delegated) is still there. [How it works](docs/INTUNE-PUBLISH.md#connect-with-an-app-certificate-242-recommended).
+- **Publishing comes first.** The card of a generated package shows *Publish to Microsoft Intune* with the connection it will use and a *Publish now* (or *Connect and publish*) button; *Publish to Intune when done* opens the publication as soon as the package is generated. It is no longer labelled preview.
+- **Fixed: "Could not find a property named 'displayVersion'".** The search for earlier versions of the app in Intune asked for a property that only Windows (Win32) apps have, so publishing stopped with "Could not connect to Microsoft Intune". It works again, and a failed search no longer blocks the publication.
+- **Refusals of Intune explained.** When Intune refuses a request that Microsoft Graph accepted (HTTP 401 or 403 "Forbidden"), the application lists what to check, read from the sign-in: an active Intune role (PIM), the license or *Allow access to unlicensed admins*, the subscription of the tenant, the consent, or the certificate as the way around. The internal address of Intune no longer fills the messages.
+- **Fixed:** a network failure while renewing the session no longer signs you out.
+
+<p align="center"><img src="docs/screenshots/en/connect.png" alt="Connect to Microsoft Intune: with an app certificate, with your account, an existing registration or Azure Cloud Shell" width="62%"></p>
+
+## What came in 2.4
 
 - **A connection to Intune that explains itself.** *Connect to Intune* opens a guided window with three ways in: the **automatic setup** (an administrator signs in; the registration *J365 IntunePSApp* is created and approved), a **registration that already exists** (paste the *connection code* an administrator shares, or the two IDs), or **Azure Cloud Shell** (one command creates the same registration with the Azure CLI, which is already authorised in every tenant: no consent screen). Every step is shown, and a failure comes with its likely causes and the action that fixes each one. Microsoft's "sign-in cancelled" answer is now told apart: a consent screen that was closed, an account without an active administrator role (with a shortcut to activate it in PIM), or a tenant that blocks *Microsoft Graph Command Line Tools*. The administrator account can be chosen beforehand.
 - **Light and dark themes, a new look.** A redesign of every page: new palette, a sidebar with the Intune connection and the database, catalog search from anywhere (**Ctrl+K**), Settings in sections, dialogs with a title bar in the theme. *Settings > Appearance*: same as Windows, light or dark; the sidebar button switches at any time.
@@ -49,7 +59,6 @@ Anyone can use it: there is nothing to install, no script to write and no PowerS
 - **Safer publishing.** Updating an app in Intune uploads and confirms the new content first, then switches settings, detection and content in one change: a failure or a cancel leaves the app as it was. *Cancel* asks the script to stop and clean up, and an app created by that run is removed.
 - **Found by a review and fixed:** *Path*-like environment variables are appended instead of replaced (the old way could drop System32 from the PATH of the devices); the PSAppDeployToolkit template must carry the signature of its publisher (checked when it is installed and before every build); typographic quotes no longer cut the company name short; a failed removal of the previous version no longer fails the installation; the *Uninstall application* action waits for uninstallers that run from a copy of themselves; publishing works behind proxies that ask for the Windows sign-in; the catalog only opens web links; the editor asks before discarding changes that were not saved.
 
-<p align="center"><img src="docs/screenshots/en/connect.png" alt="Connect to Microsoft Intune: automatic setup, existing registration or Azure Cloud Shell" width="62%"></p>
 <p align="center"><img src="docs/screenshots/en/home-dark.png" alt="The dark theme" width="88%"></p>
 
 Earlier in 2.3: publishing inside the application, the branded PSAppDeployToolkit dialogs in *Automatic* mode, the live preview of the dialog in Settings. The [changelog](CHANGELOG.md) lists everything.
@@ -81,7 +90,7 @@ Earlier in 2.3: publishing inside the application, the branded PSAppDeployToolki
 | **Keeping packages current** | *My packages* shows which packages have a **newer version in the database**. *Update* downloads the new installer and keeps every customisation. |
 | **Test before publishing** | **Windows Sandbox**: one click installs the package in a disposable Windows and runs the detection rule, with live progress; the result and the logs come back to the application. If the Windows feature is not installed, the application says so and installs it for you. Or test on the local computer. |
 | **Application icon** | Every package gets `Intune\AppIcon.png` for Intune and the Company Portal: the icon of the installer, of the program an `.msi` installs (read from its cabinet), of the copy installed on your computer, a file you choose, or a generated tile with the initials. Nothing to download separately. |
-| **Publish to Intune (preview)** | Connect once in a guided window (automatic setup, connection code or Azure Cloud Shell; every step and every failure explained), then publish with one click inside the application, with progress: create or update the app (a new version updates the previous one, which stays untouched until the new content is confirmed), optional assignment, link to the admin center. The same `Publish-ToIntune.ps1` also runs by hand. See [docs/INTUNE-PUBLISH.md](docs/INTUNE-PUBLISH.md). |
+| **Publish to Intune** | Connect once in a guided window (an app certificate with no sign-in, your own account, a connection code or Azure Cloud Shell; every step and every failure explained), then publish with one click inside the application, with progress: create or update the app (a new version updates the previous one, which stays untouched until the new content is confirmed), optional assignment, link to the admin center. The same `Publish-ToIntune.ps1` also runs by hand. See [docs/INTUNE-PUBLISH.md](docs/INTUNE-PUBLISH.md). |
 | **Light and dark** | Light, dark or same as Windows, switched live. Catalog search from any page with **Ctrl+K**. |
 | **English and Portuguese** | Switch the language at any time (sidebar or Settings). The generated instructions follow the same language. |
 | **Portable or installed** | Runs from any folder. Optionally installs for your user (Start menu, *Installed apps*) without administrator rights, and uninstalls cleanly. **Updates itself** with the window open. |
@@ -144,7 +153,7 @@ The window never opens larger than the screen and remembers its size. On small n
 │   ├── Detection_<App>_<Version>.ps1
 │   ├── Intune-Instructions.html     every field of the Intune wizard, ready to copy (+ .txt)
 │   ├── intune-app.json              the same information, machine-readable
-│   ├── Publish-ToIntune.ps1         optional publishing script (preview)
+│   ├── Publish-ToIntune.ps1         publishing script (also runs by hand)
 │   └── AppIcon.png
 ├── Sandbox\
 │   ├── Sandbox-Test.ps1             test script used by "Test in Sandbox"
@@ -182,10 +191,10 @@ Every release is built by GitHub Actions from the tagged commit and carries chec
 
 ```powershell
 # 1. Checksum: compare with SHA256SUMS.txt of the release
-Get-FileHash .\J365-IntunePSApp-2.4.1-win-x64.zip -Algorithm SHA256
+Get-FileHash .\J365-IntunePSApp-2.4.2-win-x64.zip -Algorithm SHA256
 
 # 2. Provenance: proves the file was built by this repository's workflow (GitHub CLI)
-gh attestation verify .\J365-IntunePSApp-2.4.1-win-x64.zip --repo sesantanajr/J365-IntunePSApp
+gh attestation verify .\J365-IntunePSApp-2.4.2-win-x64.zip --repo sesantanajr/J365-IntunePSApp
 ```
 
 What the application itself verifies: the database installers (SHA256 from the winget manifest), the PSAppDeployToolkit module (Authenticode signature), IntuneWinAppUtil (Microsoft signature, otherwise discarded), every `.intunewin` it creates (HMAC and SHA256) and its own updates (SHA256 of the release zip and the version of the new executable). See [SECURITY.md](SECURITY.md).
@@ -234,7 +243,8 @@ Application logs: `IntunePSApp-Data\logs` next to the executable (portable) or `
 - **For 2.2:** the reported case was reproduced as SYSTEM in Windows Sandbox: "7-Zip 26.06 (x64)" registered as installed by its `.exe` installer, with an uninstaller that hands the work to a copy of itself in `%TEMP%`. The detection of the old package reported it as installed (so Intune would never run the package); the new one did not. The package waited for that copy to finish, installed the MSI, wrote the mark and was detected; the uninstallation removed the MSI and the mark. The update inside the application was run end to end against a local release server, from the command line and through the window (notice, confirmation, download with progress, replacement of the running executable, restart in the new version, cleanup). Icon extraction was checked with three real MSI files.
 - **For 2.3:** a harmless per-user package was run on Windows in both display modes: the PSAppDeployToolkit log shows *"running in [Interactive] mode"* and the progress dialog created in *Automatic*, against *"changing deployment mode to [Silent]"* in *Discreet* (the old behaviour). The automatic setup was run against a local stand-in for Entra ID and Microsoft Graph that checks the registration (single tenant, public client, no secret, the one permission), the enterprise application created after a replication delay, the admin consent, the PKCE sign-in and the encrypted session; publishing inside the application was run against the Graph and Azure Storage stand-in with the session of the application (no browser), and the uploaded content was verified (MAC, IV, digest).
 - **For 2.4:** inside the real PSAppDeployToolkit 4.1.8 (per-user package, nothing elevated): with a newer version registered, the installation kept it, did not run the installer, wrote the mark and returned 0; with an entry that has no silent uninstaller, the uninstallation logged *"No applications found for removal"*, then failed with *"Still installed after the uninstallation"* (exit code 60001) and kept the mark. Publishing was run against the Graph and Azure Storage stand-in: an update of an existing app sent its only change after the content was committed (MAC, IV and digest verified); a failed commit left the app untouched; a cancel during the upload removed the app the run had created and recorded *cancelled*. The PowerShell expansion of typographic quotes was checked in Windows PowerShell 5.1. Every page was rendered in the light and the dark theme, in both languages.
-- **Not verified yet:** *Publish to Intune*, the connection window and the Cloud Shell command against a real tenant; that is why it is still labelled **preview**. The database generator changes were compiled but the database was not regenerated locally. Feedback is welcome in the [issues](https://github.com/sesantanajr/J365-IntunePSApp/issues).
+- **For 2.4.2:** the certificate connection was run against a stand-in for Entra ID and Microsoft Graph that checks every assertion as Entra ID does (key registered on the application, PS256 signature, audience, client, time), from the application and from `Publish-ToIntune.ps1` in Windows PowerShell 5.1; the key was created non-exportable and removed with the certificate. The stand-in also answers like Intune to the old search of earlier versions (HTTP 400) and to a refused account (HTTP 401 "Forbidden").
+- **Not verified yet:** the certificate connection and the Cloud Shell command against a real tenant (publishing with a user sign-in was used against a real tenant in 2.4.1, which found the problems fixed in 2.4.2). The database generator changes were compiled but the database was not regenerated locally. Feedback is welcome in the [issues](https://github.com/sesantanajr/J365-IntunePSApp/issues).
 
 As with any packaging tool: **always test a package with a pilot group before a broad deployment.**
 
@@ -291,7 +301,17 @@ Você escolhe um aplicativo (em um banco de dados com mais de 16.000 apps, ou o 
 
 Qualquer pessoa consegue usar: não há nada para instalar, nenhum script para escrever e não é preciso conhecer PowerShell.
 
-## Novidades da 2.4
+## Novidades da 2.4.2
+
+- **Conectar com certificado do aplicativo: moderno e sem senha.** *Conectar ao Intune > Automático com certificado do aplicativo*: o registro *J365 IntunePSApp* recebe a permissão de aplicativo `DeviceManagementApps.ReadWrite.All` e um certificado criado neste computador, com a chave no TPM e nunca exportável. A partir daí a publicação não pede login e deixa de depender da função, da ativação no PIM e da licença do Intune de uma conta. A conexão com a sua própria conta (delegada) continua disponível. [Como funciona](docs/INTUNE-PUBLISH.md#conectar-com-certificado-do-aplicativo-242-recomendado).
+- **A publicação vem primeiro.** O cartão de um pacote gerado mostra *Publicar no Microsoft Intune* com a conexão que será usada e o botão *Publicar agora* (ou *Conectar e publicar*); *Publicar no Intune ao terminar* abre a publicação assim que o pacote é gerado. Deixou de ser prévia.
+- **Corrigido: "Could not find a property named 'displayVersion'".** A busca de versões anteriores do app no Intune pedia uma propriedade que só os apps do Windows (Win32) têm, e a publicação parava com "Não foi possível conectar ao Microsoft Intune". Voltou a funcionar, e uma busca que falha não bloqueia mais a publicação.
+- **Recusas do Intune explicadas.** Quando o Intune recusa um pedido que o Microsoft Graph aceitou (HTTP 401 ou 403 "Forbidden"), o aplicativo lista o que conferir, lido do login: uma função do Intune ativa (PIM), a licença ou *Permitir acesso a administradores sem licença*, a assinatura do tenant, o consentimento, ou o certificado como alternativa. O endereço interno do Intune deixou de encher as mensagens.
+- **Corrigido:** uma falha de rede ao renovar a sessão não desconecta mais.
+
+<p align="center"><img src="docs/screenshots/pt-BR/connect.png" alt="Conectar ao Microsoft Intune: com certificado do aplicativo, com a sua conta, um registro existente ou o Azure Cloud Shell" width="62%"></p>
+
+## O que veio na 2.4
 
 - **Uma conexão com o Intune que explica o que acontece.** *Conectar ao Intune* abre uma janela guiada com três caminhos: a **configuração automática** (um administrador entra; o registro *J365 IntunePSApp* é criado e aprovado), um **registro que já existe** (cole o *código de conexão* que um administrador compartilhou, ou os dois IDs) ou o **Azure Cloud Shell** (um comando cria o mesmo registro com o Azure CLI, que já é autorizado em todo tenant: sem tela de permissão). Cada etapa aparece na tela, e uma falha vem com as causas prováveis e a ação que resolve cada uma. A resposta "login cancelado" da Microsoft agora é diferenciada: tela de permissão fechada, conta sem uma função de administrador ativa (com atalho para ativá-la no PIM) ou tenant que bloqueia o *Microsoft Graph Command Line Tools*. A conta de administrador pode ser escolhida antes.
 - **Temas claro e escuro, visual novo.** Todas as telas foram redesenhadas: paleta nova, barra lateral com a conexão do Intune e o banco de dados, busca no catálogo de qualquer lugar (**Ctrl+K**), Configurações em seções e janelas com barra de título no tema. *Configurações > Aparência*: igual ao Windows, claro ou escuro; o botão da barra lateral alterna a qualquer momento.
@@ -300,7 +320,6 @@ Qualquer pessoa consegue usar: não há nada para instalar, nenhum script para e
 - **Publicação mais segura.** Atualizar um app no Intune envia e confirma o conteúdo novo primeiro e só no fim troca configurações, detecção e conteúdo de uma vez: uma falha ou um cancelamento deixa o app como estava. *Cancelar* pede ao script que pare e limpe, e um app criado naquela execução é removido.
 - **Encontrado numa revisão e corrigido:** variáveis de ambiente do tipo *Path* são acrescentadas em vez de substituídas (o jeito antigo podia tirar o System32 do PATH dos dispositivos); o template do PSAppDeployToolkit precisa ter a assinatura do publicador (conferida ao instalar e antes de cada geração); aspas tipográficas não cortam mais o nome da empresa; uma falha ao remover a versão anterior não faz mais a instalação falhar; a ação *Desinstalar aplicativo* espera desinstaladores que rodam de uma cópia de si mesmos; a publicação funciona atrás de proxies que pedem o login do Windows; o catálogo só abre links da web; o editor pergunta antes de descartar alterações não salvas.
 
-<p align="center"><img src="docs/screenshots/pt-BR/connect.png" alt="Conectar ao Microsoft Intune: configuração automática, registro existente ou Azure Cloud Shell" width="62%"></p>
 <p align="center"><img src="docs/screenshots/pt-BR/home-dark.png" alt="O tema escuro" width="88%"></p>
 
 Antes, na 2.3: publicação dentro do aplicativo, as janelas personalizadas do PSAppDeployToolkit no modo *Automático*, a prévia ao vivo da janela nas Configurações. O [changelog](CHANGELOG.md) lista tudo.
@@ -332,7 +351,7 @@ Antes, na 2.3: publicação dentro do aplicativo, as janelas personalizadas do P
 | **Pacotes sempre atuais** | *Meus pacotes* mostra quais pacotes têm **versão mais nova no banco de dados**. *Atualizar* baixa o novo instalador e mantém todas as personalizações. |
 | **Teste antes de publicar** | **Windows Sandbox**: um clique instala o pacote em um Windows descartável e executa a regra de detecção, com progresso ao vivo; o resultado e os logs voltam para o aplicativo. Se o recurso do Windows não estiver instalado, o aplicativo avisa e instala para você. Ou teste no computador local. |
 | **Ícone do aplicativo** | Todo pacote recebe `Intune\AppIcon.png` para o Intune e o Portal da Empresa: o ícone do instalador, do programa que um `.msi` instala (lido do gabinete dele), da cópia instalada no seu computador, um arquivo que você escolher, ou um ícone gerado com as iniciais. Nada para baixar separado. |
-| **Publicar no Intune (prévia)** | Conecte uma vez numa janela guiada (configuração automática, código de conexão ou Azure Cloud Shell; cada etapa e cada falha explicadas) e publique com um clique dentro do aplicativo, com progresso: cria ou atualiza o app (uma versão nova atualiza a anterior, que fica intacta até o conteúdo novo ser confirmado), atribuição opcional, link para o centro de administração. O mesmo `Publish-ToIntune.ps1` também roda manualmente. Veja [docs/INTUNE-PUBLISH.md](docs/INTUNE-PUBLISH.md#publicar-no-intune-prévia). |
+| **Publicar no Intune** | Conecte uma vez numa janela guiada (certificado do aplicativo sem login, a sua própria conta, um código de conexão ou o Azure Cloud Shell; cada etapa e cada falha explicadas) e publique com um clique dentro do aplicativo, com progresso: cria ou atualiza o app (uma versão nova atualiza a anterior, que fica intacta até o conteúdo novo ser confirmado), atribuição opcional, link para o centro de administração. O mesmo `Publish-ToIntune.ps1` também roda manualmente. Veja [docs/INTUNE-PUBLISH.md](docs/INTUNE-PUBLISH.md#publicar-no-intune). |
 | **Claro e escuro** | Claro, escuro ou igual ao Windows, trocado na hora. Busca no catálogo de qualquer tela com **Ctrl+K**. |
 | **Inglês e português** | Troque o idioma a qualquer momento (barra lateral ou Configurações). As instruções geradas seguem o mesmo idioma. |
 | **Portátil ou instalado** | Roda de qualquer pasta. Se quiser, instala para o seu usuário (Menu Iniciar, *Aplicativos instalados*) sem precisar de administrador, e desinstala sem deixar resíduos. **Atualiza a si mesmo** com a janela aberta. |
@@ -395,7 +414,7 @@ A janela nunca abre maior que a tela e lembra o tamanho. Em notebooks pequenos, 
 │   ├── Detection_<App>_<Versão>.ps1
 │   ├── Intune-Instructions.html     todos os campos do assistente do Intune, prontos para copiar (+ .txt)
 │   ├── intune-app.json              as mesmas informações, para automação
-│   ├── Publish-ToIntune.ps1         script opcional de publicação (prévia)
+│   ├── Publish-ToIntune.ps1         script de publicação (também roda manualmente)
 │   └── AppIcon.png
 ├── Sandbox\
 │   ├── Sandbox-Test.ps1             script de teste usado por "Testar no Sandbox"
@@ -433,10 +452,10 @@ Cada versão é compilada pelo GitHub Actions a partir do commit marcado e traz 
 
 ```powershell
 # 1. Checksum: compare com o SHA256SUMS.txt da versão
-Get-FileHash .\J365-IntunePSApp-2.4.1-win-x64.zip -Algorithm SHA256
+Get-FileHash .\J365-IntunePSApp-2.4.2-win-x64.zip -Algorithm SHA256
 
 # 2. Procedência: prova que o arquivo foi compilado pelo workflow deste repositório (GitHub CLI)
-gh attestation verify .\J365-IntunePSApp-2.4.1-win-x64.zip --repo sesantanajr/J365-IntunePSApp
+gh attestation verify .\J365-IntunePSApp-2.4.2-win-x64.zip --repo sesantanajr/J365-IntunePSApp
 ```
 
 O que o próprio aplicativo verifica: os instaladores do banco de dados (SHA256 do manifesto do winget), o módulo do PSAppDeployToolkit (assinatura Authenticode), o IntuneWinAppUtil (assinatura da Microsoft, senão é descartado), cada `.intunewin` criado (HMAC e SHA256) e as próprias atualizações (SHA256 do zip da release e a versão do novo executável). Veja [SECURITY.md](SECURITY.md).
@@ -485,7 +504,8 @@ Logs do aplicativo: `IntunePSApp-Data\logs` ao lado do executável (portátil) o
 - **Para a 2.2:** o caso relatado foi reproduzido como SYSTEM no Windows Sandbox: "7-Zip 26.06 (x64)" registrado como instalado pelo instalador `.exe`, com um desinstalador que passa o trabalho para uma cópia de si mesmo no `%TEMP%`. A detecção do pacote antigo o dava como instalado (o Intune nunca executaria o pacote); a nova, não. O pacote esperou essa cópia terminar, instalou o MSI, gravou a marca e foi detectado; a desinstalação removeu o MSI e a marca. A atualização dentro do aplicativo foi executada de ponta a ponta contra um servidor de releases local, pela linha de comando e pela janela (aviso, confirmação, download com progresso, troca do executável em uso, reinício na versão nova, limpeza). A extração de ícone foi conferida com três arquivos MSI reais.
 - **Para a 2.3:** um pacote inofensivo por usuário foi executado no Windows nos dois modos de exibição: o log do PSAppDeployToolkit mostra *"running in [Interactive] mode"* e a janela de progresso criada no *Automático*, contra *"changing deployment mode to [Silent]"* no *Discreto* (o comportamento antigo). A configuração automática foi executada contra um substituto local do Entra ID e do Microsoft Graph que confere o registro (um único tenant, cliente público, sem segredo, a única permissão), o aplicativo empresarial criado após um atraso de replicação, o consentimento do administrador, o login PKCE e a sessão criptografada; a publicação dentro do aplicativo foi executada contra o substituto do Graph e do Azure Storage com a sessão do aplicativo (sem navegador), e o conteúdo enviado foi conferido (MAC, IV, hash).
 - **Para a 2.4:** dentro do PSAppDeployToolkit 4.1.8 real (pacote por usuário, nada elevado): com uma versão mais nova registrada, a instalação a manteve, não executou o instalador, gravou a marca e retornou 0; com uma entrada sem desinstalador silencioso, a desinstalação registrou *"No applications found for removal"*, depois falhou com *"Still installed after the uninstallation"* (código 60001) e manteve a marca. A publicação foi executada contra o substituto do Graph e do Azure Storage: a atualização de um app existente enviou a única alteração depois do conteúdo confirmado (MAC, IV e hash conferidos); uma confirmação com falha deixou o app intacto; um cancelamento durante o envio removeu o app criado pela execução e registrou *cancelled*. A expansão de aspas tipográficas foi conferida no Windows PowerShell 5.1. Todas as telas foram desenhadas nos temas claro e escuro, nos dois idiomas.
-- **Ainda não verificado:** *Publicar no Intune*, a janela de conexão e o comando do Cloud Shell contra um locatário real; por isso continua marcado como **prévia**. As alterações do gerador do banco de dados foram compiladas, mas o banco não foi regenerado localmente. Relatos são bem-vindos nas [issues](https://github.com/sesantanajr/J365-IntunePSApp/issues).
+- **Para a 2.4.2:** a conexão com certificado foi executada contra um substituto do Entra ID e do Microsoft Graph que confere cada declaração como o Entra ID faz (chave registrada no aplicativo, assinatura PS256, público, cliente, tempo), a partir do aplicativo e do `Publish-ToIntune.ps1` no Windows PowerShell 5.1; a chave foi criada não exportável e removida junto com o certificado. O substituto também responde como o Intune à busca antiga de versões anteriores (HTTP 400) e a uma conta recusada (HTTP 401 "Forbidden").
+- **Ainda não verificado:** a conexão com certificado e o comando do Cloud Shell contra um locatário real (a publicação com login de usuário foi usada contra um locatário real na 2.4.1, o que revelou os problemas corrigidos na 2.4.2). As alterações do gerador do banco de dados foram compiladas, mas o banco não foi regenerado localmente. Relatos são bem-vindos nas [issues](https://github.com/sesantanajr/J365-IntunePSApp/issues).
 
 Como em qualquer ferramenta de empacotamento: **sempre teste o pacote em um grupo piloto antes de uma implantação ampla.**
 

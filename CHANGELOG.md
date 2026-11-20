@@ -2,6 +2,34 @@
 
 All notable changes to J365 IntunePSApp. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.4.2 - 2026-11-19
+
+### Why this version
+
+Publishing from the application failed in a real tenant. First, the search for earlier versions of the app asked Intune for a property that only Windows (Win32) apps have, and the dialog stopped with *"Could not connect to Microsoft Intune: ... Could not find a property named 'displayVersion' on type 'microsoft.graph.mobileApp'"*. Then Intune refused the account itself (HTTP 401 *"Forbidden"*): Microsoft Graph accepted the sign-in, but the account had no active Intune role (PIM) or no Intune license, and the message pointed at the app registration instead. The connection also depended on the sign-in of a user (delegated permission). This version fixes the search, explains every refusal of Intune and adds a modern connection with no user and no secret: an app certificate.
+
+### Added
+
+- **Connect with an app certificate** (*Connect to Intune > Automatic with an app certificate*, recommended; also *Settings > Microsoft Intune > Connect with a certificate*). The registration *J365 IntunePSApp* gets `DeviceManagementApps.ReadWrite.All` as an **application permission** too, granted by the administrator during the setup (an app role assignment of Microsoft Graph; it takes a Global Administrator or Privileged Role Administrator), and the public part of a **certificate created on this computer**: RSA 2048, one year, its key in the **TPM** when there is one (otherwise in the Windows key store), never exportable, for the current Windows user only. Every token request is a short assertion signed with that key (PS256 with the SHA-256 thumbprint, as Microsoft recommends; the signature is checked before it is sent, and a key that signs PSS another way, such as some TPMs, uses RS256). Publishing then needs no sign-in and does not depend on the role, the PIM activation or the Intune license of an account. The setup keeps every other permission and key of the registration and removes expired keys it added. A new certificate becomes the connection only once it obtained a token: a renewal keeps the certificate in use working until then, *Try again* after a slow activation retries the sign-in only, and a cancelled or abandoned setup removes the new certificate. Then the application proves the connection by reading Intune. The delegated permission stays, so technicians can still connect with their own accounts.
+- **`Publish-ToIntune.ps1 -CertificateThumbprint`**: the script signs in as the application with the certificate of the current Windows user (read through .NET, no dependency on the `Cert:` drive), renews the token by itself during long uploads, and the application passes it for publications inside the app, *Copy command* and *Run in a PowerShell window*. Checked in Windows PowerShell 5.1 against a stand-in that verifies the signature, and a full publication (create, upload, commit) with the certificate against the local Intune stand-in.
+- **The publish card of a generated package**: *Publish to Microsoft Intune*, highlighted, with the connection it will use and *Publish now* (or *Connect and publish*, which opens the connection first when nothing is set up). *Open folder* and the tests moved below it.
+- **Publish to Intune when done** (next to *Generate package*, remembered): the publication opens as soon as the package is generated.
+- **Refusals of Intune explained.** When Intune refuses a request that Microsoft Graph accepted (HTTP 401 or 403 *"Forbidden"*), the connection window, *Test connection*, the publishing dialog and the result of a publication list what to check, read from the token in use: the delegated permission, an active Intune role (with a shortcut to PIM), an Intune license or *Allow access to unlicensed admins*, the Intune subscription of the tenant, and the certificate as the way around; for the certificate, the application permission and the tenant. The script prints the same causes.
+- *Settings > Microsoft Intune* shows the certificate in use (thumbprint, expiry, TPM or key store), warns a month before it expires, and *Remove the certificate from this PC* deletes it with its key (after a confirmation); a certificate whose key is gone (a cleared TPM) shows as not usable. Switching to a user connection (a code, your account, another registration) never deletes the certificate: *Use the certificate of this PC* goes back to it without an administrator. In the publishing dialog the tenant and the registration come from the certificate. The permission is shown as delegated or application.
+
+### Changed
+
+- *Publish to Intune* is no longer labelled preview (dialog, card, script, summary).
+- The connection window offers four ways: *Automatic with an app certificate* (recommended), *Automatic with my account* (delegated), an existing registration, Azure Cloud Shell. The roles asked for before the setup follow the way chosen.
+- The error of Intune keeps its sentence and the ids for support but no longer its internal address; errors of the script show the request without its query string and with the error code (`HTTP 401 (Forbidden)`). Toasts of a publication are short; the card keeps the whole text.
+- The security notes of *Settings > Microsoft Intune* describe both connections.
+
+### Fixed
+
+- **The search for earlier versions** asked for `displayVersion` on the list of every app, which Intune refuses; it now reads the Win32 apps without a selection. A search that fails for another reason no longer stops the publication: the dialog asks what to do with an app of the same name.
+- A network failure while renewing the session signed the user out (since 2.4.1 the network error carries a code that the renewal treated as an expired session).
+- The row of *Generate package* wraps on narrow windows instead of cutting the switches off.
+
 ## 2.4.1 - 2026-11-19
 
 ### Why this version

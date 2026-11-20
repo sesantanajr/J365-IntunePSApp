@@ -46,6 +46,11 @@ namespace J365.IntunePSApp.Views
             foreach (var code in PackageBuilder.MinimumOsOptions) CmbMinOs.Items.Add(new ComboBoxItem { Content = PackageBuilder.MinimumOsLabel(code), Tag = code });
             BuildSwatches();
             BuildQuickActions();
+            // "Publish to Intune when done" is remembered; the publish card follows the connection.
+            ChkPublishAfter.IsChecked = ConfigStore.Current.PublishAfterBuild;
+            ChkPublishAfter.Checked += (s, e) => { ConfigStore.Current.PublishAfterBuild = true; ConfigStore.Save(); };
+            ChkPublishAfter.Unchecked += (s, e) => { ConfigStore.Current.PublishAfterBuild = false; ConfigStore.Save(); };
+            IntuneConnection.Changed += () => Dispatcher.BeginInvoke(new Action(UpdatePublishCallout));
             LoadSettings(ConfigStore.Current.NewPackage());
             GoStep(0);
             SizeChanged += (s, e) => UpdatePreviewVisibility();
@@ -1034,7 +1039,9 @@ namespace J365.IntunePSApp.Views
             }
             if (v.Warnings.Count > 0 && !Ui.Confirm(T("Ed_WarningsPrompt", "• " + string.Join("\n• ", v.Warnings)), T("Ed_GenerateAnyway"), T("Common_Cancel"))) return;
             GoStep(ReviewStep);
-            await BuildAsync(s);
+            var built = await BuildAsync(s);
+            // "Publish to Intune when done": the publication opens with the new package.
+            if (built != null && ConfigStore.Current.PublishAfterBuild && !App.HasArg("--snapshot")) Publish_Click(BtnPublish, new RoutedEventArgs());
         }
 
         public async Task<BuildResult> BuildAsync(PackageSettings s)
@@ -1108,6 +1115,16 @@ namespace J365.IntunePSApp.Views
             ResultInstall.Text = r.InstallCommand;
             ResultUninstall.Text = r.UninstallCommand;
             ResultCard.Visibility = Visibility.Visible;
+            UpdatePublishCallout();
+        }
+
+        /// <summary>The publish card of the result: the connection it will use, or how to connect.</summary>
+        private void UpdatePublishCallout()
+        {
+            if (PublishCalloutText == null) return;
+            bool signedIn = IntuneConnection.IsSignedIn;
+            PublishCalloutText.Text = signedIn ? T("Ed_PublishCalloutConnected", IntuneConnection.Account, IntuneConnection.TenantLabel) : T("Ed_PublishCalloutNotConnected");
+            BtnPublishText.Text = signedIn ? T("Ed_PublishNow") : T("Ed_ConnectAndPublish");
         }
 
         private void PreviewScript_Click(object sender, RoutedEventArgs e)
@@ -1311,6 +1328,9 @@ namespace J365.IntunePSApp.Views
         private async void Publish_Click(object sender, RoutedEventArgs e)
         {
             if (_last == null || _publishRunning) return;
+            // Nothing set up yet, or a certificate that cannot be used: the connection comes first (the certificate is the
+            // recommended way). A user connection signs in again inside the publishing dialog.
+            if (!IntuneConnection.IsSignedIn && (!IntuneConnection.IsConfigured || IntuneConnection.UsesCertificate) && !ConnectWindow.Run(Window.GetWindow(this))) return;
             string intune = _last.IntuneFolder;
             if (string.IsNullOrEmpty(intune) || !File.Exists(Path.Combine(intune, PackageLayout.MetadataFile))) { MainWindow.Current.Toast(T("Ed_OldPackage"), "warn"); return; }
             string script;
@@ -1340,8 +1360,11 @@ namespace J365.IntunePSApp.Views
             if (result != null && File.GetLastWriteTimeUtc(IntunePublisher.ResultFile(intune)) < started.AddSeconds(-5)) result = null;
             _publishResult = result;
             RefreshPublishStatus();
-            if (result != null) MainWindow.Current.Toast(PublishSummary(result), result.IsPublished ? "ok" : result.Status == "cancelled" ? "warn" : "error");
+            if (result != null) MainWindow.Current.Toast(Brief(PublishSummary(result)), result.IsPublished ? "ok" : result.Status == "cancelled" ? "warn" : "error");
         }
+
+        /// <summary>A toast says the outcome; the card below the package keeps the whole text.</summary>
+        private static string Brief(string text) => text.Length > 220 ? text.Substring(0, 217).TrimEnd() + "…" : text;
 
         /// <summary>Name of the app in Intune, as the publishing script will send it (Intune\intune-app.json).</summary>
         private static string IntuneDisplayName(string intuneFolder)
@@ -1360,7 +1383,10 @@ namespace J365.IntunePSApp.Views
             TokenSet session;
             try { session = await IntuneConnection.RenewAsync(CancellationToken.None); }
             catch (Exception ex) { Ui.Error(T("Auth_Failed", ex.Message)); return; }
-            if (session == null || string.IsNullOrEmpty(session.RefreshToken)) { Ui.Warn(T("Auth_ErrNotSignedIn")); return; }
+            // The certificate connects by itself in the script; a user session hands over its refresh token.
+            bool certificate = IntuneConnection.UsesCertificate;
+            if (session == null || (!certificate && string.IsNullOrEmpty(session.RefreshToken))) { Ui.Warn(T("Auth_ErrNotSignedIn")); return; }
+            if (certificate) o.CertificateThumbprint = IntuneConnection.CertificateThumbprint;
             if (await Task.Run(() => PowerShellPolicy.IsRestricted)) { Ui.Warn(T("Err_PowerShellRestricted")); return; }
 
             _publishFolder = intune;
@@ -1373,7 +1399,7 @@ namespace J365.IntunePSApp.Views
             var started = DateTime.UtcNow;
             try
             {
-                using var p = IntunePublisher.LaunchInApp(script, o, session.RefreshToken, line => Dispatcher.BeginInvoke(new Action(() => ShowPublishLine(line))));
+                using var p = IntunePublisher.LaunchInApp(script, o, certificate ? null : session.RefreshToken, line => Dispatcher.BeginInvoke(new Action(() => ShowPublishLine(line))));
                 // Cancel asks the script to stop at its next safe point (it then removes an app it created, and an
                 // existing app is never left half updated). Only a script that does not stop within 90 s is killed.
                 string cancelFile = IntunePublisher.CancelFile(script);
@@ -1403,7 +1429,7 @@ namespace J365.IntunePSApp.Views
             if (result != null && File.GetLastWriteTimeUtc(IntunePublisher.ResultFile(intune)) < started.AddSeconds(-5)) result = null;
             _publishResult = result;
             RefreshPublishStatus();
-            if (result != null) MainWindow.Current.Toast(PublishSummary(result), result.IsPublished ? "ok" : result.Status == "cancelled" ? "warn" : "error");
+            if (result != null) MainWindow.Current.Toast(Brief(PublishSummary(result)), result.IsPublished ? "ok" : result.Status == "cancelled" ? "warn" : "error");
             else if (ct.IsCancellationRequested) MainWindow.Current.Toast(T("Publish_InAppCancelled"), "warn");
         }
 
@@ -1478,7 +1504,11 @@ namespace J365.IntunePSApp.Views
             bool failed = r != null && !ok && r.Status != "cancelled";
             PublishStatus.SetResourceReference(Border.BackgroundProperty, ok ? "SuccessSoft" : failed ? "DangerSoft" : "BrandSoft");
             PublishStatusIcon.SetResourceReference(TextBlock.ForegroundProperty, ok ? "Success" : failed ? "Danger" : "Brand");
-            PublishStatusText.Text = r == null ? T("Ed_PublishRunning") : PublishSummary(r);
+            string text = r == null ? T("Ed_PublishRunning") : PublishSummary(r);
+            // Intune refused the caller: what to check, read from the token of the connection.
+            if (failed && IntuneDiagnosis.IsRefusal(r.Error))
+                text += Environment.NewLine + Environment.NewLine + IntuneDiagnosis.Explain(IntuneConnection.LastToken, IntuneConnection.UsesCertificate);
+            PublishStatusText.Text = text;
             BtnPublishOpen.Visibility = ok && !string.IsNullOrWhiteSpace(r.PortalUrl) ? Visibility.Visible : Visibility.Collapsed;
         }
 

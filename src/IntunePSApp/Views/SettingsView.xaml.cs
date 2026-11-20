@@ -101,27 +101,47 @@ namespace J365.IntunePSApp.Views
         private void UpdateIntuneStatus(bool syncFields)
         {
             if (IntuneStatusTitle == null || TxtTenant == null || TxtClient == null) return;
-            bool signedIn = IntuneConnection.IsSignedIn, configured = IntuneConnection.IsConfigured;
-            IntuneStatusBox.SetResourceReference(Border.BackgroundProperty, signedIn ? "SuccessSoft" : configured ? "WarningSoft" : "BrandSoft");
-            IntuneStatusIcon.SetResourceReference(TextBlock.ForegroundProperty, signedIn ? "Success" : configured ? "Warning" : "BrandText");
+            bool signedIn = IntuneConnection.IsSignedIn, configured = IntuneConnection.IsConfigured, certificate = IntuneConnection.UsesCertificate;
+            var cert = certificate ? AppCertificate.Describe(IntuneConnection.CertificateThumbprint) : null;
+            string Date(DateTime d) => d.ToString("d", J365.IntunePSApp.Localization.Loc.Instance.Culture);
+            // A certificate close to its end is connected, but asks for attention.
+            bool attention = signedIn && cert != null && cert.ExpiresSoon;
+            IntuneStatusBox.SetResourceReference(Border.BackgroundProperty, signedIn && !attention ? "SuccessSoft" : configured ? "WarningSoft" : "BrandSoft");
+            IntuneStatusIcon.SetResourceReference(TextBlock.ForegroundProperty, signedIn && !attention ? "Success" : configured ? "Warning" : "BrandText");
             IntuneStatusIcon.Text = signedIn ? "\uE73E" : configured ? "\uE72E" : "\uE753";
-            IntuneStatusTitle.Text = signedIn ? T("Publish_ConnectedAs", IntuneConnection.Account)
+            IntuneStatusTitle.Text = signedIn ? (certificate ? T("Publish_ConnectedCert") : T("Publish_ConnectedAs", IntuneConnection.Account))
                 : configured ? T("Publish_NotSignedIn") : T("Publish_NotConnected");
-            IntuneStatusText.Text = signedIn ? T("Settings_IntuneConnectedText", IntuneConnection.RegistrationName, IntuneConnection.ClientId, IntuneConnection.SessionTenant.Length > 0 ? IntuneConnection.SessionTenant : IntuneConnection.TenantId)
-                : configured ? T("Settings_IntuneConfiguredText", IntuneConnection.ClientId, IntuneConnection.TenantId)
-                : T("Publish_NotConnectedHint", IntuneConnection.RegistrationName);
+            if (signedIn && cert != null)
+                IntuneStatusText.Text = T("Settings_IntuneCertText", IntuneConnection.RegistrationName, IntuneConnection.ClientId, cert.Thumbprint, Date(cert.NotAfter),
+                        T(cert.Hardware ? "Settings_IntuneKeyTpm" : "Settings_IntuneKeySoftware"))
+                    + (cert.ExpiresSoon ? Environment.NewLine + T("Settings_IntuneCertExpiring", Date(cert.NotAfter)) : "");
+            else if (certificate && configured)
+                IntuneStatusText.Text = cert != null && cert.Expired ? T("Settings_IntuneCertExpired", Date(cert.NotAfter)) : T("Auth_ErrCertMissing");
+            else
+                IntuneStatusText.Text = signedIn ? T("Settings_IntuneConnectedText", IntuneConnection.RegistrationName, IntuneConnection.ClientId, IntuneConnection.SessionTenant.Length > 0 ? IntuneConnection.SessionTenant : IntuneConnection.TenantId)
+                    : configured ? T("Settings_IntuneConfiguredText", IntuneConnection.ClientId, IntuneConnection.TenantId)
+                    : T("Publish_NotConnectedHint", IntuneConnection.RegistrationName);
+            IntunePermissionValue.Text = T(certificate ? "Settings_PermApp" : "Settings_PermDelegated", IntuneConnection.IntunePermission);
+            // A certificate kept while a user connection is in use: one click goes back to it.
+            bool stored = !certificate && IntuneConnection.HasStoredCertificate;
+            if (stored && AppCertificate.Describe(IntuneConnection.CertificateThumbprint) is { } kept)
+                IntuneStatusText.Text += Environment.NewLine + T("Settings_IntuneStoredCertNote", IntuneConnection.StoredCertificateTenant, Date(kept.NotAfter));
+            BtnIntuneCertText.Text = stored ? T("Settings_IntuneUseStoredCert") : T("Settings_IntuneUseCert");
             IntuneDetails.Visibility = configured ? Visibility.Visible : Visibility.Collapsed;
             IntuneTenantValue.Text = signedIn && IntuneConnection.SessionTenant.Length > 0 ? IntuneConnection.SessionTenant : IntuneConnection.TenantId;
             IntuneClientValue.Text = IntuneConnection.ClientId;
             BtnIntuneSetupText.Text = configured ? T("Settings_IntuneRedo") : T("Settings_IntuneConnect");
             BtnIntuneSetup.Style = Ui.Style(configured ? "SecondaryButton" : "PrimaryButton");
             bool typed = IntunePublisher.IsTenant(TxtTenant.Text) && IntunePublisher.IsGuid(TxtClient.Text);
-            BtnIntuneSignIn.Visibility = configured || typed ? Visibility.Visible : Visibility.Collapsed;
+            BtnIntuneSignIn.Visibility = !certificate && (configured || typed) ? Visibility.Visible : Visibility.Collapsed;
+            // The modern way is offered while the connection depends on a user (or does not exist yet).
+            BtnIntuneCert.Visibility = certificate && signedIn && !attention ? Visibility.Collapsed : Visibility.Visible;
             BtnIntuneSignIn.Content = signedIn ? T("Publish_SwitchAccount") : T("Publish_SignIn");
             BtnIntuneSignIn.Style = Ui.Style(configured && !signedIn ? "PrimaryButton" : "SecondaryButton");
             BtnIntuneTest.Visibility = signedIn ? Visibility.Visible : Visibility.Collapsed;
             BtnIntuneCopyCode.Visibility = configured ? Visibility.Visible : Visibility.Collapsed;
-            BtnIntuneSignOut.Visibility = signedIn ? Visibility.Visible : Visibility.Collapsed;
+            BtnIntuneSignOut.Visibility = signedIn || (certificate && configured) ? Visibility.Visible : Visibility.Collapsed;
+            BtnIntuneSignOut.Content = certificate ? T("Settings_IntuneRemoveCert") : T("Settings_IntuneSignOut");
             if (syncFields && !_loading)
             {
                 _loading = true;
@@ -139,13 +159,30 @@ namespace J365.IntunePSApp.Views
             bool busy = !string.IsNullOrEmpty(text);
             IntuneBusyText.Text = text ?? "";
             IntuneBusyText.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
-            BtnIntuneSetup.IsEnabled = BtnIntuneSignIn.IsEnabled = BtnIntuneTest.IsEnabled = BtnIntuneSignOut.IsEnabled = BtnIntuneCopyCode.IsEnabled = !busy;
+            BtnIntuneSetup.IsEnabled = BtnIntuneCert.IsEnabled = BtnIntuneSignIn.IsEnabled = BtnIntuneTest.IsEnabled = BtnIntuneSignOut.IsEnabled = BtnIntuneCopyCode.IsEnabled = !busy;
         }
 
         private void IntuneSetup_Click(object sender, RoutedEventArgs e)
         {
             // The connection window: automatic setup, connection code or Azure Cloud Shell, with every step shown.
             if (ConnectWindow.Run(Window.GetWindow(this))) MainWindow.Current?.Toast(T("Auth_SignedIn", IntuneConnection.Account), "ok");
+            UpdateIntuneStatus();
+        }
+
+        /// <summary>The connection window with the certificate chosen: the setup creates it and grants the application permission.</summary>
+        private void IntuneCert_Click(object sender, RoutedEventArgs e)
+        {
+            if (IntuneConnection.HasStoredCertificate)
+            {
+                // The certificate kept on this computer: no administrator needed to go back to it.
+                try
+                {
+                    IntuneConnection.UseStoredCertificate();
+                    MainWindow.Current?.Toast(T("Auth_SignedIn", IntuneConnection.Account), "ok");
+                }
+                catch (AuthException ex) { Ui.Warn(ex.Message); }
+            }
+            else if (ConnectWindow.Run(Window.GetWindow(this), "certificate")) MainWindow.Current?.Toast(T("Auth_SignedIn", IntuneConnection.Account), "ok");
             UpdateIntuneStatus();
         }
 
@@ -190,14 +227,22 @@ namespace J365.IntunePSApp.Views
         {
             SetIntuneBusy(T("Settings_IntuneTesting"));
             try { Ui.Info(await IntuneConnection.TestAsync(CancellationToken.None)); }
-            catch (Exception ex) { Ui.Error(T("Auth_Failed", ex.Message)); }
+            catch (Exception ex)
+            {
+                // Intune refused (not the sign-in): what to check, read from the token of the connection.
+                string why = IntuneDiagnosis.IsRefusal(ex) ? Environment.NewLine + Environment.NewLine + IntuneDiagnosis.Explain(IntuneConnection.LastToken, IntuneConnection.UsesCertificate) : "";
+                Ui.Error(T("Auth_Failed", ex.Message) + why);
+            }
             finally { SetIntuneBusy(null); UpdateIntuneStatus(); }
         }
 
         private void IntuneSignOut_Click(object sender, RoutedEventArgs e)
         {
-            IntuneConnection.SignOut();
-            MainWindow.Current.Toast(T("Settings_IntuneSignedOut"), "info");
+            bool certificate = IntuneConnection.UsesCertificate;
+            // Without the certificate, publishing from here needs a new connection (set up by an administrator).
+            if (certificate && !Ui.Confirm(T("Settings_IntuneRemoveCertConfirm"), T("Settings_IntuneRemoveCert"), T("Common_Cancel"), danger: true)) return;
+            IntuneConnection.Disconnect();
+            MainWindow.Current.Toast(T(certificate ? "Settings_IntuneCertRemoved" : "Settings_IntuneSignedOut"), "info");
             UpdateIntuneStatus();
         }
 
