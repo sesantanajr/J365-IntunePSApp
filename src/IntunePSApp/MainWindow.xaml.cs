@@ -86,8 +86,12 @@ namespace J365.IntunePSApp
             bool signedIn = IntuneConnection.IsSignedIn, configured = IntuneConnection.IsConfigured;
             // A registration deleted in Entra ID, a certificate that cannot be used: Settings explains, the card points there.
             bool problem = configured && (IntuneConnection.Problem.Length > 0 || (IntuneConnection.UsesCertificate && !signedIn));
-            SidebarIntuneText.Text = problem ? T("Main_IntuneProblem") : signedIn ? IntuneConnection.Account : configured ? T("Main_IntuneReady") : T("Main_IntuneNotConnected");
-            SidebarIntuneDot.SetResourceReference(Shape.FillProperty, problem ? "Danger" : signedIn ? "Success" : configured ? "Warning" : "SidebarMuted");
+            // Connected, but Intune refuses: the tenant has no Intune (known for certain), or the last request was refused.
+            bool noPlan = !problem && signedIn && IntuneSubscription.Blocks;
+            bool refused = !problem && signedIn && !noPlan && IntuneConnection.Refused;
+            SidebarIntuneText.Text = problem ? T("Main_IntuneProblem") : noPlan ? T("Main_IntuneNoPlan") : refused ? T("Main_IntuneRefused")
+                : signedIn ? IntuneConnection.Account : configured ? T("Main_IntuneReady") : T("Main_IntuneNotConnected");
+            SidebarIntuneDot.SetResourceReference(Shape.FillProperty, problem ? "Danger" : noPlan || refused ? "Warning" : signedIn ? "Success" : configured ? "Warning" : "SidebarMuted");
         }
 
         private void SidebarIntune_Click(object sender, RoutedEventArgs e)

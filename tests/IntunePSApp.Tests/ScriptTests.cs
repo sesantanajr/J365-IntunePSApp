@@ -56,6 +56,48 @@ namespace J365.IntunePSApp.Tests
         }
 
         [Fact]
+        public void A_setup_program_that_installs_an_MSI_is_removed_by_its_product_code()
+        {
+            // Adobe Acrobat Reader: an .exe of the catalog that installs the MSI {AC76BA86-1033-FF00-7760-BC15014EA700}, no
+            // uninstall switches.
+            var s = Fakes.Settings();
+            s.CatalogId = "Adobe.Acrobat.Reader.64-bit";
+            s.UninstallExeArgs = "";
+            s.MsiProductCode = "{ac76ba86-1033-ff00-7760-bc15014ea700}";
+            s.RemovePreviousVersions = true;
+            string script = ScriptGenerator.DeployScript(Fakes.Template, s, "AcroRdrDCx642600322110_MUI.exe");
+            Ps.AssertParses(script);
+            const string byCode = "Uninstall-ADTApplication -ProductCode '{AC76BA86-1033-FF00-7760-BC15014EA700}' -ApplicationType 'MSI'";
+            const string byName = "Uninstall-ADTApplication -Name 'Contoso App*' -NameMatch 'Wildcard' -ApplicationType 'MSI'";
+            // In the uninstallation and in the removal of existing versions before installing, each time before the name.
+            int install = script.IndexOf("function Install-ADTDeployment"), uninstall = script.IndexOf("function Uninstall-ADTDeployment");
+            Assert.True(install >= 0 && uninstall > install);
+            Assert.InRange(script.IndexOf(byCode, install), install, uninstall);
+            Assert.True(script.IndexOf(byCode, install) < script.IndexOf(byName, install));
+            Assert.True(script.IndexOf(byCode, uninstall) > uninstall);
+            Assert.True(script.IndexOf(byCode, uninstall) < script.IndexOf(byName, uninstall));
+            // Before installing, the product of this package is found by its code too, not only by its name.
+            Assert.Contains("$existingApps += @(Get-ADTApplication -ProductCode '{AC76BA86-1033-FF00-7760-BC15014EA700}' -ApplicationType 'MSI' | Where-Object { $existingApps.ProductCode -notcontains $_.ProductCode })", script);
+            // No switches needed: no warning (and no question) before generating.
+            Assert.DoesNotContain(Loc.T("Val_Warn_NoUninstallArgs"), PackageBuilder.Validate(s).Warnings);
+            Assert.Equal("{AC76BA86-1033-FF00-7760-BC15014EA700}", ScriptGenerator.ExeMsiCode(s));
+
+            // Outside the catalog, a code typed for the detection may be the key of a setup that is not an MSI: the
+            // removal by code is still tried (only an MSI with that code is touched), and the warning stays.
+            s.CatalogId = "";
+            Assert.Contains(byCode, ScriptGenerator.DeployScript(Fakes.Template, s, "setup.exe"));
+            Assert.Contains(Loc.T("Val_Warn_NoUninstallArgs"), PackageBuilder.Validate(s).Warnings);
+            Assert.Null(ScriptGenerator.ExeMsiCode(s));
+            s.CatalogId = "Adobe.Acrobat.Reader.64-bit";
+
+            // An uninstall key that is not a product code (Inno Setup) changes nothing.
+            s.MsiProductCode = "{F9B0D8C0-1234-4321-ABCD-0123456789AB}_is1";
+            Assert.DoesNotContain("-ProductCode", ScriptGenerator.DeployScript(Fakes.Template, s, "setup.exe"));
+            Assert.Contains(Loc.T("Val_Warn_NoUninstallArgs"), PackageBuilder.Validate(s).Warnings);
+            Assert.Null(ScriptGenerator.MsiCode(s));
+        }
+
+        [Fact]
         public void DeployScript_is_valid_PowerShell_for_msi_installers()
         {
             var s = Fakes.Settings("MSI");

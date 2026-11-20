@@ -314,6 +314,8 @@ namespace J365.IntunePSApp.Core
         public string CertificateThumbprint { get; set; } = "";
         /// <summary>Certificate mode: the new certificate, to make the connection once it obtained a token.</summary>
         public PendingCertificate Pending { get; set; }
+        /// <summary>What the tenant has of Intune, read with the administrator's sign-in.</summary>
+        public IntunePlanState Plan { get; set; }
     }
 
     /// <summary>A certificate created by the setup and not in use yet: it becomes the connection once it obtained a token.</summary>
@@ -348,11 +350,13 @@ namespace J365.IntunePSApp.Core
 
         /// <summary>
         /// What the administrator's sign-in of the setup asks for (Microsoft Graph Command Line Tools): creating the
-        /// registration and its delegated consent, and for the certificate mode the grant of the application permission.
+        /// registration and its delegated consent, for the certificate mode the grant of the application permission, and
+        /// reading the subscriptions of the tenant (does it have Intune?). Nothing of this sign-in is kept.
         /// </summary>
         private static string AdminScopes(bool certificate) =>
             $"{EntraAuth.GraphUrl}/Application.ReadWrite.All {EntraAuth.GraphUrl}/DelegatedPermissionGrant.ReadWrite.All "
-            + (certificate ? $"{EntraAuth.GraphUrl}/AppRoleAssignment.ReadWrite.All " : "") + "offline_access openid profile";
+            + (certificate ? $"{EntraAuth.GraphUrl}/AppRoleAssignment.ReadWrite.All " : "")
+            + $"{EntraAuth.GraphUrl}/{IntuneSubscription.ReadPermission} offline_access openid profile";
 
         private sealed class Saved
         {
@@ -370,6 +374,8 @@ namespace J365.IntunePSApp.Core
         private static bool _loaded;
 
         public static event Action Changed;
+
+        internal static void RaiseChanged() => Changed?.Invoke();
 
         private static string SessionFile => Path.Combine(AppPaths.Data, "intune-session.dat");
 
@@ -421,6 +427,45 @@ namespace J365.IntunePSApp.Core
             if (Problem.Length == 0) return;
             _problem = "";
             Changed?.Invoke();
+        }
+
+        /// <summary>
+        /// Intune refused the last request of this connection (the sign-in worked): the status says so until Intune
+        /// answers again or the connection changes. Why is <see cref="IntuneSubscription"/> and <see cref="IntuneDiagnosis"/>.
+        /// </summary>
+        public static bool Refused => _refusedKey.Length > 0 && _refusedKey == ConnectionKey();
+
+        private static string _refusedKey = "";
+
+        /// <summary>
+        /// Notes how Intune answered a request of this connection: an answer, which also proves that the tenant has Intune,
+        /// or a refusal, after which an Intune known only from earlier answers is not taken for granted any more (a trial
+        /// may have ended).
+        /// </summary>
+        public static void NoteIntune(bool refused)
+        {
+            string key = refused ? ConnectionKey() : "";
+            bool changed = key != _refusedKey;
+            _refusedKey = key;
+            if (refused) IntuneSubscription.NoteRefused();
+            else if (IsConfigured) IntuneSubscription.NoteAnswered(TenantId);
+            if (changed) Changed?.Invoke();
+        }
+
+        /// <summary>A request to Intune: its refusal or its answer is noted for the status.</summary>
+        private static async Task<TResult> AskIntuneAsync<TResult>(Func<Task<TResult>> request)
+        {
+            try
+            {
+                var result = await request();
+                NoteIntune(refused: false);
+                return result;
+            }
+            catch (GraphException ex) when (IntuneDiagnosis.IsRefusal(ex))
+            {
+                NoteIntune(refused: true);
+                throw;
+            }
         }
 
         /// <summary>A failure of the moment (network, proxy, a busy or failing server): the session is kept for the next try.</summary>
@@ -573,9 +618,11 @@ namespace J365.IntunePSApp.Core
             cfg.IntuneTenantId = "";
             cfg.IntuneClientId = "";
             cfg.IntuneTenantName = "";
+            IntuneSubscription.Clear();
             lock (Gate) _usable = default;
             ConfigStore.Save();
             _problem = "";
+            _refusedKey = "";
             SignOut();
         }
 
@@ -669,6 +716,7 @@ namespace J365.IntunePSApp.Core
         public static void SignOut()
         {
             DeleteSession();
+            _refusedKey = "";
             Changed?.Invoke();
         }
 
@@ -699,6 +747,8 @@ namespace J365.IntunePSApp.Core
             catch (AuthException ex) { Note(ex); throw; }
             Save(t, TenantId, ClientId);
             ClearProblem();
+            // Another account may have the Intune role the previous one lacked: the next request says.
+            _refusedKey = "";
             Log.Ok(T("Log_IntuneSignedIn", t.Account, t.TenantId.Length > 0 ? t.TenantId : TenantId));
             return t;
         }
@@ -810,6 +860,9 @@ namespace J365.IntunePSApp.Core
             var g = new Graph(admin.AccessToken);
             var result = new RegistrationResult { TenantId = tenant, Admin = admin.Account, Certificate = certificate };
             progress?.Report(new SetupProgress(SetupStep.Permission, admin.Account));
+            // Does the tenant have Intune? Without it every publication is refused, whatever the connection: said at once.
+            result.Plan = await IntuneSubscription.TryReadAsync(admin, ct);
+            if (result.Plan != IntunePlanState.Unknown) IntuneSubscription.NoteRead(tenant, result.Plan);
             try { return await CreateRegistrationCoreAsync(g, result, progress, ct); }
             catch (GraphException ex) when (ex.Status is 401 or 403)
             {
@@ -1026,7 +1079,7 @@ namespace J365.IntunePSApp.Core
         {
             var t = await RenewAsync(ct) ?? throw new AuthException(T("Auth_ErrNotSignedIn"));
             var g = new Graph(t.AccessToken);
-            var list = await g.GetAsync("/beta/deviceAppManagement/mobileApps?$top=1&$select=id", ct);
+            var list = await AskIntuneAsync(() => g.GetAsync("/beta/deviceAppManagement/mobileApps?$top=1&$select=id", ct));
             // Intune answered: whatever was noted about this connection is past.
             ClearProblem();
             return T("Auth_TestOk", Account, list?["value"]?.AsArray().Count ?? 0);
@@ -1048,7 +1101,8 @@ namespace J365.IntunePSApp.Core
             string path = "/beta/deviceAppManagement/mobileApps?$filter=" + Uri.EscapeDataString("isof('microsoft.graph.win32LobApp')") + "&$top=999";
             for (int page = 0; path != null && page < 20; page++)
             {
-                var data = await g.GetAsync(path, ct);
+                string current = path;
+                var data = await AskIntuneAsync(() => g.GetAsync(current, ct));
                 foreach (var a in data?["value"]?.AsArray() ?? new JsonArray())
                 {
                     string dn = a?["displayName"]?.GetValue<string>() ?? "";
@@ -1101,21 +1155,44 @@ namespace J365.IntunePSApp.Core
         public GraphException(int status, string message, string code = "") : base(message) { Status = status; Code = code ?? ""; }
 
         /// <summary>
-        /// Intune wraps its own error in the message as JSON ({"_version":3,"Message":"An error has occurred - Operation ID
-        /// ... - Activity ID: ... - Url: ..."}): the sentence and the ids for support are kept, not the internal address.
+        /// Intune wraps its own error in the message as JSON, sometimes twice ({"ErrorCode":"Forbidden","Message":"{\"_version\":3,
+        /// \"Message\":\"An error has occurred - Operation ID ... - Activity ID: ... - Url: ...\"}"}): every level is opened, and
+        /// the sentence and the activity id for support are kept, not the internal address nor an empty operation id.
         /// </summary>
         public static string CleanMessage(string message)
         {
             if (string.IsNullOrWhiteSpace(message)) return null;
             string m = message.Trim();
-            if (m.StartsWith("{", StringComparison.Ordinal))
+            for (int depth = 0; depth < 4 && m.StartsWith("{", StringComparison.Ordinal); depth++)
             {
-                try { m = JsonNode.Parse(m)?["Message"]?.GetValue<string>() ?? m; } catch { }
+                string inner = null;
+                try
+                {
+                    var node = JsonNode.Parse(m);
+                    inner = (node?["Message"] ?? node?["message"])?.GetValue<string>();
+                }
+                catch
+                {
+                    // Not JSON (cut short): the sentence is read from the text.
+                    var found = Regex.Match(m, "\"[Mm]essage\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)");
+                    if (found.Success)
+                    {
+                        try { inner = Regex.Unescape(found.Groups[1].Value); }
+                        catch { inner = found.Groups[1].Value; }
+                    }
+                }
+                if (string.IsNullOrWhiteSpace(inner)) break;
+                m = inner.Trim();
             }
             int url = m.IndexOf(" - Url:", StringComparison.Ordinal);
             if (url > 0) m = m.Substring(0, url);
+            m = Regex.Replace(m, @"\s*-?\s*Operation ID \(for customer support\):\s*0{8}-0{4}-0{4}-0{4}-0{12}", "");
             return m.Trim();
         }
+
+        /// <summary>The activity id Intune gives for support ("Activity ID: ..."), or an empty string.</summary>
+        public static string ActivityId(string message)
+            => Regex.Match(message ?? "", @"Activity ID:\s*([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})").Groups[1].Value;
     }
 
     /// <summary>Minimal Microsoft Graph client: JSON in and out, retries on throttling and transient errors.</summary>

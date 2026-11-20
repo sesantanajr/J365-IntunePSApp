@@ -160,6 +160,34 @@ namespace J365.IntunePSApp.Tests
         }
 
         [Fact]
+        public void Apply_takes_the_product_code_of_a_setup_program_that_installs_an_MSI()
+        {
+            var app = App();
+            var info = new InstallerInfo { Type = "EXE", AppVersion = "1.0" };
+            CatalogService.Apply(info, app, new CatalogInstaller { Arch = "x64", Type = "exe", ProductCode = "{ac76ba86-1033-ff00-7760-bc15014ea700}" }, "hash");
+            Assert.Equal("{AC76BA86-1033-FF00-7760-BC15014EA700}", info.ProductCode);
+            Assert.Contains(info.Notes, n => n.Contains("{AC76BA86-1033-FF00-7760-BC15014EA700}"));
+            var s = new PackageSettings();
+            InstallerAnalyzer.ApplyTo(s, info);
+            Assert.Equal("{AC76BA86-1033-FF00-7760-BC15014EA700}", s.MsiProductCode);
+            // Detection keeps the name and version: a vendor may change the code with the version.
+            Assert.Equal("Registry", s.DetectionMethod);
+
+            // A file found to be NSIS, listed as a plain "exe": its key is not the code of an MSI either.
+            var nsis = new InstallerInfo { Type = "EXE", Technology = "NSIS", AppVersion = "1.0" };
+            CatalogService.Apply(nsis, app, new CatalogInstaller { Arch = "x64", Type = "exe", ProductCode = "{11111111-2222-3333-4444-555555555555}" }, "hash");
+            Assert.True(string.IsNullOrEmpty(nsis.ProductCode));
+
+            // A bundle (burn), NSIS or Inno Setup registers a key of its own, never the code of an MSI.
+            foreach (var (type, code) in new[] { ("burn", "{11111111-2222-3333-4444-555555555555}"), ("nullsoft", "{11111111-2222-3333-4444-555555555555}"), ("inno", "{11111111-2222-3333-4444-555555555555}_is1"), ("exe", "Contoso App") })
+            {
+                var other = new InstallerInfo { Type = "EXE", AppVersion = "1.0" };
+                CatalogService.Apply(other, app, new CatalogInstaller { Arch = "x64", Type = type, ProductCode = code }, "hash");
+                Assert.True(string.IsNullOrEmpty(other.ProductCode), type);
+            }
+        }
+
+        [Fact]
         public void Apply_fills_the_analysis_from_the_database()
         {
             var app = App();

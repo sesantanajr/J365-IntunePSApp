@@ -43,5 +43,52 @@ namespace J365.IntunePSApp.Views
                 return false;
             }
         }
+
+        /// <summary>
+        /// "Check the subscription": an administrator of the tenant signs in in the browser (read only, nothing is kept) and
+        /// the subscriptions of the tenant are read. The result is remembered and said; null when it could not be read.
+        /// </summary>
+        public static async Task<IntunePlanState?> CheckPlanAsync(CancellationToken ct)
+        {
+            IntunePlanState state;
+            try { state = await IntuneSubscription.CheckAsync(ct); }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { return null; }
+            catch (OperationCanceledException ex)
+            {
+                // Microsoft Graph did not answer in time (its own timeout, after the retries).
+                Log.Warn(ex.Message);
+                Ui.Error(T("Plan_CheckFailed", T("Plan_ErrTimeout")));
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Log.Warn(ex.Message);
+                Ui.Error(T("Plan_CheckFailed", ex.Message));
+                return null;
+            }
+            switch (state)
+            {
+                case IntunePlanState.Active: Ui.Info(T("Plan_ResultActive", IntuneConnection.TenantLabel)); break;
+                case IntunePlanState.Unknown: Ui.Info(T("Plan_ResultUnclear", IntuneConnection.TenantLabel)); break;
+                default: Ui.Warn(T("Plan_ResultTitle") + Environment.NewLine + Environment.NewLine + IntuneDiagnosis.Causes(null, IntuneConnection.UsesCertificate)[0]); break;
+            }
+            return state;
+        }
+
+        /// <summary>
+        /// Intune refused a request: the explanation (certain when the subscriptions of the tenant are known), what Intune
+        /// said when it says more than "An error has occurred", and what identifies the request for the support of Microsoft.
+        /// </summary>
+        public static string RefusalText(Exception ex) => RefusalText(ex?.Message);
+
+        /// <inheritdoc cref="RefusalText(Exception)"/>
+        public static string RefusalText(string message)
+        {
+            string text = IntuneDiagnosis.Explain(IntuneConnection.LastToken, IntuneConnection.UsesCertificate);
+            string said = IntuneDiagnosis.AnswerOf(message);
+            if (said.Length > 0) text += Environment.NewLine + Environment.NewLine + T("Intune_Answer", said);
+            string support = IntuneDiagnosis.SupportLine(message);
+            return support.Length > 0 ? text + Environment.NewLine + Environment.NewLine + support : text;
+        }
     }
 }

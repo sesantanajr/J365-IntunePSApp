@@ -175,15 +175,78 @@ namespace J365.IntunePSApp.Tests
         [InlineData("Microsoft Graph answered HTTP 400 (BadRequest) to GET /x: Parsing OData Select and Expand failed", false)]
         [InlineData("Sign-in failed: AADSTS50076", false)]
         [InlineData("", false)]
+        // The upload goes to Azure Storage, not to Intune: its 403 (an expired link, a proxy) is not a refusal of Intune.
+        [InlineData("The upload failed after 4 attempts: HTTP 403", false)]
+        [InlineData("The upload could not be finished (HTTP 403).", false)]
+        // What Microsoft Graph answers a tenant without Intune for some requests.
+        [InlineData("Microsoft Graph answered HTTP 400 (BadRequest) to GET /deviceManagement/x: Request not applicable to target tenant.", true)]
         public void Refusals_of_Intune_are_told_apart_from_sign_in_errors(string text, bool refusal) => Assert.Equal(refusal, IntuneDiagnosis.IsRefusal(text));
 
         [Fact]
         public void The_error_of_Intune_keeps_its_sentence_and_ids_but_not_its_internal_address()
         {
             string intune = "{\r\n  \"_version\": 3,\r\n  \"Message\": \"An error has occurred - Operation ID (for customer support): 00000000-0000-0000-0000-000000000000 - Activity ID: 184af700-7dff-44d6-ba38-5af761eb24d3 - Url: https://proxy.msua08.manage.microsoft.com/AppLifecycle_2611/StatelessAppMetadataFEService/deviceAppManagement/mobileApps?api-version=5026-08-19\",\r\n  \"CustomApiErrorPhrase\": \"\",\r\n  \"RetryAfter\": null\r\n}";
-            Assert.Equal("An error has occurred - Operation ID (for customer support): 00000000-0000-0000-0000-000000000000 - Activity ID: 184af700-7dff-44d6-ba38-5af761eb24d3", GraphException.CleanMessage(intune));
+            // The operation id of Intune is always empty: only the activity id identifies the request.
+            Assert.Equal("An error has occurred - Activity ID: 184af700-7dff-44d6-ba38-5af761eb24d3", GraphException.CleanMessage(intune));
             Assert.Equal("Plain message", GraphException.CleanMessage("Plain message"));
             Assert.Null(GraphException.CleanMessage(""));
+        }
+
+        [Fact]
+        public void An_error_of_Intune_nested_twice_is_opened_to_its_sentence()
+        {
+            // How Intune refuses a tenant without a subscription: its error as JSON, inside the error of another service.
+            string inner = "{\r\n  \"_version\": 3,\r\n  \"Message\": \"An error has occurred - Operation ID (for customer support): 00000000-0000-0000-0000-000000000000 - Activity ID: bf1a4756-a3a2-43d1-bcc9-f5b988cd0e51 - Url: https://fef.msua06.manage.microsoft.com/StatelessAppMetadataFEService/deviceAppManagement/mobileApps?api-version=5025-09-12\",\r\n  \"CustomApiErrorPhrase\": \"\",\r\n  \"RetryAfter\": null,\r\n  \"ErrorSourceService\": \"\",\r\n  \"HttpHeaders\": \"{}\"\r\n}";
+            string outer = new System.Text.Json.Nodes.JsonObject { ["ErrorCode"] = "Forbidden", ["Message"] = inner, ["Target"] = null }.ToJsonString();
+            const string clean = "An error has occurred - Activity ID: bf1a4756-a3a2-43d1-bcc9-f5b988cd0e51";
+            Assert.Equal(clean, GraphException.CleanMessage(outer));
+            Assert.Equal(clean, GraphException.CleanMessage(inner));
+            // Cut short, so no longer JSON: the sentence is still found.
+            Assert.Equal(clean, GraphException.CleanMessage(inner.Substring(0, inner.IndexOf("CustomApiErrorPhrase"))));
+            Assert.Equal("bf1a4756-a3a2-43d1-bcc9-f5b988cd0e51", GraphException.ActivityId(clean));
+            Assert.Equal("", GraphException.ActivityId("no id here"));
+        }
+
+        [Fact]
+        public void The_plans_of_the_tenant_say_whether_it_has_Intune()
+        {
+            System.Text.Json.Nodes.JsonArray Plans(params (string Id, string Service, string Status)[] p) => new System.Text.Json.Nodes.JsonArray(p.Select(x =>
+                (System.Text.Json.Nodes.JsonNode)new System.Text.Json.Nodes.JsonObject { ["servicePlanId"] = x.Id, ["service"] = x.Service, ["capabilityStatus"] = x.Status }).ToArray());
+            const string intune = "c1ec4a95-1f05-45b3-a911-aa3fa01094f5", basic = "882e1d05-acd1-4ccb-8708-6ee03664b117", exchange = "9aaf7827-d63c-4b61-89c3-182f06f82e5c";
+            Assert.Equal(IntunePlanState.Active, IntuneSubscription.Classify(Plans((exchange, "exchange", "Enabled"), (intune, "SCO", "Enabled"))));
+            // In its grace period a subscription still works.
+            Assert.Equal(IntunePlanState.Active, IntuneSubscription.Classify(Plans((intune, "SCO", "Warning"))));
+            // Microsoft 365 Business Premium, by its plan.
+            Assert.Equal(IntunePlanState.Active, IntuneSubscription.Classify(Plans(("8E9FF0FF-AA7A-4B20-83C1-2F636B600AC2", "", "Enabled"))));
+            // Another plan of the Intune service, one this application does not know: it cannot say either way.
+            Assert.Equal(IntunePlanState.Unknown, IntuneSubscription.Classify(Plans(("d9923fe3-a2de-4d29-a5be-e3e83bb786be", "SCO", "Enabled"), (basic, "SCO", "Enabled"))));
+            Assert.Equal(IntunePlanState.BasicOnly, IntuneSubscription.Classify(Plans((exchange, "exchange", "Enabled"), (basic, "SCO", "Enabled"))));
+            Assert.Equal(IntunePlanState.Inactive, IntuneSubscription.Classify(Plans((intune, "SCO", "Suspended"), (basic, "SCO", "Enabled"))));
+            Assert.Equal(IntunePlanState.Inactive, IntuneSubscription.Classify(Plans((intune, "SCO", "Deleted"))));
+            Assert.Equal(IntunePlanState.None, IntuneSubscription.Classify(Plans((exchange, "exchange", "Enabled"))));
+            Assert.Equal(IntunePlanState.None, IntuneSubscription.Classify(new System.Text.Json.Nodes.JsonArray()));
+        }
+
+        [Fact]
+        public void A_refusal_of_the_publishing_script_gives_its_request_and_activity_id()
+        {
+            string error = "Microsoft Graph answered HTTP 401 (UnknownError) to GET /deviceAppManagement/mobileApps: An error has occurred - Activity ID: 32f20c83-f999-4b7b-aa7a-e485513d188a\nIntune refused the application. Check that the tenant has an active Microsoft Intune subscription.";
+            Assert.True(IntuneDiagnosis.IsRefusal(error));
+            var parsed = IntuneDiagnosis.ParseScriptError(error).Value;
+            Assert.Equal(401, parsed.Status);
+            Assert.Equal("UnknownError", parsed.Code);
+            Assert.Equal("GET /deviceAppManagement/mobileApps", parsed.Request);
+            Assert.Equal("32f20c83-f999-4b7b-aa7a-e485513d188a", parsed.ActivityId);
+            Assert.Equal(J365.IntunePSApp.Localization.Loc.T("Intune_Support", "GET /deviceAppManagement/mobileApps · Activity ID 32f20c83-f999-4b7b-aa7a-e485513d188a"), IntuneDiagnosis.SupportLine(error));
+            // An error of the application itself (GraphException) gives the same.
+            Assert.Equal(J365.IntunePSApp.Localization.Loc.T("Intune_Support", "GET /beta/deviceAppManagement/mobileApps · Activity ID 32f20c83-f999-4b7b-aa7a-e485513d188a"),
+                IntuneDiagnosis.SupportLine("GET /beta/deviceAppManagement/mobileApps: An error has occurred - Activity ID: 32f20c83-f999-4b7b-aa7a-e485513d188a"));
+            Assert.Null(IntuneDiagnosis.ParseScriptError("The file could not be read."));
+            Assert.Equal("", IntuneDiagnosis.SupportLine("The file could not be read."));
+            // "An error has occurred" says nothing: only a sentence that says more is shown.
+            Assert.Equal("", IntuneDiagnosis.AnswerOf(error));
+            Assert.Equal("Application is not authorized to perform this operation. Application must have one of the following scopes: DeviceManagementApps.ReadWrite.All",
+                IntuneDiagnosis.AnswerOf("GET /beta/deviceAppManagement/mobileApps: Application is not authorized to perform this operation. Application must have one of the following scopes: DeviceManagementApps.ReadWrite.All - Activity ID: 32f20c83-f999-4b7b-aa7a-e485513d188a"));
         }
 
         [Fact]

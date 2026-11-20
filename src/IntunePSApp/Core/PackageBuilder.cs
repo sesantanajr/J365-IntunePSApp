@@ -154,7 +154,8 @@ namespace J365.IntunePSApp.Core
             else if (Regex.Replace(pat, @"[\*\?\s]", "").Length < 3) v.Errors.Add(T("Val_PatternTooGeneric", pat));
 
             if (s.InstallerType == "EXE" && string.IsNullOrWhiteSpace(s.InstallArgs)) v.Warnings.Add(T("Val_Warn_NoSilentArgs"));
-            if (s.InstallerType == "EXE" && string.IsNullOrWhiteSpace(s.UninstallExeArgs)) v.Warnings.Add(T("Val_Warn_NoUninstallArgs"));
+            // A setup program of the catalog that installs an MSI is removed with msiexec /x by its product code: no switches needed.
+            if (s.InstallerType == "EXE" && string.IsNullOrWhiteSpace(s.UninstallExeArgs) && ScriptGenerator.ExeMsiCode(s) == null) v.Warnings.Add(T("Val_Warn_NoUninstallArgs"));
             foreach (var p in s.ProcessesToClose) if (!Regex.IsMatch(p, @"^[\w\.\-\+ ]+$")) v.Errors.Add(T("Val_ProcessName", p));
             if (s.AllowDefer && (s.DeferTimes < 1 || s.DeferTimes > 99)) v.Errors.Add(T("Val_DeferTimes"));
             if (s.CloseAppsCountdown < 0 || s.CloseAppsCountdown > 3000) v.Errors.Add(T("Val_CloseCountdown"));
@@ -272,6 +273,7 @@ namespace J365.IntunePSApp.Core
             var check = Validate(s);
             foreach (var w in check.Warnings) Log.Warn(w);
             if (!check.IsValid) throw new InvalidOperationException(T("Err_FixBeforeBuild") + "\n• " + string.Join("\n• ", check.Errors));
+            if (ScriptGenerator.ExeMsiCode(s) is string msiCode) Log.Info(T("Log_UninstallByCode", msiCode));
 
             var sw = Stopwatch.StartNew();
             Log.Step(T("Log_BuildStart", s.AppName, s.AppVersion));

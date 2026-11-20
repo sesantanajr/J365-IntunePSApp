@@ -109,12 +109,15 @@ namespace J365.IntunePSApp.Views
             bool broken = configured && problem.Length > 0;
             bool certBroken = configured && certificate && !signedIn;   // expired, removed, its key gone
             bool renew = signedIn && cert != null && cert.ExpiresSoon;
-            bool ok = signedIn && !broken && !renew;
+            // Connected, but Intune refuses: the tenant has no Intune (known for certain), or the last request was refused.
+            bool noPlan = signedIn && !broken && IntuneSubscription.Blocks;
+            bool refused = signedIn && !broken && !noPlan && IntuneConnection.Refused;
+            bool ok = signedIn && !broken && !renew && !noPlan && !refused;
 
             string tone = ok ? "Success" : broken || certBroken ? "Danger" : configured ? "Warning" : "Brand";
             IntuneStatusBox.SetResourceReference(Border.BackgroundProperty, tone + "Soft");
             IntuneStatusIcon.SetResourceReference(TextBlock.ForegroundProperty, tone == "Brand" ? "BrandText" : tone);
-            IntuneStatusIcon.Text = ok ? Glyph(0xE73E) : broken || certBroken ? Glyph(0xE7BA) : configured ? Glyph(0xE72E) : Glyph(0xE753);
+            IntuneStatusIcon.Text = ok ? Glyph(0xE73E) : broken || certBroken || noPlan || refused ? Glyph(0xE7BA) : configured ? Glyph(0xE72E) : Glyph(0xE753);
             if (broken)
             {
                 IntuneStatusTitle.Text = T("Settings_IntuneProblemTitle");
@@ -124,6 +127,17 @@ namespace J365.IntunePSApp.Views
             {
                 IntuneStatusTitle.Text = T("Publish_CertBroken");
                 IntuneStatusText.Text = cert != null && cert.Expired ? T("Settings_IntuneCertExpired", Date(cert.NotAfter)) : T("Auth_ErrCertMissing");
+            }
+            else if (noPlan)
+            {
+                // The connection itself works: an administrator activates Intune in the tenant, nothing changes here.
+                IntuneStatusTitle.Text = T("Settings_IntuneNoPlanTitle");
+                IntuneStatusText.Text = IntuneDiagnosis.Causes(null, certificate)[0] + Environment.NewLine + T("Settings_IntuneNoPlanHint", IntuneConnection.Account);
+            }
+            else if (refused)
+            {
+                IntuneStatusTitle.Text = T("Settings_IntuneRefusedTitle");
+                IntuneStatusText.Text = IntuneDiagnosis.Explain(IntuneConnection.LastToken, certificate);
             }
             else if (signedIn && cert != null)
             {
@@ -163,12 +177,17 @@ namespace J365.IntunePSApp.Views
                 "renew" => T("Settings_IntuneRenewCert"),
                 _ => T("Publish_SignIn")
             };
+            // The subscriptions of the tenant: checked again when known to be missing, checked whenever Intune refused (an
+            // earlier answer of Intune does not prove that a trial is still running).
+            BtnIntunePlan.Visibility = noPlan || refused ? Visibility.Visible : Visibility.Collapsed;
+            BtnIntunePlanText.Text = noPlan ? T("Settings_IntuneCheckPlanAgain") : T("Settings_IntuneCheckPlan");
+            BtnIntunePurchase.Visibility = noPlan ? Visibility.Visible : Visibility.Collapsed;
             BtnIntuneTest.Visibility = signedIn && !broken ? Visibility.Visible : Visibility.Collapsed;
             BtnIntuneSwitchAccount.Visibility = signedIn && !certificate && !broken ? Visibility.Visible : Visibility.Collapsed;
             BtnIntuneCopyCode.Visibility = configured && !broken ? Visibility.Visible : Visibility.Collapsed;
             BtnIntuneChange.Visibility = configured && primary != "reconnect" ? Visibility.Visible : Visibility.Collapsed;
             BtnIntuneDisconnect.Visibility = configured ? Visibility.Visible : Visibility.Collapsed;
-            foreach (var b in new Button[] { BtnIntunePrimary, BtnIntuneTest, BtnIntuneSwitchAccount, BtnIntuneCopyCode, BtnIntuneChange, BtnIntuneDisconnect }) b.IsEnabled = !busy;
+            foreach (var b in new Button[] { BtnIntunePrimary, BtnIntunePlan, BtnIntunePurchase, BtnIntuneTest, BtnIntuneSwitchAccount, BtnIntuneCopyCode, BtnIntuneChange, BtnIntuneDisconnect }) b.IsEnabled = !busy;
             BtnIntuneCancel.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
         }
 
@@ -233,14 +252,16 @@ namespace J365.IntunePSApp.Views
             {
                 try { Ui.Info(await IntuneConnection.TestAsync(ct)); }
                 catch (OperationCanceledException) { throw; }
-                catch (Exception ex)
-                {
-                    // Intune refused (not the sign-in): what to check, read from the token of the connection.
-                    string why = IntuneDiagnosis.IsRefusal(ex) ? Environment.NewLine + Environment.NewLine + IntuneDiagnosis.Explain(IntuneConnection.LastToken, IntuneConnection.UsesCertificate) : "";
-                    Ui.Error(T("Auth_Failed", ex.Message) + why);
-                }
+                // Intune refused (the sign-in worked): why, and what identifies the request for support. The card says it too.
+                catch (Exception ex) when (IntuneDiagnosis.IsRefusal(ex)) { Ui.Warn(IntuneConnectUi.RefusalText(ex)); }
+                catch (Exception ex) { Ui.Error(T("Auth_Failed", ex.Message)); }
             });
         }
+
+        private async void IntunePlan_Click(object sender, RoutedEventArgs e)
+            => await RunIntuneAsync(T("Settings_IntuneCheckingPlan"), ct => IntuneConnectUi.CheckPlanAsync(ct));
+
+        private void IntunePurchase_Click(object sender, RoutedEventArgs e) => MainWindow.OpenUrl(IntuneSubscription.PurchaseUrl);
 
         private void IntuneDisconnect_Click(object sender, RoutedEventArgs e)
         {

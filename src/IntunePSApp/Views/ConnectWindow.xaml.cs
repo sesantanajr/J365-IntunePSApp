@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
@@ -354,10 +355,11 @@ namespace J365.IntunePSApp.Views
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
-                // Connected, but Intune refused the read: the account has no Intune role (or the consent is missing).
+                // Connected, but Intune refused the read: the tenant has no Intune, the account has no Intune role, or
+                // the consent is missing. The cause is shown on the result page.
                 var test = Row(SetupStep.Test);
                 test.State = "Warning";
-                test.Detail = T("Connect_TestWarn", ex.Message);
+                test.Detail = TestDetail(ex);
                 _testFailure = ex;
             }
             // The certificate is replaced only by a connection that reads Intune: otherwise it stays in use.
@@ -398,7 +400,9 @@ namespace J365.IntunePSApp.Views
             }
             Advance(SetupStep.Test);
             var test = Row(SetupStep.Test);
-            const int tries = 6;
+            // A new application permission takes a little while to reach Intune, and a refusal is tried again for about
+            // two minutes; a tenant known to have no Intune refuses anyway, so it is said at once.
+            int tries = IntuneSubscription.Blocks ? 1 : 6;
             for (int attempt = 1; ; attempt++)
             {
                 try
@@ -419,7 +423,7 @@ namespace J365.IntunePSApp.Views
                 catch (Exception ex)
                 {
                     test.State = "Warning";
-                    test.Detail = T("Connect_TestWarn", ex.Message);
+                    test.Detail = TestDetail(ex);
                     _testFailure = ex;
                     break;
                 }
@@ -427,6 +431,11 @@ namespace J365.IntunePSApp.Views
             foreach (var row in _steps) if (row.State is "Pending" or "Working") row.State = "Done";
             ShowSuccess();
         }
+
+        /// <summary>The line of the test step when Intune did not answer: a refusal points to its cause on the result page.</summary>
+        private static string TestDetail(Exception ex)
+            => !IntuneDiagnosis.IsRefusal(ex) ? T("Connect_TestWarn", ex.Message)
+                : IntuneSubscription.Blocks ? T("Connect_TestNoPlan") : T("Connect_TestRefused");
 
         /// <summary>"Try again" after a new certificate did not activate: its sign-in and the test run again, nothing is recreated.</summary>
         private async Task RetryActivationAsync()
@@ -506,16 +515,19 @@ namespace J365.IntunePSApp.Views
                 AddCause(T("Connect_CauseConsentTitle"), T("Connect_CauseConsentText"), ("Connect_OpenConsentLink", () => MainWindow.OpenUrl(_consentUrl)), ("Connect_CopyConsentLink", () => Ui.CopyText(_consentUrl)));
             if (_testFailure != null && IntuneDiagnosis.IsRefusal(_testFailure))
             {
-                // Connected, but Intune refused: what to check, and the way that does not depend on the account.
-                bool certificate = IntuneConnection.UsesCertificate;
-                var actions = certificate
-                    ? new (string, Action)[0]
-                    : new (string, Action)[]
-                    {
-                        ("Connect_OpenPim", () => MainWindow.OpenUrl(IntuneConnection.PimUrl)),
-                        ("Connect_UseCertificate", () => { OptCert.IsChecked = true; _ = RunAutoAsync(certificate: true); })
-                    };
-                AddCause(T("Connect_CauseIntuneTitle"), IntuneDiagnosis.Explain(IntuneConnection.LastToken, certificate), actions);
+                // Connected, but Intune refused. A tenant without Intune is said for certain (its subscriptions were read
+                // with the administrator's sign-in) and only an administrator of the tenant changes that; otherwise what to
+                // check, and the way that does not depend on the account.
+                bool certificate = IntuneConnection.UsesCertificate, noPlan = IntuneSubscription.Blocks;
+                var actions = new List<(string, Action)>();
+                if (noPlan) actions.Add(("Settings_IntunePurchase", () => MainWindow.OpenUrl(IntuneSubscription.PurchaseUrl)));
+                actions.Add((noPlan ? "Settings_IntuneCheckPlanAgain" : "Settings_IntuneCheckPlan", () => _ = CheckPlanAsync()));
+                if (!certificate && !noPlan)
+                {
+                    actions.Add(("Connect_OpenPim", () => MainWindow.OpenUrl(IntuneConnection.PimUrl)));
+                    actions.Add(("Connect_UseCertificate", () => { OptCert.IsChecked = true; _ = RunAutoAsync(certificate: true); }));
+                }
+                AddCause(noPlan ? T("Connect_CauseNoPlanTitle") : T("Connect_CauseIntuneTitle"), IntuneConnectUi.RefusalText(_testFailure), actions.ToArray());
             }
             CausesTitle.Visibility = Causes.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             SetHeader("", T("Connect_DoneHeader"), IntuneConnection.Account, "SuccessSoft", "Success");
@@ -524,6 +536,24 @@ namespace J365.IntunePSApp.Views
             BtnExtra.Visibility = Visibility.Visible;
             BtnExtraText.Text = T("Settings_IntuneCopyCode");
             if (log) Log.Ok(T("Log_IntuneConnected", IntuneConnection.Account, IntuneConnection.ClientId));
+        }
+
+        /// <summary>"Check the subscription" from the result page: an administrator signs in, the causes are shown again.</summary>
+        private async Task CheckPlanAsync()
+        {
+            if (_running) return;
+            _running = true;
+            Causes.IsEnabled = false;
+            BtnPrimary.IsEnabled = false;
+            _cts = new CancellationTokenSource();
+            try { await IntuneConnectUi.CheckPlanAsync(_cts.Token); }
+            finally
+            {
+                _running = false;
+                Causes.IsEnabled = true;
+                BtnPrimary.IsEnabled = true;
+                if (IsLoaded) ShowSuccess(log: false);
+            }
         }
 
         private void ShowCancelled()

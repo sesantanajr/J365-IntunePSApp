@@ -35,6 +35,9 @@ namespace J365.IntunePSApp.Views
         public bool IsBuilding { get; private set; }
         public int StepCount => 8;
 
+        /// <summary>The Intune folder of the package generated last (capture mode), or null.</summary>
+        internal string LastIntuneFolder => _last?.IntuneFolder;
+
         public EditorView()
         {
             InitializeComponent();
@@ -50,7 +53,7 @@ namespace J365.IntunePSApp.Views
             ChkPublishAfter.IsChecked = ConfigStore.Current.PublishAfterBuild;
             ChkPublishAfter.Checked += (s, e) => { ConfigStore.Current.PublishAfterBuild = true; ConfigStore.Save(); };
             ChkPublishAfter.Unchecked += (s, e) => { ConfigStore.Current.PublishAfterBuild = false; ConfigStore.Save(); };
-            IntuneConnection.Changed += () => Dispatcher.BeginInvoke(new Action(UpdatePublishCallout));
+            IntuneConnection.Changed += () => Dispatcher.BeginInvoke(new Action(() => { UpdatePublishCallout(); RefreshPublishStatus(); }));
             LoadSettings(ConfigStore.Current.NewPackage());
             GoStep(0);
             SizeChanged += (s, e) => UpdatePreviewVisibility();
@@ -525,7 +528,17 @@ namespace J365.IntunePSApp.Views
             BodyScroll.ScrollToTop();
             if (_step == ReviewStep) BuildSummary();
             if (_step == 2 || _step == 6) UpdatePreview();
+            if (_step == 4) UpdateUninstallByCode();
             if (_step == 5) UpdateDetectionPanels();
+        }
+
+        /// <summary>A setup program that installs an MSI of a known product code: the uninstall step says how it is removed.</summary>
+        private void UpdateUninstallByCode()
+        {
+            if (UninstallByCode == null || _s == null) return;
+            string code = ScriptGenerator.ExeMsiCode(Collect());
+            UninstallByCode.Visibility = code != null ? Visibility.Visible : Visibility.Collapsed;
+            UninstallByCodeText.Text = code == null ? "" : T("Ed_UninstallByCode", code);
         }
 
         private void Step_Checked(object sender, RoutedEventArgs e)
@@ -1123,7 +1136,10 @@ namespace J365.IntunePSApp.Views
         {
             if (PublishCalloutText == null) return;
             bool ready = IntuneConnection.IsSignedIn && !IntuneConnection.NeedsSetup;
-            PublishCalloutText.Text = ready ? T("Ed_PublishCalloutConnected", IntuneConnection.Account, IntuneConnection.TenantLabel) : T("Ed_PublishCalloutNotConnected");
+            // A tenant known to have no Intune refuses every publication: said before the upload, not after it.
+            PublishCalloutText.Text = !ready ? T("Ed_PublishCalloutNotConnected")
+                : IntuneSubscription.Blocks ? T("Ed_PublishCalloutNoPlan", IntuneConnection.Account, IntuneConnection.TenantLabel)
+                : T("Ed_PublishCalloutConnected", IntuneConnection.Account, IntuneConnection.TenantLabel);
             BtnPublishText.Text = ready ? T("Ed_PublishNow") : T("Ed_ConnectAndPublish");
         }
 
@@ -1359,9 +1375,21 @@ namespace J365.IntunePSApp.Views
             // A file older than this run belongs to a previous publication (the window was closed before it wrote anything).
             if (result != null && File.GetLastWriteTimeUtc(IntunePublisher.ResultFile(intune)) < started.AddSeconds(-5)) result = null;
             _publishResult = result;
+            NoteIntuneAnswer(result);
             RefreshPublishStatus();
             if (result != null) MainWindow.Current.Toast(Brief(PublishSummary(result)), result.IsPublished ? "ok" : result.Status == "cancelled" ? "warn" : "error");
         }
+
+        /// <summary>A publication that went through, or that Intune refused, says how Intune answers this connection.</summary>
+        private static void NoteIntuneAnswer(PublishResult r)
+        {
+            if (r == null) return;
+            if (r.IsPublished) IntuneConnection.NoteIntune(refused: false);
+            else if (IsRefused(r)) IntuneConnection.NoteIntune(refused: true);
+        }
+
+        private static bool IsRefused(PublishResult r)
+            => r != null && !r.IsPublished && r.Status != "cancelled" && IntuneDiagnosis.IsRefusal(r.Error);
 
         /// <summary>A toast says the outcome; the card below the package keeps the whole text.</summary>
         private static string Brief(string text) => text.Length > 220 ? text.Substring(0, 217).TrimEnd() + "…" : text;
@@ -1428,6 +1456,7 @@ namespace J365.IntunePSApp.Views
             var result = IntunePublisher.ReadResult(intune);
             if (result != null && File.GetLastWriteTimeUtc(IntunePublisher.ResultFile(intune)) < started.AddSeconds(-5)) result = null;
             _publishResult = result;
+            NoteIntuneAnswer(result);
             RefreshPublishStatus();
             if (result != null) MainWindow.Current.Toast(Brief(PublishSummary(result)), result.IsPublished ? "ok" : result.Status == "cancelled" ? "warn" : "error");
             else if (ct.IsCancellationRequested) MainWindow.Current.Toast(T("Publish_InAppCancelled"), "warn");
@@ -1490,7 +1519,10 @@ namespace J365.IntunePSApp.Views
                 if (!string.IsNullOrWhiteSpace(r.Assignment)) text += " " + T("Ed_PublishAssigned", r.Assignment);
                 return text;
             }
-            return r.Status == "cancelled" ? T("Ed_PublishCancelled") : T("Ed_PublishFailed", r.Error);
+            if (r.Status == "cancelled") return T("Ed_PublishCancelled");
+            // Intune refused: said in the language of the interface (the answer of the script is in English).
+            if (IsRefused(r) && IntuneDiagnosis.ParseScriptError(r.Error) is { } p) return T("Ed_PublishRefused", p.Status);
+            return T("Ed_PublishFailed", r.Error);
         }
 
         private void RefreshPublishStatus()
@@ -1505,15 +1537,40 @@ namespace J365.IntunePSApp.Views
             PublishStatus.SetResourceReference(Border.BackgroundProperty, ok ? "SuccessSoft" : failed ? "DangerSoft" : "BrandSoft");
             PublishStatusIcon.SetResourceReference(TextBlock.ForegroundProperty, ok ? "Success" : failed ? "Danger" : "Brand");
             string text = r == null ? T("Ed_PublishRunning") : PublishSummary(r);
-            // Intune refused the caller: what to check, read from the token of the connection.
-            if (failed && IntuneDiagnosis.IsRefusal(r.Error))
-                text += Environment.NewLine + Environment.NewLine + IntuneDiagnosis.Explain(IntuneConnection.LastToken, IntuneConnection.UsesCertificate);
+            // Intune refused the caller: why (certain when the subscriptions of the tenant are known), what Intune said when
+            // it says more, and what identifies the request for support.
+            bool refused = IsRefused(r);
+            if (refused) text += Environment.NewLine + Environment.NewLine + IntuneConnectUi.RefusalText(r.Error);
             PublishStatusText.Text = text;
-            BtnPublishOpen.Visibility = ok && !string.IsNullOrWhiteSpace(r.PortalUrl) ? Visibility.Visible : Visibility.Collapsed;
+            // The button of the card: the app in Intune, or what to do about a refusal (activate Intune, or check whether
+            // the tenant has it: an earlier answer of Intune does not prove that a trial is still running).
+            string action = ok && !string.IsNullOrWhiteSpace(r.PortalUrl) ? "open"
+                : refused && IntuneSubscription.Blocks ? "purchase"
+                : refused ? "plan" : "";
+            BtnPublishOpen.Tag = action;
+            BtnPublishOpen.Content = action switch { "purchase" => T("Settings_IntunePurchase"), "plan" => T("Settings_IntuneCheckPlan"), _ => T("Ed_PublishOpen") };
+            BtnPublishOpen.Visibility = action.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         }
 
-        private void PublishOpen_Click(object sender, RoutedEventArgs e)
+        private async void PublishOpen_Click(object sender, RoutedEventArgs e)
         {
+            switch (BtnPublishOpen.Tag as string)
+            {
+                case "purchase":
+                    MainWindow.OpenUrl(IntuneSubscription.PurchaseUrl);
+                    return;
+                case "plan":
+                    // An administrator signs in in the browser; the card then says for certain why Intune refused.
+                    var main = MainWindow.Current;
+                    var ct = main.ShowBusy(T("Settings_IntuneCheckPlan"), T("Settings_IntuneCheckingPlan"));
+                    try { await IntuneConnectUi.CheckPlanAsync(ct); }
+                    finally
+                    {
+                        main.HideBusy();
+                        RefreshPublishStatus();
+                    }
+                    return;
+            }
             // Only the Intune admin center is opened from here, whatever the result file says.
             string url = _publishResult?.PortalUrl ?? "";
             if (url.StartsWith("https://intune.microsoft.com/", StringComparison.OrdinalIgnoreCase)) MainWindow.OpenUrl(url);

@@ -399,6 +399,17 @@ namespace J365.IntunePSApp.Core
                 arpVersion = sameVersion ? arpOfMatch : null;
                 // Exit codes the manifest declares as success (besides 0).
                 if (inst.SuccessCodes != null && inst.SuccessCodes.Count > 0) info.SuccessCodes = string.Join(", ", inst.SuccessCodes.Where(c => c != 0).Distinct());
+                // A setup program that installs a Windows Installer product (Adobe Reader, InstallShield setups): the
+                // catalog gives its product code, so the package removes it by that code (msiexec /x) without switches.
+                // Bundles (burn), NSIS, Inno Setup and Squirrel register keys of their own, never an MSI: only plain "exe"
+                // rows, and only when the file itself is not one of those either.
+                if (info.Type == "EXE" && string.IsNullOrEmpty(info.ProductCode) && string.Equals(inst.Type, "exe", StringComparison.OrdinalIgnoreCase)
+                    && info.Technology is not ("NSIS" or "Inno Setup" or "WiX Burn" or "Squirrel")
+                    && Guid.TryParseExact((inst.ProductCode ?? "").Trim(), "B", out var msiCode) && msiCode != Guid.Empty)
+                {
+                    info.ProductCode = msiCode.ToString("B").ToUpperInvariant();
+                    info.Notes.Add(T("Analysis_ExeMsiCode", info.ProductCode));
+                }
             }
             info.UninstallPattern = Names.NamePattern(arpName ?? (string.IsNullOrEmpty(info.MsiProductName) ? app.Name : info.MsiProductName));
             info.DetectionVersion = arpVersion ?? info.AppVersion;

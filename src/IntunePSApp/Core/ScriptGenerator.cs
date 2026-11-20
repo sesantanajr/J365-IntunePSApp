@@ -461,10 +461,34 @@ namespace J365.IntunePSApp.Core
             };
         }
 
+        /// <summary>
+        /// The Windows Installer product code of the package, as {GUID}: the MSI itself, or the MSI a setup program installs
+        /// (Adobe Reader, InstallShield setups), known from the catalog. Null when the field holds no GUID (an uninstall key
+        /// name such as "{GUID}_is1" or "7-Zip").
+        /// </summary>
+        public static string MsiCode(PackageSettings s)
+        {
+            if (s == null || !(s.InstallerType is "MSI" or "EXE")) return null;
+            return Guid.TryParse((s.MsiProductCode ?? "").Trim(), out var g) && g != Guid.Empty ? g.ToString("B").ToUpperInvariant() : null;
+        }
+
+        /// <summary>
+        /// An .exe of the catalog that installs an MSI, with no uninstall switches of its own: the product code its removal
+        /// relies on (msiexec /x), which the catalog gave. Null for an .exe outside the catalog, where a code typed for the
+        /// detection may be the key of a setup that is not an MSI, so its warning about switches stays.
+        /// </summary>
+        public static string ExeMsiCode(PackageSettings s)
+            => s != null && s.InstallerType == "EXE" && !string.IsNullOrEmpty(s.CatalogId) && string.IsNullOrWhiteSpace(s.UninstallExeArgs) ? MsiCode(s) : null;
+
         private static List<string> RemoveLines(PackageSettings s, bool continueOnError)
         {
             string pat = Lit(s.UninstallPattern);
             string msi = $"Uninstall-ADTApplication -Name {pat} -NameMatch 'Wildcard' -ApplicationType 'MSI'";
+            // The product of this package by its code first (msiexec /x): it goes even when its name does not match the
+            // pattern, and a setup program that installs an MSI needs no switches. Only a Windows Installer product with
+            // this code is touched (-ApplicationType 'MSI'); when none is installed, the toolkit only logs it.
+            string code = MsiCode(s);
+            string byCode = code == null ? null : $"Uninstall-ADTApplication -ProductCode {Lit(code)} -ApplicationType 'MSI'";
             string ua = (s.UninstallExeArgs ?? "").Trim();
             // -WaitForChildProcesses: many uninstallers (NSIS, 7-Zip) copy themselves to %TEMP%, start the copy and exit at once.
             // Without waiting for that copy the removal "finishes" while the program is still installed, and the new
@@ -480,9 +504,14 @@ namespace J365.IntunePSApp.Core
                 string find = $"@(Get-ADTApplication -Name {pat} -NameMatch 'Wildcard')";
                 const string describe = "(($_ | ForEach-Object { \"$($_.DisplayName) $($_.DisplayVersion)\".Trim() }) -join '; ')";
                 L.Add("    ## Existing versions: whatever is already installed is removed first, then the new version is installed.");
-                L.Add("    ## No detection rule is consulted here: the removal runs whenever a program with this name is found (MSI and EXE).");
+                L.Add(code == null
+                    ? "    ## No detection rule is consulted here: the removal runs whenever a program with this name is found (MSI and EXE)."
+                    : "    ## No detection rule is consulted here: the removal runs whenever a program with this name (MSI and EXE), or the MSI with this product code, is found.");
                 L.Add("    ## A failure is logged but does not stop the installation.");
                 L.Add($"    $existingApps = {find}");
+                // The product of this package also when its name does not match the pattern (counted once when it does).
+                if (code != null)
+                    L.Add($"    $existingApps += @(Get-ADTApplication -ProductCode {Lit(code)} -ApplicationType 'MSI' | Where-Object {{ $existingApps.ProductCode -notcontains $_.ProductCode }})");
                 L.Add("    if ($existingApps.Count -eq 0)");
                 L.Add("    {");
                 L.Add("        Write-ADTLogEntry -Message 'No version already installed was found: nothing to remove.'");
@@ -493,7 +522,7 @@ namespace J365.IntunePSApp.Core
                 // The toolkit records the exit code of a failed process before it throws: restored, so a failed
                 // removal that is only logged does not make the whole installation report that code.
                 L.Add("        $j365ExitCode = $adtSession.GetExitCode()");
-                foreach (var c in new[] { msi, exe })
+                foreach (var c in byCode == null ? new[] { msi, exe } : new[] { byCode, msi, exe })
                 {
                     L.Add("        try");
                     L.Add("        {");
@@ -515,6 +544,12 @@ namespace J365.IntunePSApp.Core
             else
             {
                 L.Add("    ## Removes the application (every version found, MSI and EXE).");
+                if (byCode != null)
+                {
+                    L.Add("    ## The Windows Installer product of this package, by its product code (msiexec /x).");
+                    L.Add("    " + byCode);
+                    L.Add("    ## Other versions with the same name.");
+                }
                 L.Add("    " + msi);
                 L.Add("    " + exe);
             }

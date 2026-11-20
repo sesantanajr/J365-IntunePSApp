@@ -419,6 +419,13 @@
                 <TextBlock Text="{l:T Ed_UninstallArgs}" Style="{StaticResource Label}"/>
                 <TextBox x:Name="TxtUninstallArgs" Style="{StaticResource Mono}"/>
                 <TextBlock Style="{StaticResource Hint}" Text="{l:T Ed_UninstallArgsHint}"/>
+                <!-- A setup program that installs an MSI of a known product code: removed by that code, no switches needed -->
+                <Border x:Name="UninstallByCode" Background="{DynamicResource SuccessSoft}" CornerRadius="8" Padding="12,8" Margin="0,10,0,0" Visibility="Collapsed">
+                  <DockPanel>
+                    <TextBlock Text="&#xE73E;" Style="{StaticResource Icon}" Foreground="{DynamicResource Success}" Margin="0,1,10,0" VerticalAlignment="Top"/>
+                    <TextBlock x:Name="UninstallByCodeText" TextWrapping="Wrap" FontSize="12.5"/>
+                  </DockPanel>
+                </Border>
               </StackPanel>
             </Border>
           </StackPanel>

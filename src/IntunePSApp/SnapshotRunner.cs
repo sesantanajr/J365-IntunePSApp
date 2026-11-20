@@ -58,6 +58,25 @@ namespace J365.IntunePSApp
                     win.CloseForSnapshot();
                 }
 
+                // Any other dialog, drawn off-screen the same way, captured, then closed.
+                async Task ShotDialog(Window win, string name)
+                {
+                    win.WindowStartupLocation = WindowStartupLocation.Manual;
+                    win.Left = -32000; win.Top = 0;
+                    win.ShowActivated = false;
+                    win.ShowInTaskbar = false;
+                    win.Show();
+                    await Task.Delay(700);
+                    win.UpdateLayout();
+                    var root = (FrameworkElement)VisualTreeHelper.GetChild(win, 0);
+                    var rtb = new RenderTargetBitmap((int)root.ActualWidth, (int)root.ActualHeight, 96, 96, PixelFormats.Pbgra32);
+                    rtb.Render(root);
+                    var enc = new PngBitmapEncoder();
+                    enc.Frames.Add(BitmapFrame.Create(rtb));
+                    using (var fs = File.Create(Path.Combine(dir, name + ".png"))) enc.Save(fs);
+                    win.Close();
+                }
+
                 if (App.HasArg("--snapshot-setup"))
                 {
                     var setup = w.ShowSetupAsync(refresh: false);
@@ -120,6 +139,9 @@ namespace J365.IntunePSApp
                     await w.Editor.BuildAsync(s);
                     await Shot("04-generated");
                     if (!string.IsNullOrEmpty(outDir)) ConfigStore.Current.OutputFolder = outDir;
+                    // The publishing dialog of that package, as it opens with the connection of this computer (nothing is sent).
+                    if (App.HasArg("--snapshot-publish") && w.Editor.LastIntuneFolder is string intune && Directory.Exists(intune))
+                        await ShotDialog(new Views.PublishDialog(IntunePublisher.Prepare(intune), s.AppName + " " + s.AppVersion, null, s.AppName), "09-publish");
                 }
 
                 w.Navigate("packages");

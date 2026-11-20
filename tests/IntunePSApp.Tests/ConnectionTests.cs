@@ -34,6 +34,19 @@ namespace J365.IntunePSApp.Tests
         public bool ExistingRegistration { get; set; }
         /// <summary>Intune answers every read with its 401 "Forbidden" (a user without an active Intune role, for example).</summary>
         public bool IntuneRefuses { get; set; }
+        /// <summary>The refusal comes nested twice, with the code "UnknownError", as from a tenant without Intune.</summary>
+        public bool NestedRefusal { get; set; }
+        /// <summary>
+        /// The subscriptions of the tenant (organization.assignedPlans): Microsoft Intune Plan 1 by default. Null: Microsoft
+        /// Graph leaves them out (no permission that reads them).
+        /// </summary>
+        public JsonArray Plans { get; set; } = PlansOf(("c1ec4a95-1f05-45b3-a911-aa3fa01094f5", "SCO", "Enabled"), ("9aaf7827-d63c-4b61-89c3-182f06f82e5c", "exchange", "Enabled"));
+
+        public static JsonArray PlansOf(params (string Id, string Service, string Status)[] plans)
+            => new JsonArray(plans.Select(p => (JsonNode)new JsonObject { ["assignedDateTime"] = "2026-01-05T10:00:00Z", ["capabilityStatus"] = p.Status, ["service"] = p.Service, ["servicePlanId"] = p.Id }).ToArray());
+
+        /// <summary>The delegated access tokens given out, with the permissions asked for ("scp"), as Entra ID does.</summary>
+        private readonly HashSet<string> _issued = new HashSet<string>();
         /// <summary>The keyCredentials of the application: a key of another tool, then whatever the setup sends.</summary>
         public List<JsonNode> KeyCredentials { get; } = new List<JsonNode>();
         public List<JsonNode> RoleAssignments { get; } = new List<JsonNode>();
@@ -45,6 +58,20 @@ namespace J365.IntunePSApp.Tests
         public string AppToken { get; } = Jwt(new { tid = TenantGuid, idtyp = "app", roles = new[] { "DeviceManagementApps.ReadWrite.All" } });
 
         /// <summary>The 401 of Intune for a caller it refuses: its own error as JSON inside the message of Graph.</summary>
+        public static readonly string IntuneUnknownError = new JsonObject
+        {
+            ["error"] = new JsonObject
+            {
+                ["code"] = "UnknownError",
+                ["message"] = new JsonObject
+                {
+                    ["ErrorCode"] = "Forbidden",
+                    ["Message"] = "{\r\n  \"_version\": 3,\r\n  \"Message\": \"An error has occurred - Operation ID (for customer support): 00000000-0000-0000-0000-000000000000 - Activity ID: 32f20c83-f999-4b7b-aa7a-e485513d188a - Url: https://fef.msua06.manage.microsoft.com/StatelessAppMetadataFEService/deviceAppManagement/mobileApps?api-version=5025-09-12\",\r\n  \"CustomApiErrorPhrase\": \"\",\r\n  \"RetryAfter\": null,\r\n  \"ErrorSourceService\": \"\",\r\n  \"HttpHeaders\": \"{}\"\r\n}",
+                    ["Target"] = null, ["Details"] = null, ["InnerError"] = null
+                }.ToJsonString()
+            }
+        }.ToJsonString();
+
         public const string IntuneForbidden = "{\"error\":{\"code\":\"Forbidden\",\"message\":\"{\\r\\n  \\\"_version\\\": 3,\\r\\n  \\\"Message\\\": \\\"An error has occurred - Operation ID (for customer support): 00000000-0000-0000-0000-000000000000 - Activity ID: 184af700-7dff-44d6-ba38-5af761eb24d3 - Url: https://proxy.msua08.manage.microsoft.com/AppLifecycle_2611/StatelessAppMetadataFEService/deviceAppManagement/mobileApps?api-version=5026-08-19\\\"\\r\\n}\"}}";
         public List<(string Method, string Path, string Body)> Calls { get; } = new List<(string, string, string)>();
         public const string NewAppId = "aaaaaaaa-1111-2222-3333-444444444444";
@@ -180,15 +207,22 @@ namespace J365.IntunePSApp.Tests
                     string expected = Convert.ToBase64String(SHA256.HashData(Encoding.ASCII.GetBytes(form["code_verifier"]))).TrimEnd('=').Replace('+', '-').Replace('/', '_');
                     if (form["code"] != "mockcode" || expected != _challenge) { Reply(ctx, 400, new { error = "invalid_grant", error_description = "AADSTS50148: PKCE mismatch" }); return; }
                 }
+                // The access token carries the permissions asked for, without the address of the resource.
+                string scp = string.Join(" ", form.GetValueOrDefault("scope", "").Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(s => s.Substring(s.LastIndexOf('/') + 1)));
+                string access = Jwt(new { tid = TenantGuid, scp, n = Guid.NewGuid().ToString("N") });
+                lock (_issued) _issued.Add(access);
                 Reply(ctx, 200, new
                 {
-                    token_type = "Bearer", access_token = "mock-access", refresh_token = "mock-refresh-" + form["grant_type"], expires_in = 3600,
+                    token_type = "Bearer", access_token = access, refresh_token = "mock-refresh-" + form["grant_type"], expires_in = 3600,
                     id_token = Jwt(new { tid = TenantGuid, preferred_username = "admin@contoso.onmicrosoft.com", name = "Contoso Admin" })
                 });
                 return;
             }
-            string auth = req.Headers["Authorization"];
-            if (auth != "Bearer mock-access" && auth != "Bearer " + AppToken) { Reply(ctx, 401, new { error = new { code = "InvalidAuthenticationToken", message = "no token" } }); return; }
+            string auth = req.Headers["Authorization"] ?? "";
+            string bearer = auth.StartsWith("Bearer ") ? auth.Substring(7) : "";
+            bool known;
+            lock (_issued) known = _issued.Contains(bearer);
+            if (!known && bearer != "mock-access" && bearer != AppToken) { Reply(ctx, 401, new { error = new { code = "InvalidAuthenticationToken", message = "no token" } }); return; }
 
             if (path.StartsWith("/v1.0/servicePrincipals(appId="))
                 Reply(ctx, 200, new
@@ -230,9 +264,18 @@ namespace J365.IntunePSApp.Tests
                 if (DenyConsent) Reply(ctx, 403, new { error = new { code = "Authorization_RequestDenied", message = "Insufficient privileges to complete the operation." } });
                 else Reply(ctx, 201, new { id = "grant-1" });
             }
+            else if (req.HttpMethod == "GET" && path == "/v1.0/organization")
+            {
+                // As Microsoft Graph: without a permission that reads the organization, its plans are left out.
+                var claims = J365.IntunePSApp.Core.TokenSet.ReadClaims(bearer);
+                bool canRead = claims.TryGetValue("scp", out var granted) && granted.Split(' ').Contains("Organization.Read.All");
+                var org = new JsonObject { ["id"] = TenantGuid, ["displayName"] = "Contoso" };
+                if (canRead && Plans != null) org["assignedPlans"] = Plans.DeepClone();
+                Reply(ctx, 200, new JsonObject { ["value"] = new JsonArray(org) });
+            }
             else if (req.HttpMethod == "GET" && path == "/beta/deviceAppManagement/mobileApps")
             {
-                if (IntuneRefuses) { Reply(ctx, 401, IntuneForbidden); return; }
+                if (IntuneRefuses) { Reply(ctx, 401, NestedRefusal ? IntuneUnknownError : IntuneForbidden); return; }
                 // As in Intune: a property of Win32 apps cannot be selected on the list of every app.
                 if (query.Contains("$select=") && query.Contains("displayVersion"))
                 {
@@ -274,6 +317,7 @@ namespace J365.IntunePSApp.Tests
             configure?.Invoke(mock);
             var cfg = ConfigStore.Current;
             string tenant = cfg.IntuneTenantId, client = cfg.IntuneClientId;
+            IntuneSubscription.Clear();
             var open = EntraAuth.OpenBrowser;
             Environment.SetEnvironmentVariable("J365_LOGIN_URL", mock.Base + "/login");
             Environment.SetEnvironmentVariable("J365_GRAPH_URL", mock.Base);
@@ -286,6 +330,7 @@ namespace J365.IntunePSApp.Tests
                 Environment.SetEnvironmentVariable("J365_LOGIN_URL", null);
                 Environment.SetEnvironmentVariable("J365_GRAPH_URL", null);
                 IntuneConnection.SignOut();
+                IntuneSubscription.Clear();
                 cfg.IntuneTenantId = tenant;
                 cfg.IntuneClientId = client;
             }
@@ -645,7 +690,10 @@ namespace J365.IntunePSApp.Tests
         [Fact]
         public Task A_refusal_of_Intune_is_cleaned_up_and_explained() => WithMockAsync(async mock =>
         {
+            // The subscriptions cannot be read: the causes worth checking, in order.
+            mock.Plans = null;
             await ConnectWithAccountAsync();
+            Assert.Equal(IntunePlanState.Unknown, IntuneSubscription.State);
             mock.IntuneRefuses = true;
             var ex = await Assert.ThrowsAsync<GraphException>(() => IntuneConnection.TestAsync(CancellationToken.None));
             Assert.Equal(401, ex.Status);
@@ -662,7 +710,139 @@ namespace J365.IntunePSApp.Tests
             // The application: its permission and the tenant, never a role or a license of a user.
             var app = new TokenSet { App = true, Claims = TokenSet.ReadClaims(mock.AppToken) };
             Assert.Equal(new[] { J365.IntunePSApp.Localization.Loc.T("Diag_TenantLicense") }, IntuneDiagnosis.Causes(app, certificate: true));
+            Assert.True(IntuneConnection.Refused);
         });
+
+        [Fact]
+        public Task A_tenant_without_Intune_is_found_at_the_setup_and_said_for_certain() => WithMockAsync(async mock =>
+        {
+            // Microsoft 365 with Exchange and the basic mobility only: no Intune for Win32 apps.
+            mock.Plans = EntraMock.PlansOf(("9aaf7827-d63c-4b61-89c3-182f06f82e5c", "exchange", "Enabled"), ("882e1d05-acd1-4ccb-8708-6ee03664b117", "SCO", "Enabled"));
+            mock.IntuneRefuses = true;
+            mock.NestedRefusal = true;
+            var r = await ConnectWithAccountAsync();
+            // The administrator's sign-in of the setup read the subscriptions (read only).
+            Assert.Contains("Organization.Read.All", mock.Last("GET", "/login/organizations/oauth2/v2.0/authorize").Path);
+            Assert.Equal(IntunePlanState.BasicOnly, r.Plan);
+            Assert.Equal(IntunePlanState.BasicOnly, IntuneSubscription.State);
+            Assert.True(IntuneSubscription.Blocks);
+
+            // Intune refuses, as it does for such a tenant: one cause, said for certain, whatever the account.
+            var ex = await Assert.ThrowsAsync<GraphException>(() => IntuneConnection.TestAsync(CancellationToken.None));
+            Assert.Equal("UnknownError", ex.Code);
+            Assert.Equal("GET /beta/deviceAppManagement/mobileApps: An error has occurred - Activity ID: 32f20c83-f999-4b7b-aa7a-e485513d188a", ex.Message);
+            Assert.True(IntuneConnection.Refused);
+            var causes = IntuneDiagnosis.Causes(IntuneConnection.LastToken, certificate: false);
+            Assert.Single(causes);
+            Assert.StartsWith(J365.IntunePSApp.Localization.Loc.T("Diag_PlanBasic", IntuneConnection.TenantLabel, "").Split('(')[0], causes[0]);
+            Assert.StartsWith(J365.IntunePSApp.Localization.Loc.T("Diag_IntroOne"), IntuneDiagnosis.Explain(IntuneConnection.LastToken, certificate: false));
+
+            // Disconnect forgets it with the rest.
+            IntuneConnection.Disconnect();
+            Assert.Equal(IntunePlanState.Unknown, IntuneSubscription.State);
+            Assert.Equal("", ConfigStore.Current.IntunePlan);
+            Assert.False(IntuneConnection.Refused);
+        });
+
+        [Fact]
+        public Task Intune_answering_proves_the_subscription_and_ends_a_refusal() => WithMockAsync(async mock =>
+        {
+            mock.Plans = null;
+            await ConnectWithAccountAsync();
+            mock.IntuneRefuses = true;
+            await Assert.ThrowsAsync<GraphException>(() => IntuneConnection.TestAsync(CancellationToken.None));
+            Assert.True(IntuneConnection.Refused);
+            Assert.Equal(IntunePlanState.Unknown, IntuneSubscription.State);
+
+            mock.IntuneRefuses = false;
+            await IntuneConnection.TestAsync(CancellationToken.None);
+            Assert.False(IntuneConnection.Refused);
+            Assert.Equal(IntunePlanState.Active, IntuneSubscription.State);
+            Assert.False(IntuneSubscription.Blocks);
+
+            // Known only from that answer: a new refusal (a trial that ended since) forgets it, and the subscription is
+            // among the causes again.
+            mock.IntuneRefuses = true;
+            await Assert.ThrowsAsync<GraphException>(() => IntuneConnection.TestAsync(CancellationToken.None));
+            Assert.Equal(IntunePlanState.Unknown, IntuneSubscription.State);
+            Assert.Contains(J365.IntunePSApp.Localization.Loc.T("Diag_TenantLicense"), IntuneDiagnosis.Causes(IntuneConnection.LastToken, certificate: false));
+        });
+
+        [Fact]
+        public Task A_fresh_reading_of_the_plans_stands_over_a_refusal() => WithMockAsync(async mock =>
+        {
+            // Read at the setup: Intune Plan 1 active. Refused a moment later (a grant still on its way): the reading stands.
+            await ConnectWithAccountAsync();
+            Assert.Equal(IntunePlanState.Active, IntuneSubscription.State);
+            mock.IntuneRefuses = true;
+            await Assert.ThrowsAsync<GraphException>(() => IntuneConnection.TestAsync(CancellationToken.None));
+            Assert.Equal(IntunePlanState.Active, IntuneSubscription.State);
+            // A reading two days old does not.
+            ConfigStore.Current.IntunePlanUtc = DateTime.UtcNow.AddDays(-2);
+            await Assert.ThrowsAsync<GraphException>(() => IntuneConnection.TestAsync(CancellationToken.None));
+            Assert.Equal(IntunePlanState.Unknown, IntuneSubscription.State);
+        });
+
+        [Fact]
+        public Task Check_the_subscription_signs_in_an_administrator_and_reads_the_plans() => WithMockAsync(async mock =>
+        {
+            mock.Plans = null;
+            await ConnectWithAccountAsync();
+            // A trial of Intune that ended.
+            mock.Plans = EntraMock.PlansOf(("c1ec4a95-1f05-45b3-a911-aa3fa01094f5", "SCO", "Suspended"), ("882e1d05-acd1-4ccb-8708-6ee03664b117", "SCO", "Enabled"));
+            Assert.Equal(IntunePlanState.Inactive, await IntuneSubscription.CheckAsync(CancellationToken.None));
+            var authorize = mock.Last("GET", $"/login/{EntraMock.TenantGuid}/oauth2/v2.0/authorize");
+            Assert.Contains("client_id=" + EntraAuth.GraphCliClientId, authorize.Path);
+            Assert.Contains("Organization.Read.All", authorize.Path);
+            Assert.DoesNotContain("offline_access", authorize.Path);
+            Assert.Equal(IntunePlanState.Inactive, IntuneSubscription.State);
+            Assert.NotNull(IntuneSubscription.Checked);
+
+            // Checked again with the same answer: the date is the one of the new check.
+            ConfigStore.Current.IntunePlanUtc = DateTime.UtcNow.AddDays(-30);
+            Assert.Equal(IntunePlanState.Inactive, await IntuneSubscription.CheckAsync(CancellationToken.None));
+            Assert.True(IntuneSubscription.Checked > DateTime.Now.AddMinutes(-5));
+
+            // Plans of the Intune service this application does not know: it says it cannot tell, and keeps nothing.
+            mock.Plans = EntraMock.PlansOf(("d9923fe3-a2de-4d29-a5be-e3e83bb786be", "SCO", "Enabled"));
+            Assert.Equal(IntunePlanState.Unknown, await IntuneSubscription.CheckAsync(CancellationToken.None));
+            Assert.Equal(IntunePlanState.Unknown, IntuneSubscription.State);
+        });
+
+        [Fact]
+        public async Task The_publishing_script_cleans_up_a_refusal_of_Intune()
+        {
+            // Invoke-Graph of Publish-ToIntune.ps1, in Windows PowerShell 5.1, against the refusal Intune gives a tenant
+            // without a subscription: its error nested twice, opened to its sentence and activity id.
+            using var mock = new EntraMock { IntuneRefuses = true, NestedRefusal = true };
+            string script = PackageBuilder.CompanionScript(PackageLayout.PublishScript);
+            var functions = new[] { "Invoke-Http", "Invoke-Graph" }
+                .Select(name => System.Text.RegularExpressions.Regex.Match(script, @"(?ms)^function " + name + @"\b.*?^\}\r?$").Value).ToList();
+            Assert.All(functions, f => Assert.False(string.IsNullOrEmpty(f)));
+            string code = "$ErrorActionPreference = 'Stop'\r\n"
+                + $"$GraphUrl = '{mock.Base}'; $CertificateThumbprint = 'ABCDEF'\r\n"
+                + "function Get-AccessToken { 'mock-access' }\r\nfunction Write-Note([string]$Text) { }\r\n"
+                + string.Join("\r\n", functions)
+                + "\r\ntry { $null = Invoke-Graph -Method 'GET' -Path '/deviceAppManagement/mobileApps?$top=1' } catch { 'ERROR: ' + $_.Exception.Message }\r\n";
+            string file = Path.Combine(Path.GetTempPath(), "j365-graph-" + Guid.NewGuid().ToString("N") + ".ps1");
+            File.WriteAllText(file, code, new UTF8Encoding(true));
+            try
+            {
+                var run = await Task.Run(() => ToolsService.RunPowerShell(ToolsService.PowerShellStartInfo($"-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"{file}\""), 60000));
+                Assert.False(run.TimedOut);
+                Assert.Contains("ERROR: Microsoft Graph answered HTTP 401 (UnknownError) to GET /deviceAppManagement/mobileApps: An error has occurred - Activity ID: 32f20c83-f999-4b7b-aa7a-e485513d188a", run.Output);
+                Assert.DoesNotContain("_version", run.Output);
+                Assert.DoesNotContain("Url:", run.Output);
+                Assert.DoesNotContain("Operation ID", run.Output);
+                // What to check comes on its own line, the subscription first.
+                Assert.Contains("\nIntune refused the application. Check that the tenant has an active Microsoft Intune subscription", run.Output.Replace("\r\n", "\n"));
+                // The application reads it back: a refusal, its request and activity id.
+                string error = run.Output.Substring(run.Output.IndexOf("ERROR: ") + 7).Trim();
+                Assert.True(IntuneDiagnosis.IsRefusal(error));
+                Assert.Equal((401, "UnknownError", "GET /deviceAppManagement/mobileApps", "32f20c83-f999-4b7b-aa7a-e485513d188a"), IntuneDiagnosis.ParseScriptError(error));
+            }
+            finally { File.Delete(file); }
+        }
 
         [Fact]
         public async Task The_publishing_script_signs_in_with_the_certificate_in_Windows_PowerShell()

@@ -2,6 +2,31 @@
 
 All notable changes to J365 IntunePSApp. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.4.4 - 2026-11-20
+
+### Why this version
+
+Two reports from a real tenant. An Adobe Acrobat Reader package (an .exe) was generated with the warning *"No uninstall switches for the .exe"* and a question before generating, although the catalog knows that this installer puts an MSI on the computer and how to remove it. And publishing with the app certificate failed with *HTTP 401 (UnknownError)*: the message showed the raw JSON of Intune cut in the middle, the dialog said *"Could not connect to Microsoft Intune"* although the connection worked, and the causes were a guess. Intune answers 401 to every request of a tenant without an active Intune subscription, whatever the connection: the application now checks that for certain.
+
+### Added
+
+- **Does the tenant have Intune?** The administrator's sign-in of the setup also reads the subscriptions of the tenant (`Organization.Read.All`, read only, nothing kept): Microsoft Intune active, only *Basic Mobility and Security* (every Microsoft 365 tenant has it, and it does not deploy Win32 apps), an Intune subscription that expired or was suspended (a trial that ended), or none. When Intune is missing, the connection window says so at once, instead of retrying for two minutes, with *Activate Intune in Microsoft 365*. For a connection set up before, **Check the subscription** (in Settings, the publishing dialog, the card of a package and the connection window) signs in an administrator in the browser and reads it; it is offered whenever Intune refuses. Intune answering a request proves the subscription too, until Intune refuses again (a trial may have ended since); a reading of the plans stands over a refusal for a day (a grant may still be on its way). Plans of the Intune service that the application does not know leave the answer open instead of guessing.
+- **The state shows everywhere:** the sidebar and the home page say *Tenant without Intune* or *Intune refused the access* instead of a green *connected*; Settings explains it, with *Check again* and *Activate Intune in Microsoft 365*; the card of a package says before the upload that Intune will refuse the publication.
+- **A setup program that installs an MSI is removed by its product code.** When the catalog gives the product code of the MSI an .exe installs (Adobe Acrobat Reader, InstallShield setups), the package removes it with `Uninstall-ADTApplication -ProductCode ... -ApplicationType 'MSI'` (msiexec /x) before the removal by name, in the uninstallation and in the removal of existing versions. No uninstall switches are needed, so the warning and the question before generating are gone; the analysis, the *Uninstall* step and the log say how it is removed. Only a Windows Installer product with that code is touched; bundles (burn), NSIS, Inno Setup and Squirrel never count as one, by the catalog or by the file itself. Before installing, the product is found by its code as well as by its name. Outside the catalog, a code typed for the detection keeps the warning about switches. Detection keeps the name and version, since some vendors change the code with each version.
+
+### Changed
+
+- **A refusal of Intune says what happened, in the language of the application.** The publishing dialog no longer says *"Could not connect"* when the connection worked: its card says *Intune refused this connection*, with the cause (one, for certain, when the subscriptions are known) and what identifies the request for Microsoft support (the request and its Activity ID). The card of a failed publication says *Intune refused the request (HTTP 401)* with the same explanation, instead of the English text of the script. When Intune says more than *An error has occurred* (a missing scope, for example), its sentence is shown as well.
+- Only an answer of Microsoft Graph counts as a refusal of Intune: an HTTP 403 of the upload (an expired storage link, a proxy) keeps its own message. The HTTP 400 *Request not applicable to target tenant* that Microsoft Graph gives a tenant without Intune counts as one.
+- The causes of a refusal follow what is known of the tenant: without Intune nothing about the connection matters; with Intune active and the permission in the token, only time is left (a permission or a subscription activated a moment ago).
+- *Ask*, in the publishing dialog, says what it does (it shows the Intune apps with the same name first) instead of *"Ask in the PowerShell window"*.
+- `Publish-ToIntune.ps1` puts what to check on its own line, the subscription of the tenant first.
+
+### Fixed
+
+- **The error of Intune came as raw JSON cut in the middle.** Intune can nest its error twice (`{"ErrorCode":...,"Message":"{\"_version\":3,\"Message\":\"...\"}"}`): every level is opened now, in the application and in the script, without the empty operation id and the internal address of Intune. A message cut short is still read.
+- **A package of Adobe Acrobat Reader (64-bit) could uninstall Acrobat Pro or Acrobat 2020.** Its name in the database was `Adobe Acrobat*`, which also matches Acrobat 2020, Acrobat Pro and the 32-bit Reader (the *Uninstall* step warned about it): with *Uninstall any version already installed* on, they were removed before the installation. The name is now `Adobe Acrobat (64-bit)`, the name of the 64-bit application, and the package no longer removes earlier versions, since Adobe's installer updates the 64-bit Reader in place. It applies with the database built when this version is published.
+
 ## 2.4.3 - 2026-11-19
 
 ### Why this version

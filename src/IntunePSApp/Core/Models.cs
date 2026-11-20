@@ -187,6 +187,14 @@ namespace J365.IntunePSApp.Core
         public string IntuneCertificateThumbprint { get; set; } = "";
         /// <summary>The tenant as people read it (the domain of the administrator who set the connection up).</summary>
         public string IntuneTenantName { get; set; } = "";
+        /// <summary>
+        /// What the tenant has of Microsoft Intune (IntuneSubscription): "active", "basic" (Basic Mobility and Security
+        /// only), "inactive" (expired or suspended), "none"; empty when unknown.
+        /// </summary>
+        public string IntunePlan { get; set; } = "";
+        /// <summary>The tenant <see cref="IntunePlan"/> belongs to, as the connection names it.</summary>
+        public string IntunePlanTenant { get; set; } = "";
+        public DateTime? IntunePlanUtc { get; set; }
         /// <summary>Opens the publication to Intune as soon as a package is generated.</summary>
         public bool PublishAfterBuild { get; set; }
 

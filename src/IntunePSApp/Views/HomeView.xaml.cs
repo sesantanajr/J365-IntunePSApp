@@ -141,14 +141,23 @@ namespace J365.IntunePSApp.Views
             return list;
         }
 
-        /// <summary>Connected, configured without a session, or not connected yet.</summary>
+        /// <summary>
+        /// Connected, configured without a session, or not connected yet; and what keeps a connection from publishing (the
+        /// registration gone, the tenant without Intune, Intune refusing), as the sidebar says it.
+        /// </summary>
         private void UpdateIntuneCard()
         {
-            bool signedIn = IntuneConnection.IsSignedIn;
-            StatIntune.Text = signedIn ? T("Home_StatIntuneOn") : IntuneConnection.IsConfigured ? T("Home_StatIntuneReady") : T("Home_StatIntuneOff");
-            StatIntune.SetResourceReference(TextBlock.ForegroundProperty, signedIn ? "Success" : "Ink");
-            IntuneDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, signedIn ? "Success" : IntuneConnection.IsConfigured ? "Warning" : "Faint");
-            StatIntuneSub.Text = signedIn ? IntuneConnection.Account : IntuneConnection.IsConfigured ? T("Home_StatIntuneSignIn") : T("Home_StatIntuneSetup");
+            bool signedIn = IntuneConnection.IsSignedIn, configured = IntuneConnection.IsConfigured;
+            bool problem = configured && (IntuneConnection.Problem.Length > 0 || (IntuneConnection.UsesCertificate && !signedIn));
+            bool noPlan = !problem && signedIn && IntuneSubscription.Blocks;
+            bool refused = !problem && signedIn && !noPlan && IntuneConnection.Refused;
+            bool attention = problem || noPlan || refused;
+            // One or two words: the number style of the card cuts anything longer.
+            StatIntune.Text = problem ? T("Home_StatIntuneProblem") : noPlan ? T("Home_StatIntuneNoPlan") : refused ? T("Home_StatIntuneRefused")
+                : signedIn ? T("Home_StatIntuneOn") : configured ? T("Home_StatIntuneReady") : T("Home_StatIntuneOff");
+            StatIntune.SetResourceReference(TextBlock.ForegroundProperty, problem ? "Danger" : attention ? "Warning" : signedIn ? "Success" : "Ink");
+            IntuneDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, problem ? "Danger" : attention ? "Warning" : signedIn ? "Success" : configured ? "Warning" : "Faint");
+            StatIntuneSub.Text = attention ? T("Home_StatIntuneWhy") : signedIn ? IntuneConnection.Account : configured ? T("Home_StatIntuneSignIn") : T("Home_StatIntuneSetup");
         }
 
         private void Intune_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)

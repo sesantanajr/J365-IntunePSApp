@@ -438,23 +438,36 @@ function Invoke-Graph
         $message = ''
         $code = ''
         try { $failure = $answer.Text | ConvertFrom-Json; $message = [string]$failure.error.message; $code = [string]$failure.error.code } catch { }
-        # Intune wraps its own error as JSON in the message: its sentence and the ids for support are kept.
-        if ($message.TrimStart().StartsWith('{')) { try { $inner = [string](($message | ConvertFrom-Json).Message); if ($inner) { $message = $inner } } catch { } }
+        # Intune wraps its own error as JSON in the message, sometimes twice: every level is opened, and its sentence and
+        # the activity id for support are kept (not its internal address, nor an empty operation id).
+        for ($depth = 0; $depth -lt 4 -and $message.TrimStart().StartsWith('{'); $depth++)
+        {
+            $inner = ''
+            try { $inner = [string](($message | ConvertFrom-Json).Message) } catch { }
+            if (-not $inner -and $message -match '"[Mm]essage"\s*:\s*"((?:[^"\\]|\\.)*)') { try { $inner = [regex]::Unescape($Matches[1]) } catch { $inner = $Matches[1] } }
+            if (-not $inner) { break }
+            $message = $inner.Trim()
+        }
         $cut = $message.IndexOf(' - Url:')
         if ($cut -gt 0) { $message = $message.Substring(0, $cut) }
+        $message = $message -replace '\s*-?\s*Operation ID \(for customer support\):\s*0{8}-0{4}-0{4}-0{4}-0{12}', ''
         if (-not $message) { $message = $answer.Text }
         if ($message.Length -gt 400) { $message = $message.Substring(0, 400) }
         $hint = ''
-        if ($answer.Status -eq 401 -and $code -eq 'InvalidAuthenticationToken') { $hint = ' Microsoft Graph did not accept the sign-in: run the publication again.' }
-        elseif ($answer.Status -eq 401 -or $answer.Status -eq 403)
+        if ($answer.Status -eq 401 -and $code -eq 'InvalidAuthenticationToken') { $hint = 'Microsoft Graph did not accept the sign-in: run the publication again.' }
+        elseif ($answer.Status -eq 401 -or $answer.Status -eq 403 -or ($answer.Status -eq 400 -and $message -match 'not applicable to target tenant'))
         {
-            # Microsoft Graph accepted the token and Intune refused the caller.
-            if ($CertificateThumbprint) { $hint = ' Intune refused the application: the app registration needs the application permission DeviceManagementApps.ReadWrite.All with admin consent, and the tenant an active Intune subscription.' }
-            else { $hint = ' Intune refused your account: an Intune role must be active now (Intune Administrator or Global Administrator; with PIM, activate it first), your account needs an Intune license unless "Allow access to unlicensed admins" is on, and the tenant an active Intune subscription. Connecting with the app certificate does not depend on the role or license of an account.' }
+            # Microsoft Graph accepted the token and Intune refused the caller. A tenant without an active Intune
+            # subscription refuses everyone, whatever the connection (HTTP 401, or 400 "Request not applicable to target tenant").
+            if ($CertificateThumbprint) { $hint = 'Intune refused the application. Check that the tenant has an active Microsoft Intune subscription (Microsoft 365 admin center > Billing > Your products; a trial that ended gives the same answer), then that the app registration has the application permission DeviceManagementApps.ReadWrite.All with admin consent.' }
+            else { $hint = 'Intune refused your account. Check that the tenant has an active Microsoft Intune subscription, that an Intune role is active now (Intune Administrator or Global Administrator; with PIM, activate it first), and that your account has an Intune license unless "Allow access to unlicensed admins" is on. Connecting with the app certificate does not depend on the role or license of an account.' }
         }
         $status = [string]$answer.Status
         if ($code) { $status += ' (' + $code + ')' }
-        throw ('Microsoft Graph answered HTTP ' + $status + ' to ' + $Method + ' ' + ($Path -split '\?')[0] + ': ' + $message + $hint)
+        # The answer on the first line, what to check on the second (J365 IntunePSApp shows its own explanation instead).
+        $text = 'Microsoft Graph answered HTTP ' + $status + ' to ' + $Method + ' ' + ($Path -split '\?')[0] + ': ' + $message
+        if ($hint) { $text += "`n" + $hint }
+        throw $text
     }
 }
 
@@ -910,7 +923,7 @@ catch
     $cancelled = ($message -eq $CancelledMessage)
     Write-Host ''
     if ($cancelled) { Write-Note $CancelledMessage }
-    else { Write-Host ('  ERROR  ' + $message) -ForegroundColor Red }
+    else { Write-Host ('  ERROR  ' + ($message -replace "`n", "`n         ")) -ForegroundColor Red }
     # An app created by this run and left without content would be a broken entry in the tenant: remove it.
     if ($script:CreatedAppId)
     {

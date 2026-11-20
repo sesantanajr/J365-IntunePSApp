@@ -438,6 +438,8 @@ namespace J365.IntunePSApp.Views
         private readonly string _script, _displayName, _appName;
         private CancellationTokenSource _cts;
         private bool _busy;
+        /// <summary>Intune refused the lookup of this dialog: the publication would stop at its first request too.</summary>
+        private Exception _refusal;
 
         /// <summary>The PowerShell window of the publication, when "Run in a PowerShell window" was chosen.</summary>
         public Process Started { get; private set; }
@@ -612,7 +614,38 @@ namespace J365.IntunePSApp.Views
             dock.Children.Add(text);
             box.Child = dock;
             _connection.Children.Add(box);
+            // Connected, but Intune refuses: the tenant has no Intune (known for certain), or the lookup was refused. The
+            // publication would stop at its first request: why, and what to do, before anything is sent.
+            if (signedIn && !IntuneConnection.NeedsSetup && (IntuneSubscription.Blocks || _refusal != null)) _connection.Children.Add(RefusalBox());
             _publish.Content = signedIn && !IntuneConnection.NeedsSetup ? T("Publish_PublishNow") : T("Publish_SignInAndPublish");
+        }
+
+        private Border RefusalBox()
+        {
+            bool noPlan = IntuneSubscription.Blocks;
+            var panel = new StackPanel();
+            panel.Children.Add(new TextBlock { Text = noPlan ? T("Publish_NoPlanTitle") : T("Publish_RefusedTitle"), FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
+            string why = noPlan ? IntuneDiagnosis.Causes(null, IntuneConnection.UsesCertificate)[0] : IntuneConnectUi.RefusalText(_refusal);
+            panel.Children.Add(new TextBlock { Text = why, Style = S("MutedText"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) });
+            var actions = new WrapPanel { Margin = new Thickness(0, 10, 0, 0) };
+            if (noPlan) actions.Children.Add(MakeButton(T("Settings_IntunePurchase"), "SecondaryButton", (s, e) => MainWindow.OpenUrl(IntuneSubscription.PurchaseUrl), 0));
+            actions.Children.Add(MakeButton(noPlan ? T("Settings_IntuneCheckPlanAgain") : T("Settings_IntuneCheckPlan"), "SecondaryButton", async (s, e) => await CheckPlanAsync(), noPlan ? 8 : 0));
+            if (actions.Children.Count > 0) panel.Children.Add(actions);
+            return new Border { Background = Ui.Brush("WarningSoft"), CornerRadius = new CornerRadius(10), Padding = new Thickness(16, 12, 14, 12), Margin = new Thickness(0, 8, 0, 0), Child = panel };
+        }
+
+        /// <summary>"Check the subscription" from the dialog: an administrator signs in in the browser, the result is shown here.</summary>
+        private async Task CheckPlanAsync()
+        {
+            if (_busy) return;
+            _cts = new CancellationTokenSource();
+            SetBusy(true, T("Settings_IntuneCheckingPlan"));
+            try { await IntuneConnectUi.CheckPlanAsync(_cts.Token); }
+            finally
+            {
+                SetBusy(false);
+                if (IsLoaded) RenderConnection();
+            }
         }
 
         private void SetBusy(bool busy, string status = null)
@@ -628,6 +661,9 @@ namespace J365.IntunePSApp.Views
         {
             if (_busy) return;
             _cts = new CancellationTokenSource();
+            // A refusal belongs to the connection that met it: another account, the certificate or a new connection is
+            // asked again by the next lookup.
+            _refusal = null;
             SetBusy(true, setup ? null : T("Publish_SigningIn"));
             try
             {
@@ -728,6 +764,8 @@ namespace J365.IntunePSApp.Views
                 {
                     var found = await IntuneConnection.FindRelatedAppsAsync(_appName, _cts.Token);
                     SetBusy(false);
+                    _refusal = null;
+                    RenderConnection();
                     if (found.Count > 0)
                     {
                         // The user decides here, before anything is sent: update one of them (a new version keeps its
@@ -756,10 +794,10 @@ namespace J365.IntunePSApp.Views
                 catch (Exception ex)
                 {
                     SetBusy(false);
-                    // A refusal of Intune would stop the publication as well: it is explained. Any other failure of the
-                    // lookup only means that the user says what to do with an app of the same name.
-                    if (IntuneDiagnosis.IsRefusal(ex))
-                        Ui.Error(T("Auth_Failed", ex.Message) + Environment.NewLine + Environment.NewLine + IntuneDiagnosis.Explain(IntuneConnection.LastToken, IntuneConnection.UsesCertificate));
+                    // A refusal of Intune would stop the publication as well: the dialog says why and what to do, and
+                    // nothing is started. Any other failure of the lookup only means that the user says what to do with
+                    // an app of the same name.
+                    if (IntuneDiagnosis.IsRefusal(ex)) _refusal = ex;
                     else if (ex is AuthException) Ui.Error(T("Auth_Failed", ex.Message));
                     else Ui.Warn(T("Publish_LookupFailed", ex.Message));
                     RenderConnection();

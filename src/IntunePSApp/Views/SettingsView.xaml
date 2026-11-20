@@ -324,6 +324,12 @@
                   <Button x:Name="BtnIntunePrimary" Style="{StaticResource PrimaryButton}" Margin="0,0,8,8" Click="IntunePrimary_Click">
                     <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE945;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock x:Name="BtnIntunePrimaryText" Text="{l:T Settings_IntuneConnect}"/></StackPanel>
                   </Button>
+                  <Button x:Name="BtnIntunePlan" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8" Click="IntunePlan_Click" Visibility="Collapsed">
+                    <TextBlock x:Name="BtnIntunePlanText" Text="{l:T Settings_IntuneCheckPlan}"/>
+                  </Button>
+                  <Button x:Name="BtnIntunePurchase" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8" Click="IntunePurchase_Click" Visibility="Collapsed">
+                    <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8A7;" Style="{StaticResource Icon}" FontSize="13" Margin="0,0,8,0"/><TextBlock Text="{l:T Settings_IntunePurchase}"/></StackPanel>
+                  </Button>
                   <Button x:Name="BtnIntuneTest" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8" Click="IntuneTest_Click" Content="{l:T Settings_IntuneTest}"/>
                   <Button x:Name="BtnIntuneSwitchAccount" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8" Click="IntuneSwitchAccount_Click" Content="{l:T Publish_SwitchAccount}"/>
                   <Button x:Name="BtnIntuneCopyCode" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8" Click="IntuneCopyCode_Click" ToolTip="{l:T Settings_IntuneCopyCodeTip}">
