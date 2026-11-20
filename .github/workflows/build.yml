@@ -2,7 +2,7 @@ name: Build and release
 
 # Every push and pull request: unit tests + portable build.
 # Tags "v*": the same build is published as a GitHub release with
-#   - the portable application (win-x64, single executable),
+#   - the portable application (win-x64, single executable), code-signed when a signing identity is configured,
 #   - the source package of that exact commit,
 #   - SHA256SUMS.txt and a signed build provenance attestation (gh attestation verify).
 
@@ -18,13 +18,21 @@ permissions:
   contents: write
   id-token: write
   attestations: write
+  actions: read
 
 jobs:
   build:
     name: Test and build (win-x64)
     runs-on: windows-latest
     env:
-      # Code signing with Azure Trusted Signing (docs/SIGNING.md). Repository variables; empty = unsigned build.
+      # Code signing (docs/SIGNING.md, CODE_SIGNING_POLICY.md). Repository variables; all empty = unsigned build.
+      # SignPath (free for open-source projects through SignPath Foundation):
+      SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+      SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+      SIGNPATH_SIGNING_POLICY_SLUG: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+      SIGNPATH_EXE_CONFIGURATION: ${{ vars.SIGNPATH_EXE_CONFIGURATION }}
+      SIGNPATH_SCRIPTS_CONFIGURATION: ${{ vars.SIGNPATH_SCRIPTS_CONFIGURATION }}
+      # Azure Artifact Signing (formerly Trusted Signing):
       SIGNING_ENDPOINT: ${{ vars.SIGNING_ENDPOINT }}
       SIGNING_ACCOUNT: ${{ vars.SIGNING_ACCOUNT }}
       SIGNING_PROFILE: ${{ vars.SIGNING_PROFILE }}
@@ -35,13 +43,21 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Set version
+      - name: Set version and signing mode
         shell: pwsh
         run: |
           if ($env:GITHUB_REF_TYPE -eq 'tag') { $ver = $env:GITHUB_REF_NAME.TrimStart('v') }
           else { $ver = ([xml](Get-Content src/IntunePSApp/IntunePSApp.csproj)).Project.PropertyGroup[0].Version }
+          # Signing never runs for pull requests (they have no access to the secrets).
+          $mode = 'none'
+          if ($env:GITHUB_EVENT_NAME -ne 'pull_request') {
+            if ($env:SIGNPATH_ORGANIZATION_ID) { $mode = 'signpath' } elseif ($env:SIGNING_ACCOUNT) { $mode = 'azure' }
+          }
+          $scripts = ($mode -eq 'azure') -or ($mode -eq 'signpath' -and [bool]$env:SIGNPATH_SCRIPTS_CONFIGURATION)
           "VERSION=$ver" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          Write-Host "Version: $ver"
+          "SIGN_MODE=$mode" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "SIGN_SCRIPTS=$($scripts.ToString().ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "Version: $ver - signing: $mode (scripts: $scripts)"
 
       - name: Unit tests
         run: dotnet test tests/IntunePSApp.Tests -c Release --logger "console;verbosity=normal"
@@ -49,14 +65,38 @@ jobs:
       - name: Build the database generator
         run: dotnet build tools/CatalogBuilder -c Release
 
-      - name: Publish the portable application
-        shell: pwsh
-        run: dotnet publish src/IntunePSApp -c Release -r win-x64 -o publish -p:Version=$env:VERSION -p:ContinuousIntegrationBuild=true
+      # ------------------------------------------------------------------ companion scripts
+      # Publish-ToIntune.ps1 and Sandbox-Test.ps1 are embedded in the executable and written into every package, so
+      # they are signed before the build: signed, they keep full PowerShell where Windows App Control (or Smart App
+      # Control) restricts unsigned scripts.
+      - name: Upload the scripts to sign (SignPath)
+        id: unsigned-scripts
+        if: env.SIGN_MODE == 'signpath' && env.SIGN_SCRIPTS == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-scripts
+          path: |
+            src/IntunePSApp/Resources/Publish-ToIntune.ps1
+            src/IntunePSApp/Resources/Sandbox-Test.ps1
+          if-no-files-found: error
 
-      # Signs the executable before it is zipped, hashed and attested. Runs only when the repository has the
-      # variables above and the secrets of the signing identity; nothing changes for builds without them.
-      - name: Sign the executable (Azure Trusted Signing)
-        if: env.SIGNING_ACCOUNT != '' && github.event_name != 'pull_request'
+      - name: Sign the scripts (SignPath)
+        if: env.SIGN_MODE == 'signpath' && env.SIGN_SCRIPTS == 'true'
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ env.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ env.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ env.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ env.SIGNPATH_SCRIPTS_CONFIGURATION }}
+          github-artifact-id: ${{ steps.unsigned-scripts.outputs.artifact-id }}
+          wait-for-completion: true
+          # Every request of the open-source programme is approved by hand in SignPath: one hour to do it.
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: signed-scripts
+
+      - name: Sign the scripts (Azure Artifact Signing)
+        if: env.SIGN_MODE == 'azure'
         shell: pwsh
         env:
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
@@ -64,17 +104,81 @@ jobs:
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
         run: |
           Install-Module -Name TrustedSigning -Scope CurrentUser -Force -AllowClobber
-          $exe = (Resolve-Path publish/J365.IntunePSApp.exe).Path
+          New-Item -ItemType Directory signed-scripts | Out-Null
+          Copy-Item src/IntunePSApp/Resources/Publish-ToIntune.ps1, src/IntunePSApp/Resources/Sandbox-Test.ps1 signed-scripts/
           Invoke-TrustedSigning -Endpoint $env:SIGNING_ENDPOINT -CodeSigningAccountName $env:SIGNING_ACCOUNT -CertificateProfileName $env:SIGNING_PROFILE `
-            -Files $exe -FileDigest SHA256 -TimestampRfc3161 'http://timestamp.acs.microsoft.com' -TimestampDigest SHA256
-          $sig = Get-AuthenticodeSignature -FilePath $exe
-          if ($sig.Status -ne 'Valid') { throw "The signature of the executable is not valid: $($sig.Status) $($sig.StatusMessage)" }
-          Write-Host "Signed by: $($sig.SignerCertificate.Subject)"
+            -Files ((Get-ChildItem signed-scripts/*.ps1).FullName -join ',') -FileDigest SHA256 -TimestampRfc3161 'http://timestamp.acs.microsoft.com' -TimestampDigest SHA256
+
+      - name: Embed the signed scripts
+        if: env.SIGN_SCRIPTS == 'true'
+        shell: pwsh
+        run: |
+          foreach ($name in 'Publish-ToIntune.ps1', 'Sandbox-Test.ps1') {
+            $file = Get-ChildItem signed-scripts -Recurse -Filter $name | Select-Object -First 1
+            if (-not $file) { throw "The signed $name is missing." }
+            ./tools/Assert-Signature.ps1 -Path $file.FullName
+            Copy-Item $file.FullName "src/IntunePSApp/Resources/$name" -Force
+          }
+
+      - name: Publish the portable application
+        shell: pwsh
+        run: dotnet publish src/IntunePSApp -c Release -r win-x64 -o publish -p:Version=$env:VERSION -p:ContinuousIntegrationBuild=true
+
+      # ------------------------------------------------------------------ executable
+      # Signed before it is zipped, hashed and attested.
+      - name: Upload the executable to sign (SignPath)
+        id: unsigned
+        if: env.SIGN_MODE == 'signpath'
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-executable
+          path: publish/J365.IntunePSApp.exe
+          if-no-files-found: error
+
+      - name: Sign the executable (SignPath)
+        if: env.SIGN_MODE == 'signpath'
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ env.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ env.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ env.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ env.SIGNPATH_EXE_CONFIGURATION }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: signed
+
+      - name: Use the signed executable (SignPath)
+        if: env.SIGN_MODE == 'signpath'
+        shell: pwsh
+        run: |
+          $signed = Get-ChildItem signed -Recurse -Filter J365.IntunePSApp.exe | Select-Object -First 1
+          if (-not $signed) { throw 'SignPath did not return J365.IntunePSApp.exe.' }
+          Copy-Item $signed.FullName publish/J365.IntunePSApp.exe -Force
+
+      - name: Sign the executable (Azure Artifact Signing)
+        if: env.SIGN_MODE == 'azure'
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        run: |
+          Install-Module -Name TrustedSigning -Scope CurrentUser -Force -AllowClobber
+          Invoke-TrustedSigning -Endpoint $env:SIGNING_ENDPOINT -CodeSigningAccountName $env:SIGNING_ACCOUNT -CertificateProfileName $env:SIGNING_PROFILE `
+            -Files (Resolve-Path publish/J365.IntunePSApp.exe).Path -FileDigest SHA256 -TimestampRfc3161 'http://timestamp.acs.microsoft.com' -TimestampDigest SHA256
+
+      # A signing that was configured but did not produce a valid, timestamped signature stops the release.
+      - name: Check the signature of the executable
+        if: env.SIGN_MODE != 'none'
+        shell: pwsh
+        run: ./tools/Assert-Signature.ps1 -Path publish/J365.IntunePSApp.exe
 
       - name: Package the release files
         shell: pwsh
         run: |
-          Copy-Item README.md, LICENSE, NOTICE.md, THIRD-PARTY-NOTICES.md, CHANGELOG.md, SECURITY.md publish/
+          Copy-Item README.md, LICENSE, NOTICE.md, THIRD-PARTY-NOTICES.md, CHANGELOG.md, SECURITY.md, CODE_SIGNING_POLICY.md publish/
           New-Item -ItemType Directory dist | Out-Null
           $app = "dist/J365-IntunePSApp-$env:VERSION-win-x64.zip"
           Compress-Archive -Path publish/* -DestinationPath $app
@@ -92,6 +196,8 @@ jobs:
           $out = (Get-Content version.txt -Raw).Trim()
           Write-Host "Exit code $($p.ExitCode), version '$out'"
           if ($p.ExitCode -ne 0 -or $out -ne $env:VERSION) { throw "The published executable did not report version $env:VERSION." }
+          $sig = Get-AuthenticodeSignature -FilePath publish/J365.IntunePSApp.exe
+          Write-Host "Signature: $($sig.Status) $($sig.SignerCertificate.Subject)"
 
       - name: Attest build provenance
         if: github.event_name != 'pull_request'
@@ -110,4 +216,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create $env:GITHUB_REF_NAME (Get-ChildItem dist/*).FullName --title "J365 IntunePSApp $env:VERSION" --notes-file .github/RELEASE_NOTES.md --latest
+          $notes = (Get-Content .github/RELEASE_NOTES.md -Raw).TrimEnd()
+          $sig = Get-AuthenticodeSignature -FilePath publish/J365.IntunePSApp.exe
+          $notes += "`n`n---`n"
+          if ($sig.Status -eq 'Valid') {
+            $signer = $sig.SignerCertificate.GetNameInfo([System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false)
+            $notes += "**Code-signed** by *$signer* (check: right-click ``J365.IntunePSApp.exe`` > Properties > Digital Signatures, or ``Get-AuthenticodeSignature``). "
+          }
+          else { $notes += "This release is **not code-signed** yet ([why and what to do](https://github.com/$env:GITHUB_REPOSITORY/blob/main/docs/SIGNING.md)). " }
+          $notes += "[Code signing policy](https://github.com/$env:GITHUB_REPOSITORY/blob/main/CODE_SIGNING_POLICY.md).`n"
+          # The SignPath Foundation programme asks every release it signs to say so.
+          if ($env:SIGN_MODE -eq 'signpath') { $notes += "`nFree code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org).`n" }
+          Set-Content release-notes.md $notes -Encoding utf8
+          gh release create $env:GITHUB_REF_NAME (Get-ChildItem dist/*).FullName --title "J365 IntunePSApp $env:VERSION" --notes-file release-notes.md --latest

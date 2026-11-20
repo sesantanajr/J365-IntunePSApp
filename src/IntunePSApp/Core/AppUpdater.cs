@@ -125,18 +125,39 @@ namespace J365.IntunePSApp.Core
                 string found = (info.ProductVersion ?? "").Split('+')[0].Trim();
                 if (found.Length == 0) found = info.FileVersion ?? "";
                 if (VersionUtil.Compare(found, version) != 0) throw new InvalidDataException(T("Update_ErrVersion", found, version));
-                // Once releases are code-signed, an update must carry a valid signature of the same publisher: a signed
-                // copy is never replaced by an unsigned or foreign file.
+                // Once releases are code-signed, an update must carry a valid signature of the same publisher, or of one
+                // of the publishers of this project (the signing service may change): a signed copy is never replaced by
+                // an unsigned or foreign file.
                 string running = AppPaths.ExePath;
                 if (Path.GetFileName(running).Equals(ExeName, StringComparison.OrdinalIgnoreCase) && Signature.IsValid(running))
                 {
                     var current = Signature.Signer(running);
-                    if (!Signature.IsValid(part) || !string.Equals(Signature.Signer(part).Subject, current.Subject, StringComparison.OrdinalIgnoreCase))
+                    if (!Signature.IsValid(part) || !IsTrustedPublisher(Signature.Signer(part), current))
                         throw new InvalidDataException(T("Update_ErrSignature", current.Name));
                 }
                 File.Move(part, destination, true);
             }
             finally { try { File.Delete(part); } catch { } }
+        }
+
+        /// <summary>
+        /// The signer of a new executable is accepted when it is the signer of the running one, or one of the publishers
+        /// of the project's releases (<see cref="AppInfo.TrustedPublishers"/>).
+        /// </summary>
+        public static bool IsTrustedPublisher((string Name, string Subject) signer, (string Name, string Subject) current)
+        {
+            if (!string.IsNullOrEmpty(signer.Subject) && string.Equals(signer.Subject, current.Subject, StringComparison.OrdinalIgnoreCase)) return true;
+            // Compared without accents and punctuation: "Open Source Developer, Sergio Sant'Ana Junior" (Certum) is the author.
+            string name = Comparable(signer.Name);
+            return name.Length > 0 && AppInfo.TrustedPublishers.Select(Comparable).Any(p => p.Length > 0 && (name == p || name.EndsWith(p, StringComparison.Ordinal)));
+        }
+
+        private static string Comparable(string text)
+        {
+            var sb = new System.Text.StringBuilder();
+            foreach (char c in (text ?? "").Normalize(System.Text.NormalizationForm.FormD))
+                if (char.IsLetterOrDigit(c)) sb.Append(char.ToLowerInvariant(c));
+            return sb.ToString();
         }
 
         /// <summary>

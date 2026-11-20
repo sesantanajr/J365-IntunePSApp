@@ -60,6 +60,30 @@ namespace J365.IntunePSApp.Core
             }
             return signer;
         }
+
+        /// <summary>
+        /// The toolkit for a build, checked again first. A copy that no longer passes (changed on disk or damaged since it
+        /// was installed) is removed and installed again from the official release, then checked once more, so one
+        /// damaged copy does not make every build fail.
+        /// </summary>
+        public static async Task<string> EnsureVerifiedPsadtAsync(CancellationToken ct, IProgress<(long, long?)> progress = null)
+        {
+            string template = await EnsurePsadtAsync(ct, progress);
+            try
+            {
+                await Task.Run(() => VerifyPsadt(template), ct);
+                return template;
+            }
+            catch (InvalidDataException ex)
+            {
+                Log.Warn(T("Log_PsadtReinstall", Path.GetFileName(template), ex.Message));
+                await Task.Run(() => Directory.Delete(template, true), ct);
+            }
+            template = await EnsurePsadtAsync(ct, progress);
+            await Task.Run(() => VerifyPsadt(template), ct);
+            return template;
+        }
+
         public static bool HasIntuneWinAppUtil => File.Exists(IntuneWinAppUtilPath);
 
         public static async Task<string> EnsurePsadtAsync(CancellationToken ct, IProgress<(long, long?)> progress = null)
@@ -253,6 +277,46 @@ namespace J365.IntunePSApp.Core
     }
 
     /// <summary>Checks the syntax of generated scripts with the Windows PowerShell 5.1 parser (the engine that runs the package).</summary>
+    /// <summary>
+    /// Windows App Control (WDAC) policies with script rules - Smart App Control among them - run unsigned scripts in
+    /// Constrained Language Mode: the .NET calls of the detection script, of the local tests and of the publishing script
+    /// are refused there. The language mode is read once, so those features say why instead of failing obscurely.
+    /// </summary>
+    public static class PowerShellPolicy
+    {
+        private static string _mode;
+        private static readonly object Gate = new object();
+
+        /// <summary>FullLanguage, ConstrainedLanguage, or Unknown when PowerShell could not be asked.</summary>
+        public static string LanguageMode
+        {
+            get
+            {
+                lock (Gate)
+                {
+                    if (_mode != null) return _mode;
+                    try
+                    {
+                        var psi = ToolsService.PowerShellStartInfo("-NoProfile -NonInteractive -Command \"$ExecutionContext.SessionState.LanguageMode\"");
+                        var run = ToolsService.RunPowerShell(psi, 30000);
+                        string last = (run.Output ?? "").Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).LastOrDefault()?.Trim() ?? "";
+                        _mode = run.TimedOut || last.Length == 0 ? "Unknown" : last;
+                    }
+                    catch { _mode = "Unknown"; }
+                    return _mode;
+                }
+            }
+        }
+
+        public static bool IsRestricted => LanguageMode.Equals("ConstrainedLanguage", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>Throws the explanation when unsigned scripts cannot run with .NET calls on this computer.</summary>
+        public static void EnsureFullLanguage()
+        {
+            if (IsRestricted) throw new InvalidOperationException(T("Err_PowerShellRestricted"));
+        }
+    }
+
     public static class PowerShellValidator
     {
         /// <summary>Instant feedback while typing: unbalanced braces. Returns null when nothing looks wrong.</summary>

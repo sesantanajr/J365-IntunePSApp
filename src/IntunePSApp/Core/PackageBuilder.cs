@@ -276,9 +276,9 @@ namespace J365.IntunePSApp.Core
             var sw = Stopwatch.StartNew();
             Log.Step(T("Log_BuildStart", s.AppName, s.AppVersion));
             Log.Step(T("Log_CheckingPsadt"));
-            string template = await ToolsService.EnsurePsadtAsync(ct);
-            // Checked again before every build: the copy in the tools folder could have been changed since it was installed.
-            await Task.Run(() => ToolsService.VerifyPsadt(template), ct);
+            // Checked again before every build: the copy in the tools folder could have been changed since it was installed
+            // (a copy that fails is installed again from the official release).
+            string template = await ToolsService.EnsureVerifiedPsadtAsync(ct);
             string psadtVersion = Path.GetFileName(template);
             Log.Ok($"{AppInfo.PsadtName} {psadtVersion}");
 
@@ -462,8 +462,20 @@ namespace J365.IntunePSApp.Core
         }
 
         /// <summary>Embedded companion script with the product name and repository of this build (forks get their own links).</summary>
-        public static string CompanionScript(string resourceName)
-            => EmbeddedText(resourceName).Replace("https://github.com/sesantanajr/J365-IntunePSApp", AppInfo.RepoUrl).Replace("J365 IntunePSApp", AppInfo.Name);
+        public static string CompanionScript(string resourceName) => Rebrand(EmbeddedText(resourceName));
+
+        /// <summary>
+        /// The companion script with the name and repository of this build (forks). Releases carry the scripts signed: the
+        /// text is then written byte for byte, so the signature stays valid; when a fork changes the text, the signature
+        /// block (now invalid) is removed instead of being left behind.
+        /// </summary>
+        public static string Rebrand(string script)
+        {
+            string text = script.Replace("https://github.com/sesantanajr/J365-IntunePSApp", AppInfo.RepoUrl).Replace("J365 IntunePSApp", AppInfo.Name);
+            if (text == script) return script;
+            int begin = text.IndexOf("# SIG # Begin signature block", StringComparison.Ordinal);
+            return begin < 0 ? text : text.Substring(0, begin).TrimEnd() + Environment.NewLine;
+        }
 
         public static string EmbeddedText(string resourceName)
         {
@@ -585,6 +597,7 @@ namespace J365.IntunePSApp.Core
         /// </summary>
         public static (bool Detected, bool NoMark, string Output) TestDetection(PackageSettings s)
         {
+            PowerShellPolicy.EnsureFullLanguage();
             string tmp = Path.Combine(AppPaths.Temp, $"detection_{Guid.NewGuid():N}.ps1");
             File.WriteAllText(tmp, ScriptGenerator.DetectionScript(s), Encoding.ASCII);
             try
@@ -603,6 +616,7 @@ namespace J365.IntunePSApp.Core
         /// <summary>Runs the package on this computer, elevated and with the dialogs visible.</summary>
         public static void RunLocalTest(string psadtFolder, string deploymentType)
         {
+            PowerShellPolicy.EnsureFullLanguage();
             var psi = new ProcessStartInfo(Path.Combine(psadtFolder, "Invoke-AppDeployToolkit.exe"), $"-DeploymentType {deploymentType} -DeployMode Interactive")
             {
                 UseShellExecute = true,

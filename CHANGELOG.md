@@ -2,6 +2,40 @@
 
 All notable changes to J365 IntunePSApp. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.4.1 - 2026-11-19
+
+### Why this version
+
+Smart App Control (Windows 11) blocked 2.4.0 with *"we couldn't verify its publisher"*. It asks Microsoft's cloud service about every program and, when the file is unknown, accepts it only with a valid digital signature; every new version is a new, unknown file. No change inside the program can get past it: the releases have to be signed. This version makes signing possible with the identities an individual open-source author can actually obtain, and makes the rest of the application behave well on computers with such policies.
+
+### Added
+
+- **Release signing with SignPath** (free for open-source projects through SignPath Foundation): the workflow uploads the executable, waits up to an hour for the manual approval, checks the signature and only then zips, hashes and attests. Enabled by the repository variables `SIGNPATH_ORGANIZATION_ID`, `SIGNPATH_PROJECT_SLUG`, `SIGNPATH_SIGNING_POLICY_SLUG`, `SIGNPATH_EXE_CONFIGURATION` and the secret `SIGNPATH_API_TOKEN`. Azure Artifact Signing stays available.
+- **The companion scripts are signed too** (`Publish-ToIntune.ps1`, `Sandbox-Test.ps1`; SignPath with `SIGNPATH_SCRIPTS_CONFIGURATION`, or Azure Artifact Signing) before the build embeds them, so they keep full PowerShell where App Control restricts unsigned scripts. The application writes them into the packages byte for byte, so the signature stays valid (checked with a throw-away certificate: identical bytes, and a single changed character breaks it); a fork that changes their text drops the signature block instead of leaving an invalid one.
+- **`tools/Assert-Signature.ps1`**: a release with signing configured stops unless the executable and the scripts carry a valid, timestamped signature.
+- **Release notes say who signed** the executable (or that it is not signed yet, with the link to `docs/SIGNING.md`), link the code signing policy, and carry the SignPath attribution when SignPath signed it. The release zip includes `CODE_SIGNING_POLICY.md`.
+- **`tools/Sign-Release.ps1`**: signs a published release (or a local zip) with a certificate of the signer's computer: a Certum "Open Source Developer" certificate in SimplySign, any OV/EV token, or a `.pfx` of a company's internal authority for App Control allow-lists (key loaded in memory only). It checks the downloaded files against `SHA256SUMS.txt`, signs with SHA-256 and an RFC 3161 timestamp (`signtool` when the Windows SDK is installed, otherwise Windows' own signing API), checks the signature, rebuilds the zip and the checksums and, with `-Upload`, replaces them in the release. Run end to end on a local zip with a throw-away certificate and DigiCert's timestamp server.
+- `CODE_SIGNING_POLICY.md` (what is signed, roles, privacy; linked from the README and every release, as SignPath Foundation asks), and `docs/SIGNING.md` rewritten: how Smart App Control decides, a comparison of the ways to sign (SignPath Foundation, Certum, Azure Artifact Signing, Microsoft Store), step by step for each, the answers for the SignPath application, example artifact configurations, signing for a company's App Control policy, and what to do until a release is signed.
+- Settings > About shows whether the executable carries a valid signature, and whose.
+- The local tests, the detection test and publishing inside the application detect a Windows PowerShell restricted by App Control (Constrained Language Mode, where unsigned scripts cannot call .NET) and say so, instead of failing with an obscure error; the restriction is written once in the log.
+
+### Changed
+
+- The update inside the application accepts a new version signed by any publisher of the project (SignPath Foundation, the author, Jornada 365), compared without accents and punctuation, so the signing service can change without breaking *Update now*; a foreign or missing signature is still refused once the running copy is signed.
+
+### Fixed
+
+Found reviewing the 2.4.0 changes:
+
+- **"Keep a newer version" compared with the wrong version** when the minimum version of the detection was lower than the package's (package 2.5.0, minimum 2.0): a copy older than the package (2.3) counted as newer and was kept instead of updated. It now compares with the version the package installs. Checked inside PSAppDeployToolkit 4.1.8: 2.3 installed by hand is updated to 2.5.0.
+- **Connecting with a code, IDs or Azure Cloud Shell no longer ends a working connection** before the new one works: the new registration is saved only after its sign-in succeeds, so a wrong code, a cancel or a failure leaves the previous registration and session as they were. The same for *Sign in* in Settings with IDs typed by hand; *Save* in Settings with another registration ends the session of the old one, as the rest of the application does.
+- **No package with unsaved changes is replaced without a question** by *Update to the newest version* (Packages) or by an installer of another application (dropped, picked or from the catalog). New defaults saved in Settings, or another output folder, no longer mark the open package as changed.
+- **Closing for an update, an installation or an uninstall** asks about unsaved changes and waits for a running build before the step starts, instead of asking while the application was already closing (when the answer no longer mattered); the window size and position are always kept.
+- **Connection failures**: a timeout of Microsoft Graph is reported as a failure, with the network as the likely cause, instead of looking like a cancel; the network cause is offered only for network failures (no answer, timeout, HTTP 429 and 5xx), not for refusals such as HTTP 400 or 403; a failure at the very start of the automatic setup marks the right step.
+- **A toolkit copy that fails the signature check before a build** (changed or damaged on disk) is removed and installed again from the official release, instead of making every build fail.
+- **Environment variables** set by a package (PATH entries too) reach the signed-in user's Explorer and the rest of the deployment right away (`Update-ADTEnvironmentPsProvider`, `Update-ADTDesktop`), not only after the next sign-in. Checked inside PSAppDeployToolkit 4.1.8.
+- The icons of the quick actions in the editor follow a change of theme.
+
 ## 2.4.0 - 2026-11-19
 
 ### Added

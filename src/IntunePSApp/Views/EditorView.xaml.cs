@@ -158,7 +158,13 @@ namespace J365.IntunePSApp.Views
         /// <summary>The package as it is on screen, in a form that can be compared.</summary>
         private string Snapshot()
         {
-            try { return System.Text.Json.JsonSerializer.Serialize(Collect(), Json.Options); }
+            try
+            {
+                var s = Collect();
+                // The output folder comes from Settings: changing it there is not an edit of this package.
+                s.OutputRoot = null;
+                return System.Text.Json.JsonSerializer.Serialize(s, Json.Options);
+            }
             catch { return null; }
         }
 
@@ -352,9 +358,14 @@ namespace J365.IntunePSApp.Views
 
                 var cur = Collect();
                 bool hadInstaller = !string.IsNullOrEmpty(cur.InstallerPath);
-                bool keep = keepCustomisations;
+                bool keep = keepCustomisations, asked = false;
                 if (!keep && hadInstaller && IsSameApplication(cur, info) && !string.Equals(cur.InstallerPath, info.Path, StringComparison.OrdinalIgnoreCase))
+                {
                     keep = Ui.Confirm(T("Ed_SameAppPrompt", info.AppName, cur.AppVersion, info.AppVersion), T("Ed_SameAppKeep"), T("Ed_SameAppReset"));
+                    asked = true;
+                }
+                // A new package replaces the one on screen: its unsaved changes are not lost without a question.
+                if (!keep && !asked && hadInstaller && !ConfirmDiscard()) return;
 
                 PackageSettings s;
                 if (keep)
@@ -473,6 +484,8 @@ namespace J365.IntunePSApp.Views
         /// <summary>Opens a project and replaces its installer with the newest version in the database, keeping every customisation.</summary>
         public async Task UpdateProjectAsync(string projectFile)
         {
+            // Opening the project replaces the package on screen: its unsaved changes are not lost without a question.
+            if (!ConfirmDiscard()) return;
             if (!LoadProject(projectFile, quiet: true)) return;
             await UpdateFromCatalogAsync();
         }
@@ -705,6 +718,8 @@ namespace J365.IntunePSApp.Views
         {
             if (IsBuilding) return 0;
             var cur = Collect();
+            // New defaults are not edits of the package: a package without unsaved changes stays without them.
+            bool wasClean = !HasUnsavedChanges;
             int n = 0;
             void Text(Func<PackageSettings, string> get, Action<string> set)
             {
@@ -746,6 +761,7 @@ namespace J365.IntunePSApp.Views
                 UpdateLogo();
                 UpdatePreview();
                 UpdateHeader();
+                if (wasClean) MarkClean();
             }
             return n;
         }
@@ -880,7 +896,10 @@ namespace J365.IntunePSApp.Views
             {
                 var b = new Button { Style = (Style)FindResource("SecondaryButton"), Margin = new Thickness(0, 0, 8, 8), Padding = new Thickness(12, 6, 12, 6), Tag = type };
                 var sp = new StackPanel { Orientation = Orientation.Horizontal };
-                sp.Children.Add(new TextBlock { Text = ActionCatalog.Get(type)?.Glyph ?? "", FontFamily = Ui.Font("IconFont"), Foreground = Ui.Brush("Brand"), Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center, FontSize = 13 });
+                // A theme key, so the icons follow a change of theme.
+                var icon = new TextBlock { Text = ActionCatalog.Get(type)?.Glyph ?? "", FontFamily = Ui.Font("IconFont"), Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center, FontSize = 13 };
+                icon.SetResourceReference(TextBlock.ForegroundProperty, "Brand");
+                sp.Children.Add(icon);
                 sp.Children.Add(new TextBlock { Text = T(key), FontSize = 12.5 });
                 b.Content = sp;
                 b.Click += (s, e) => OpenActionEditor(null, (string)((Button)s).Tag);
@@ -1136,6 +1155,7 @@ namespace J365.IntunePSApp.Views
                 PackageBuilder.RunLocalTest(_last.PsadtFolder, type);
                 MainWindow.Current.Toast(T("Ed_TestStarted"), "info");
             }
+            catch (InvalidOperationException ex) { Ui.Warn(ex.Message); }
             catch { MainWindow.Current.Toast(T("Ed_TestCancelled"), "warn"); }
         }
 
@@ -1341,6 +1361,7 @@ namespace J365.IntunePSApp.Views
             try { session = await IntuneConnection.RenewAsync(CancellationToken.None); }
             catch (Exception ex) { Ui.Error(T("Auth_Failed", ex.Message)); return; }
             if (session == null || string.IsNullOrEmpty(session.RefreshToken)) { Ui.Warn(T("Auth_ErrNotSignedIn")); return; }
+            if (await Task.Run(() => PowerShellPolicy.IsRestricted)) { Ui.Warn(T("Err_PowerShellRestricted")); return; }
 
             _publishFolder = intune;
             _publishResult = null;

@@ -45,6 +45,8 @@ namespace J365.IntunePSApp.Views
         private string _consentUrl;
         private string _errorDetails = "";
         private ConnectStepRow _current;
+        /// <summary>The sign-in of the current attempt worked (its session replaced the previous one).</summary>
+        private bool _signedIn;
 
         /// <summary>True when the window closed with the application connected (signed in).</summary>
         public bool Connected => _succeeded;
@@ -202,6 +204,7 @@ namespace J365.IntunePSApp.Views
         private void BuildSteps(params SetupStep[] steps)
         {
             _steps.Clear();
+            _current = null;
             int n = 1;
             foreach (var s in steps) _steps.Add(new ConnectStepRow { Step = s, Number = n++, Title = StepTitle(s) });
         }
@@ -236,9 +239,12 @@ namespace J365.IntunePSApp.Views
         {
             _flow = Flow.Auto;
             _consentUrl = null;
+            _succeeded = false;
             BuildSteps(SetupStep.AdminSignIn, SetupStep.Permission, SetupStep.Registration, SetupStep.ServicePrincipal, SetupStep.Consent,
                        SetupStep.Activation, SetupStep.UserSignIn, SetupStep.Test);
             ShowPage(Page.Progress);
+            // Marked now, not when the first progress report arrives: a failure before it names the right step.
+            Advance(SetupStep.AdminSignIn);
             _cts = new CancellationTokenSource();
             _running = true;
             try
@@ -263,7 +269,7 @@ namespace J365.IntunePSApp.Views
                 }
                 await ActivateAndSignInAsync(newRegistration: !r.Reused, loginHint: r.Admin);
             }
-            catch (OperationCanceledException) { ShowCancelled(); }
+            catch (OperationCanceledException) when (_cts.IsCancellationRequested) { ShowCancelled(); }
             catch (Exception ex) { ShowFailure(ex); }
             finally { _running = false; }
         }
@@ -289,6 +295,7 @@ namespace J365.IntunePSApp.Views
                     await Task.Delay(TimeSpan.FromSeconds(20), ct);
                 }
             }
+            _signedIn = true;
             Row(SetupStep.UserSignIn).Detail = T("Connect_SignedInAs", IntuneConnection.Account);
             Advance(SetupStep.Test);
             try
@@ -298,7 +305,7 @@ namespace J365.IntunePSApp.Views
                 test.State = "Done";
                 test.Detail = T("Connect_TestOk");
             }
-            catch (OperationCanceledException) { throw; }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
                 // Connected, but Intune refused the read: the account has no Intune role (or the consent is missing).
@@ -323,16 +330,24 @@ namespace J365.IntunePSApp.Views
                 return;
             }
             _flow = flow;
+            _succeeded = false;
             _consentUrl = $"{EntraAuth.LoginUrl}/{tenant}/adminconsent?client_id={client}";
-            IntuneConnection.SaveRegistration(tenant, client);
+            // Tried first and saved only once the sign-in works: a wrong code, a cancel or a failure leaves the connection
+            // that was working (registration and session) as it was.
+            var previous = IntuneConnection.BeginTrial(tenant, client);
             BuildSteps(SetupStep.Activation, SetupStep.UserSignIn, SetupStep.Test);
             ShowPage(Page.Progress);
             _cts = new CancellationTokenSource();
             _running = true;
+            _signedIn = false;
             try { await ActivateAndSignInAsync(newRegistration: flow == Flow.Shell, loginHint: null); }
-            catch (OperationCanceledException) { ShowCancelled(); }
+            catch (OperationCanceledException) when (_cts.IsCancellationRequested) { ShowCancelled(); }
             catch (Exception ex) { ShowFailure(ex); }
-            finally { _running = false; }
+            finally
+            {
+                _running = false;
+                IntuneConnection.EndTrial(previous, keep: _signedIn);
+            }
         }
 
         // ------------------------------------------------------------------ result
@@ -441,7 +456,7 @@ namespace J365.IntunePSApp.Views
                     AddCause(T("Connect_CauseNotFoundTitle"), T("Connect_CauseNotFoundText"));
                     break;
                 default:
-                    if (code.StartsWith("HTTP", StringComparison.Ordinal) || code == nameof(System.Net.Http.HttpRequestException))
+                    if (EntraAuth.IsNetworkFailure(code))
                         AddCause(T("Connect_CauseNetworkTitle"), T("Connect_CauseNetworkText"));
                     if (adminStep) AddCause(T("Connect_CauseBlockedTitle"), T("Connect_CauseShellAlternative"), useShell);
                     break;

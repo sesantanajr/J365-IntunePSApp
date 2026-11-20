@@ -169,14 +169,21 @@ namespace J365.IntunePSApp.Views
 
         private async void IntuneSignIn_Click(object sender, RoutedEventArgs e)
         {
-            // Typed by hand: saved first, so the sign-in uses them.
+            // Typed by hand: used for this sign-in and saved once it works, so a typo does not end a working connection.
             string tenant = TxtTenant.Text.Trim(), client = TxtClient.Text.Trim();
             if (tenant.Length > 0 && client.Length > 0 && (!IntunePublisher.IsTenant(tenant) || !IntunePublisher.IsGuid(client))) { Ui.Warn(T(IntunePublisher.IsTenant(tenant) ? "Publish_InvalidClient" : "Publish_InvalidTenant")); return; }
-            if (tenant.Length > 0 && client.Length > 0) IntuneConnection.SaveRegistration(tenant, client);
+            bool typed = tenant.Length > 0 && client.Length > 0;
+            var previous = typed ? IntuneConnection.BeginTrial(tenant, client) : default;
             _intuneCts = new CancellationTokenSource();
             SetIntuneBusy(T("Publish_SigningIn"));
-            try { await IntuneConnectUi.SignInAsync(null, _intuneCts.Token); }
-            finally { SetIntuneBusy(null); UpdateIntuneStatus(); }
+            bool signedIn = false;
+            try { signedIn = await IntuneConnectUi.SignInAsync(null, _intuneCts.Token); }
+            finally
+            {
+                if (typed) IntuneConnection.EndTrial(previous, keep: signedIn);
+                SetIntuneBusy(null);
+                UpdateIntuneStatus();
+            }
         }
 
         private async void IntuneTest_Click(object sender, RoutedEventArgs e)
@@ -332,8 +339,14 @@ namespace J365.IntunePSApp.Views
         /// <summary>Updates the information blocks (database, versions, installation) without touching the form.</summary>
         public void RefreshInfo() => UpdateInfo();
 
+        private (bool Signed, string Name)? _signature;
+
         private void UpdateInfo()
         {
+            // Read once: whether this executable carries a valid signature, and whose (Settings > About).
+            _signature ??= Signature.IsValid(AppPaths.ExePath) ? (true, Signature.Signer(AppPaths.ExePath).Name ?? "?") : (false, "");
+            AboutSignatureIcon.Text = _signature.Value.Signed ? "" : "";
+            AboutSignature.Text = _signature.Value.Signed ? T("About_SignedBy", _signature.Value.Name) : T("About_Unsigned");
             var culture = Loc.Instance.Culture;
             var cat = CatalogService.Instance;
             CatalogInfo.Text = cat.IsLoaded
@@ -399,6 +412,8 @@ namespace J365.IntunePSApp.Views
         private void Uninstall_Click(object sender, RoutedEventArgs e)
         {
             if (!Ui.Confirm(T("Install_ConfirmUninstall"), T("Install_Uninstall"), T("Common_Cancel"), danger: true)) return;
+            // The installed copy closes afterwards: a running build and unsaved changes are settled first.
+            if (AppPaths.IsInstalledCopy && !MainWindow.Current.ConfirmClosing()) return;
             bool purge = Ui.Confirm(T("Install_ConfirmPurge"), T("Install_PurgeYes"), T("Install_PurgeNo"));
             try
             {
@@ -406,7 +421,7 @@ namespace J365.IntunePSApp.Views
                 if (AppPaths.IsInstalledCopy)
                 {
                     // This is the installed copy: it closes now so that its own folder can be removed.
-                    Application.Current.Shutdown();
+                    MainWindow.Current.CloseApplication();
                     return;
                 }
                 MainWindow.Current.Toast(T("Install_Uninstalled"), "ok");
@@ -482,9 +497,9 @@ namespace J365.IntunePSApp.Views
             c.OutputFolder = string.IsNullOrWhiteSpace(TxtOutput.Text) ? AppPaths.DefaultOutput : TxtOutput.Text.Trim().Trim('"');
             c.CatalogUrl = string.IsNullOrWhiteSpace(TxtCatalogUrl.Text) ? AppInfo.DefaultCatalogUrl : TxtCatalogUrl.Text.Trim();
             c.CatalogUpdateDays = int.TryParse(TxtCatalogDays.Text, out var days) ? Math.Clamp(days, 1, 90) : 1;
-            c.IntuneTenantId = tenant;
-            c.IntuneClientId = client;
-            ConfigStore.Save();
+            // Saved through the connection, with the rest of the settings: another app registration ends the session of
+            // the previous one, and the status of the connection follows.
+            IntuneConnection.SaveRegistration(tenant, client);
             int applied = MainWindow.Current.Editor?.ApplyNewDefaults(before, c.NewPackage()) ?? 0;
             Refresh();
             MainWindow.Current.Toast(applied > 0 ? T("Settings_SavedApplied", applied) : T("Settings_Saved"), "ok");

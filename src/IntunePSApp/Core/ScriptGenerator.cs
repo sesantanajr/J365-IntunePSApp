@@ -106,6 +106,20 @@ namespace J365.IntunePSApp.Core
             => Ascii(string.IsNullOrWhiteSpace(s.DetectionVersion) ? s.AppVersion ?? "" : s.DetectionVersion).Trim();
 
         /// <summary>
+        /// Version that the package installs, for the check that keeps a newer copy: the greater of the application
+        /// version and the minimum version of the detection. The minimum may be lower on purpose (older copies count as
+        /// installed); compared with it, a copy older than the package would count as newer and never be updated.
+        /// </summary>
+        public static string PackageVersion(PackageSettings s)
+        {
+            string app = Ascii(s.AppVersion ?? "").Trim(), min = Ascii(s.DetectionVersion ?? "").Trim();
+            bool hasApp = Regex.IsMatch(app, @"\d"), hasMin = Regex.IsMatch(min, @"\d");
+            if (!hasApp) return hasMin ? min : "";
+            if (!hasMin) return app;
+            return VersionUtil.Compare(app, min) >= 0 ? app : min;
+        }
+
+        /// <summary>
         /// PowerShell expression that opens the hive of the mark. The 64-bit view is explicit: the package and the
         /// detection script read the same key whatever the bitness of the PowerShell that runs them.
         /// </summary>
@@ -323,7 +337,7 @@ namespace J365.IntunePSApp.Core
         private static List<string> KeepNewerLines(PackageSettings s)
         {
             var L = new List<string>();
-            string version = MarkVersion(s);
+            string version = PackageVersion(s);
             string pattern = (string.IsNullOrWhiteSpace(s.UninstallPattern) ? s.DetectionNamePattern : s.UninstallPattern)?.Trim() ?? "";
             if (!s.KeepNewerVersion || !Regex.IsMatch(version, @"\d") || pattern.Trim('*', '?', ' ').Length < 3) return L;
             string pat = Lit(pattern);

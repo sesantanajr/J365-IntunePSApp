@@ -359,6 +359,10 @@ namespace J365.IntunePSApp.Core
                             body.Add("$envKey.Close()");
                         }
                         else body.Add($"[Environment]::SetEnvironmentVariable({L(name)}, {L(value)}, '{(userContext ? "User" : "Machine")}')");
+                        // The signed-in user's Explorer (and what it starts) sees the change now instead of at the next
+                        // sign-in, and so does the rest of this deployment.
+                        body.Add("Update-ADTEnvironmentPsProvider");
+                        body.Add("Update-ADTDesktop -ErrorAction SilentlyContinue");
                         break;
                     }
                 case "RunProgram":

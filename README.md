@@ -64,7 +64,7 @@ Earlier in 2.3: publishing inside the application, the branded PSAppDeployToolki
 
 **Requirements:** Windows 10 or 11 (x64). No .NET to install (it is inside the executable). Internet access on the first run.
 
-> **Windows protection prompts.** The executable is not code-signed (this is a free community project). Windows SmartScreen may show *"Windows protected your PC"*: check the file first (see [Verify the download](#verify-the-download)), then choose *More info > Run anyway*. On computers with **Smart App Control** turned on, Windows can block unsigned applications it does not know yet and offers no exception; in that case use another computer or a virtual machine. The release workflow is ready to sign the executable ([docs/SIGNING.md](docs/SIGNING.md)).
+> **Windows protection prompts.** Until the releases are code-signed, Windows SmartScreen may show *"Windows protected your PC"*: check the file first (see [Verify the download](#verify-the-download)), then choose *More info > Run anyway*. **Smart App Control** (Windows 11) goes further: it blocks a program it does not know and that has no signature, with no exception for one application, and every new version starts unknown again. Use a computer where it is off (company-managed devices usually are), or see the options in [docs/SIGNING.md](docs/SIGNING.md). The release workflow signs the executable as soon as a signing identity is configured (SignPath Foundation, Azure Artifact Signing, or a certificate of the author with `tools/Sign-Release.ps1`).
 
 ## Features
 
@@ -182,13 +182,17 @@ Every release is built by GitHub Actions from the tagged commit and carries chec
 
 ```powershell
 # 1. Checksum: compare with SHA256SUMS.txt of the release
-Get-FileHash .\J365-IntunePSApp-2.4.0-win-x64.zip -Algorithm SHA256
+Get-FileHash .\J365-IntunePSApp-2.4.1-win-x64.zip -Algorithm SHA256
 
 # 2. Provenance: proves the file was built by this repository's workflow (GitHub CLI)
-gh attestation verify .\J365-IntunePSApp-2.4.0-win-x64.zip --repo sesantanajr/J365-IntunePSApp
+gh attestation verify .\J365-IntunePSApp-2.4.1-win-x64.zip --repo sesantanajr/J365-IntunePSApp
 ```
 
 What the application itself verifies: the database installers (SHA256 from the winget manifest), the PSAppDeployToolkit module (Authenticode signature), IntuneWinAppUtil (Microsoft signature, otherwise discarded), every `.intunewin` it creates (HMAC and SHA256) and its own updates (SHA256 of the release zip and the version of the new executable). See [SECURITY.md](SECURITY.md).
+
+## Code signing policy
+
+What is signed, by whom, and what the application sends over the network: [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md). How releases get signed: [docs/SIGNING.md](docs/SIGNING.md).
 
 ## Source package, building and forking
 
@@ -212,6 +216,8 @@ The project is open source so you can **audit it, build it yourself, fork it or 
 | *Test on this computer* says the application is installed, but not by this package | Expected where the package has not run: Intune will run it there (remove the copy found, install this version, write the mark). |
 | The update inside the application does not start | It needs to reach `api.github.com` and `github.com` (proxy and firewall). A copy in a read-only folder cannot replace itself: the application offers the download page instead. The installed copy is in `%LOCALAPPDATA%\Programs\J365 IntunePSApp`. |
 | *Windows protected your PC* when starting the application | See [Download](#download): the executable is not code-signed yet ([docs/SIGNING.md](docs/SIGNING.md)). |
+| *Smart App Control blocked an app that may be unsafe* | Smart App Control accepts an unknown program only with a valid signature, and gives no exception for one application; a new version is unknown again. Use a computer where it is off, or turn it off in *Windows Security > App & browser control* (Windows 11 25H2 can turn it back on later). The permanent fix is a signed release: [docs/SIGNING.md](docs/SIGNING.md). |
+| *PowerShell is restricted on this computer* (local tests, publishing) | Windows App Control (or Smart App Control) runs unsigned scripts in Constrained Language Mode, which refuses the .NET calls of the detection, test and publishing scripts. Use a computer without that policy for those features; generating packages still works. |
 | The package ran from Intune but the user only saw Intune's notification, not the branded dialogs | Packages of 2.2 or earlier in *Automatic* mode turned silent when none of the applications to close was open. Generate the package again with 2.3 (*Automatic* now shows the dialogs whenever a user is signed in). |
 | *Connect to Intune* created the registration but says the consent is missing | The administrator could create apps but not grant consent for Microsoft Graph. A Global Administrator opens the consent link the window shows (*Copy link* to send it), or grants it in Entra ID > App registrations > J365 IntunePSApp > API permissions. |
 | *Connect to Intune* says the sign-in was cancelled or needs an administrator's approval | The window lists the three causes and their fix: accept the consent screen of *Microsoft Graph Command Line Tools* (Microsoft's own app, used only to create the registration); sign in with an account whose administrator role is **active** (Global, Application or Cloud Application Administrator; with PIM, activate it and wait a minute); or, when the tenant blocks that app, use *Create it with Azure Cloud Shell*. Entra ID > Sign-in logs, application *Microsoft Graph Command Line Tools*, shows the exact reason. |
@@ -309,7 +315,7 @@ Antes, na 2.3: publicação dentro do aplicativo, as janelas personalizadas do P
 
 **Requisitos:** Windows 10 ou 11 (x64). Não precisa instalar o .NET (ele está dentro do executável). Acesso à internet na primeira execução.
 
-> **Avisos de proteção do Windows.** O executável não tem assinatura digital (é um projeto gratuito da comunidade). O Windows SmartScreen pode mostrar *"O Windows protegeu o computador"*: confira o arquivo antes (veja [Verifique o download](#verifique-o-download)) e escolha *Mais informações > Executar assim mesmo*. Em computadores com o **Controle Inteligente de Aplicativos** (Smart App Control) ativado, o Windows pode bloquear aplicativos sem assinatura que ainda não conhece e não oferece exceção; nesse caso use outro computador ou uma máquina virtual. O workflow de release já está pronto para assinar o executável ([docs/SIGNING.md](docs/SIGNING.md)).
+> **Avisos de proteção do Windows.** Enquanto as versões não tiverem assinatura de código, o Windows SmartScreen pode mostrar *"O Windows protegeu o computador"*: confira o arquivo antes (veja [Verifique o download](#verifique-o-download)) e escolha *Mais informações > Executar assim mesmo*. O **Controle Inteligente de Aplicativos** (Smart App Control, Windows 11) vai além: bloqueia um programa que não conhece e que não tem assinatura, sem exceção para um aplicativo, e cada versão nova começa desconhecida de novo. Use um computador em que ele esteja desligado (dispositivos gerenciados por empresas costumam estar), ou veja as opções em [docs/SIGNING.md](docs/SIGNING.md). O workflow de release assina o executável assim que uma identidade de assinatura for configurada (SignPath Foundation, Azure Artifact Signing, ou um certificado do autor com o `tools/Sign-Release.ps1`).
 
 ## Recursos
 
@@ -427,13 +433,17 @@ Cada versão é compilada pelo GitHub Actions a partir do commit marcado e traz 
 
 ```powershell
 # 1. Checksum: compare com o SHA256SUMS.txt da versão
-Get-FileHash .\J365-IntunePSApp-2.4.0-win-x64.zip -Algorithm SHA256
+Get-FileHash .\J365-IntunePSApp-2.4.1-win-x64.zip -Algorithm SHA256
 
 # 2. Procedência: prova que o arquivo foi compilado pelo workflow deste repositório (GitHub CLI)
-gh attestation verify .\J365-IntunePSApp-2.4.0-win-x64.zip --repo sesantanajr/J365-IntunePSApp
+gh attestation verify .\J365-IntunePSApp-2.4.1-win-x64.zip --repo sesantanajr/J365-IntunePSApp
 ```
 
 O que o próprio aplicativo verifica: os instaladores do banco de dados (SHA256 do manifesto do winget), o módulo do PSAppDeployToolkit (assinatura Authenticode), o IntuneWinAppUtil (assinatura da Microsoft, senão é descartado), cada `.intunewin` criado (HMAC e SHA256) e as próprias atualizações (SHA256 do zip da release e a versão do novo executável). Veja [SECURITY.md](SECURITY.md).
+
+## Política de assinatura de código
+
+O que é assinado, por quem, e o que o aplicativo envia pela rede: [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md) (Code signing policy). Como as versões são assinadas: [docs/SIGNING.md](docs/SIGNING.md).
 
 ## Pacote de código-fonte, compilação e fork
 
@@ -457,6 +467,8 @@ O projeto é de código aberto para que você possa **auditar, compilar, fazer u
 | *Testar neste computador* diz que o aplicativo está instalado, mas não por este pacote | Esperado onde o pacote ainda não rodou: o Intune vai executá-lo ali (remover a cópia encontrada, instalar esta versão e gravar a marca). |
 | A atualização dentro do aplicativo não começa | Ela precisa acessar `api.github.com` e `github.com` (proxy e firewall). Uma cópia numa pasta somente leitura não consegue se substituir: o aplicativo oferece a página de download. A cópia instalada fica em `%LOCALAPPDATA%\Programs\J365 IntunePSApp`. |
 | *O Windows protegeu o computador* ao abrir o aplicativo | Veja [Download](#download-1): o executável ainda não tem assinatura de código ([docs/SIGNING.md](docs/SIGNING.md)). |
+| *O controle inteligente de aplicativos bloqueou um aplicativo que pode não ser seguro* | O Controle Inteligente de Aplicativos só aceita um programa desconhecido com assinatura válida e não dá exceção para um aplicativo; uma versão nova volta a ser desconhecida. Use um computador em que ele esteja desligado, ou desligue-o em *Segurança do Windows > Controle de aplicativos e do navegador* (o Windows 11 25H2 permite religá-lo depois). A solução definitiva é uma versão assinada: [docs/SIGNING.md](docs/SIGNING.md). |
+| *O PowerShell deste computador está restrito* (testes locais, publicação) | O Controle de Aplicativos do Windows (ou o Controle Inteligente de Aplicativos) roda scripts sem assinatura em modo de linguagem restrita, que recusa as chamadas .NET dos scripts de detecção, de teste e de publicação. Use um computador sem essa política para esses recursos; gerar pacotes continua funcionando. |
 | O pacote rodou pelo Intune, mas o usuário viu só a notificação do Intune, sem as janelas personalizadas | Pacotes da 2.2 ou anteriores no modo *Automático* ficavam silenciosos quando nenhum dos aplicativos a fechar estava aberto. Gere o pacote de novo com a 2.3 (o *Automático* agora mostra as janelas sempre que houver um usuário conectado). |
 | *Conectar ao Intune* criou o registro, mas diz que falta o consentimento | O administrador podia criar aplicativos, mas não conceder consentimento para o Microsoft Graph. Um Administrador Global abre o link de consentimento que a janela mostra (*Copiar link* para enviá-lo), ou concede em Entra ID > Registros de aplicativo > J365 IntunePSApp > Permissões de API. |
 | *Conectar ao Intune* diz que o login foi cancelado ou precisa da aprovação de um administrador | A janela lista as três causas e a solução de cada uma: aceite a tela de permissão do *Microsoft Graph Command Line Tools* (aplicativo da própria Microsoft, usado só para criar o registro); entre com uma conta cuja função de administrador esteja **ativa** (Administrador Global, de Aplicativos ou de Aplicativos de Nuvem; com PIM, ative-a e aguarde um minuto); ou, se o tenant bloquear esse aplicativo, use *Criar pelo Azure Cloud Shell*. Em Entra ID > Logs de entrada, aplicativo *Microsoft Graph Command Line Tools*, aparece o motivo exato. |

@@ -131,7 +131,7 @@ namespace J365.IntunePSApp.Core
             try { resp = await Http.Client.PostAsync($"{LoginUrl}/{Uri.EscapeDataString(tenant)}/oauth2/v2.0/token", new FormUrlEncodedContent(form), cts.Token); }
             catch (Exception ex) when (ex is HttpRequestException || (ex is OperationCanceledException && !ct.IsCancellationRequested))
             {
-                throw new AuthException(T("Auth_ErrNetwork", ex.Message));
+                throw new AuthException(T("Auth_ErrNetwork", ex.Message), "network");
             }
             using var response = resp;
             string text = await resp.Content.ReadAsStringAsync(ct);
@@ -153,6 +153,18 @@ namespace J365.IntunePSApp.Core
                 };
             }
             throw Explain(json?["error"]?.GetValue<string>() ?? ("HTTP " + (int)resp.StatusCode), json?["error_description"]?.GetValue<string>());
+        }
+
+        /// <summary>
+        /// A failure of the network rather than a refusal: no answer, a timeout, or a server that is busy or failing
+        /// (HTTP 429 and 5xx). "HTTP 400" or "HTTP 403" are answers of the service, not network failures.
+        /// </summary>
+        public static bool IsNetworkFailure(string code)
+        {
+            code ??= "";
+            if (code is "network" or nameof(HttpRequestException) or nameof(TaskCanceledException) or nameof(OperationCanceledException) or nameof(TimeoutException)) return true;
+            if (!code.StartsWith("HTTP ", StringComparison.Ordinal) || !int.TryParse(code.AsSpan(5), out int status)) return false;
+            return status == 429 || status >= 500;
         }
 
         /// <summary>The usual Entra ID errors, in plain words (the AADSTS code stays at the end for the administrator).</summary>
@@ -338,6 +350,29 @@ namespace J365.IntunePSApp.Core
             cfg.IntuneClientId = client?.Trim() ?? "";
             ConfigStore.Save();
             if (changed) SignOut(); else Changed?.Invoke();
+        }
+
+        /// <summary>
+        /// Uses another app registration for the next sign-in without saving it or ending the current session (code, IDs,
+        /// Cloud Shell). <see cref="EndTrial"/> saves it once a sign-in with it worked, or puts the previous one back, so a
+        /// wrong code, a cancel or a failure leaves a working connection as it was. Returns the previous registration.
+        /// </summary>
+        public static (string Tenant, string Client) BeginTrial(string tenant, string client)
+        {
+            var cfg = ConfigStore.Current;
+            var previous = (cfg.IntuneTenantId ?? "", cfg.IntuneClientId ?? "");
+            cfg.IntuneTenantId = tenant?.Trim() ?? "";
+            cfg.IntuneClientId = client?.Trim() ?? "";
+            return previous;
+        }
+
+        /// <summary>Ends <see cref="BeginTrial"/>: <paramref name="keep"/> (a sign-in with it worked) saves the new registration.</summary>
+        public static void EndTrial((string Tenant, string Client) previous, bool keep)
+        {
+            var cfg = ConfigStore.Current;
+            if (!keep) { cfg.IntuneTenantId = previous.Tenant; cfg.IntuneClientId = previous.Client; }
+            ConfigStore.Save();
+            Changed?.Invoke();
         }
 
         private static Saved Load()

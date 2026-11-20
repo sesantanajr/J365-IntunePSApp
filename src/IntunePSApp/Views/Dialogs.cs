@@ -695,6 +695,7 @@ namespace J365.IntunePSApp.Views
             button.IsEnabled = false;
             try
             {
+                if (await Task.Run(() => PowerShellPolicy.IsRestricted)) { Ui.Warn(T("Err_PowerShellRestricted")); return; }
                 var result = await Task.Run(() => IntunePublisher.Validate(_script));
                 new TextViewerWindow(T("Publish_ValidateTitle"), result.Output) { Owner = this, Width = 760, Height = 460 }.ShowDialog();
             }

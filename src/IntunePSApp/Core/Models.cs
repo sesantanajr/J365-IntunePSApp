@@ -15,6 +15,12 @@ namespace J365.IntunePSApp.Core
         public const string Author = "Sérgio Sant'Ana Junior";
         public const string AuthorLinkedIn = "https://www.linkedin.com/in/sergiosantanacloud/";
         public const string Brand = "Jornada 365";
+        /// <summary>
+        /// Who may sign the releases of this project (docs/SIGNING.md): the SignPath Foundation certificate (free signing
+        /// for open-source projects), or a certificate in the name of the author or of Jornada 365 (Azure Artifact Signing,
+        /// a Certum "Open Source Developer" certificate...). An update signed by any of them is accepted.
+        /// </summary>
+        public static readonly string[] TrustedPublishers = { "SignPath Foundation", Author, Brand };
         public const string BlogUrl = "https://jornada365.cloud";
         public const string GitHubRepo = "sesantanajr/J365-IntunePSApp";
         public const string PsadtName = "PSAppDeployToolkit";

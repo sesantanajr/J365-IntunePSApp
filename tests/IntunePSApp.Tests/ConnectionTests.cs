@@ -260,6 +260,48 @@ namespace J365.IntunePSApp.Tests
         }, m => m.ExistingRegistration = true);
 
         [Fact]
+        public Task A_registration_that_is_tried_and_fails_leaves_the_working_connection_as_it_was() => WithMockAsync(async mock =>
+        {
+            // A working connection: the registration of the setup, signed in.
+            await IntuneConnection.CreateRegistrationAsync(null, CancellationToken.None);
+            await IntuneConnection.SignInAsync(CancellationToken.None);
+            Assert.True(IntuneConnection.IsSignedIn);
+            string tenant = ConfigStore.Current.IntuneTenantId, client = ConfigStore.Current.IntuneClientId;
+            string file = Path.Combine(AppPaths.Data, "intune-session.dat");
+
+            // Another registration is tried (a pasted code) and its sign-in does not complete.
+            var previous = IntuneConnection.BeginTrial("fabrikam.onmicrosoft.com", "11111111-2222-3333-4444-555555555555");
+            Assert.Equal("11111111-2222-3333-4444-555555555555", IntuneConnection.ClientId);
+            Assert.False(IntuneConnection.IsSignedIn);
+            IntuneConnection.EndTrial(previous, keep: false);
+
+            // Everything as it was: registration, session file and account.
+            Assert.Equal(tenant, ConfigStore.Current.IntuneTenantId);
+            Assert.Equal(client, ConfigStore.Current.IntuneClientId);
+            Assert.True(File.Exists(file));
+            Assert.True(IntuneConnection.IsSignedIn);
+            Assert.Equal("admin@contoso.onmicrosoft.com", IntuneConnection.Account);
+        });
+
+        [Fact]
+        public async Task A_sign_in_server_that_does_not_answer_is_a_network_failure()
+        {
+            // A port where nothing listens: the request fails before any answer.
+            var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+            listener.Start();
+            int port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+            listener.Stop();
+            Environment.SetEnvironmentVariable("J365_LOGIN_URL", $"http://127.0.0.1:{port}");
+            try
+            {
+                var ex = await Assert.ThrowsAsync<AuthException>(() => EntraAuth.RefreshAsync("contoso.onmicrosoft.com", "11111111-2222-3333-4444-555555555555", "x", "openid", CancellationToken.None));
+                Assert.Equal("network", ex.Code);
+                Assert.True(EntraAuth.IsNetworkFailure(ex.Code));
+            }
+            finally { Environment.SetEnvironmentVariable("J365_LOGIN_URL", null); }
+        }
+
+        [Fact]
         public void Sign_in_errors_are_explained_in_plain_words()
         {
             var e = EntraAuth.Explain("invalid_client", "AADSTS7000218: The request body must contain the following parameter: 'client_assertion' or 'client_secret'.");

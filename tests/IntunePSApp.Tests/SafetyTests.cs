@@ -57,6 +57,33 @@ namespace J365.IntunePSApp.Tests
             Assert.DoesNotContain("Test-J365NewerVersion", ScriptGenerator.DeployScript(Fakes.Template, s, "setup.exe"));
         }
 
+        [Fact]
+        public void The_newer_version_check_compares_with_the_version_the_package_installs()
+        {
+            // A lower minimum version in the detection (older copies count as installed) must not keep a copy older than
+            // the package: 2.3 installed by hand is updated to 2.5.0, not kept because it is newer than 2.0.
+            var s = Firefox();
+            s.AppVersion = "2.5.0";
+            s.DetectionVersion = "2.0";
+            string script = ScriptGenerator.DeployScript(Fakes.Template, s, "setup.exe");
+            Assert.Contains("-Package '2.5.0'", script);
+            Assert.DoesNotContain("-Package '2.0'", script);
+            // The mark still carries the version the detection compares with its minimum.
+            Assert.Equal("2.0", ScriptGenerator.MarkVersion(s));
+
+            s.AppVersion = "";
+            Assert.Equal("2.0", ScriptGenerator.PackageVersion(s));
+            s.AppVersion = "latest";
+            Assert.Equal("2.0", ScriptGenerator.PackageVersion(s));
+            s.AppVersion = "1.0";
+            s.DetectionVersion = "1.0.5";
+            Assert.Equal("1.0.5", ScriptGenerator.PackageVersion(s));
+            s.DetectionVersion = "";
+            Assert.Equal("1.0", ScriptGenerator.PackageVersion(s));
+            s.AppVersion = "";
+            Assert.Equal("", ScriptGenerator.PackageVersion(s));
+        }
+
         [Theory]
         [InlineData("134.0.1", "133.0", true)]
         [InlineData("133.0", "133.0", false)]
@@ -127,6 +154,9 @@ namespace J365.IntunePSApp.Tests
             Assert.Contains("DoNotExpandEnvironmentNames", code);
             Assert.DoesNotContain("'%" + name + "%'", code);
             Assert.Contains(userContext ? "CurrentUser" : "LocalMachine", code);
+            // Explorer of the signed-in user and the rest of the deployment are told after the write.
+            Assert.True(code.IndexOf("Update-ADTDesktop", StringComparison.Ordinal) > code.IndexOf("$envKey.Close()", StringComparison.Ordinal));
+            Assert.Contains("Update-ADTEnvironmentPsProvider", code);
             Assert.NotEmpty(ActionCatalog.Warnings(a, userContext));
         }
 
@@ -135,6 +165,24 @@ namespace J365.IntunePSApp.Tests
         {
             var a = new PackageAction { Type = "SetEnvironment", Params = { ["Name"] = "CONTOSO_HOME", ["Value"] = "C:\\Contoso" } };
             Assert.Contains(ActionCatalog.Generate(a), l => l.Contains("SetEnvironmentVariable('CONTOSO_HOME', 'C:\\Contoso', 'Machine')"));
+            Assert.Contains(ActionCatalog.Generate(a), l => l.TrimStart().StartsWith("Update-ADTDesktop", StringComparison.Ordinal));
+        }
+
+        [Theory]
+        [InlineData("network", true)]
+        [InlineData("HttpRequestException", true)]
+        [InlineData("TaskCanceledException", true)]
+        [InlineData("HTTP 503", true)]
+        [InlineData("HTTP 429", true)]
+        [InlineData("HTTP 403", false)]
+        [InlineData("HTTP 400", false)]
+        [InlineData("AADSTS50105", false)]
+        [InlineData("cancel", false)]
+        [InlineData("", false)]
+        [InlineData(null, false)]
+        public void Only_failures_of_the_network_suggest_checking_the_network(string code, bool network)
+        {
+            Assert.Equal(network, EntraAuth.IsNetworkFailure(code));
         }
 
         [Fact]
@@ -190,6 +238,32 @@ namespace J365.IntunePSApp.Tests
             // The official copy, when this machine has one (the demo data of the screenshots).
             string official = Path.Combine("C:" + Path.DirectorySeparatorChar, "Users", "Public", "J365-IntunePSApp-Demo", "IntunePSApp-Data", "tools", "PSAppDeployToolkit", "4.1.8");
             if (Directory.Exists(official)) Assert.Contains("Patch My PC", ToolsService.VerifyPsadt(official));
+        }
+
+        [Theory]
+        [InlineData("SignPath Foundation", true)]
+        [InlineData("Open Source Developer, Sérgio Sant'Ana Junior", true)]
+        [InlineData("Open Source Developer, Sergio Sant Ana Junior", true)]
+        [InlineData("Jornada 365", true)]
+        [InlineData("Contoso Ltd", false)]
+        [InlineData("", false)]
+        public void Updates_accept_the_publishers_of_the_project(string signer, bool accepted)
+        {
+            var running = ("Someone Else", "CN=Someone Else");
+            Assert.Equal(accepted, AppUpdater.IsTrustedPublisher((signer, "CN=" + signer), running));
+            // The publisher of the running copy is always accepted.
+            Assert.True(AppUpdater.IsTrustedPublisher(("Contoso Ltd", "CN=Contoso Ltd, O=Contoso"), ("Contoso Ltd", "CN=Contoso Ltd, O=Contoso")));
+        }
+
+        [Fact]
+        public void Companion_scripts_are_written_unchanged_so_their_signature_stays_valid()
+        {
+            // Releases embed the scripts signed: what the application writes must be the same text, signature block included.
+            string signedLike = "Write-Host 'J365 IntunePSApp'" + System.Environment.NewLine + "# SIG # Begin signature block" + System.Environment.NewLine
+                                + "# MIIabc" + System.Environment.NewLine + "# SIG # End signature block" + System.Environment.NewLine;
+            Assert.Equal(signedLike, PackageBuilder.Rebrand(signedLike));
+            Assert.Equal(PackageBuilder.EmbeddedText(PackageLayout.PublishScript), PackageBuilder.CompanionScript(PackageLayout.PublishScript));
+            Assert.Equal(PackageBuilder.EmbeddedText(PackageLayout.SandboxScript), PackageBuilder.CompanionScript(PackageLayout.SandboxScript));
         }
 
         [Fact]

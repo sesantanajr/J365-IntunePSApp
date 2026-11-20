@@ -1,19 +1,21 @@
-## J365 IntunePSApp 2.4.0
+## J365 IntunePSApp 2.4.1
 
 Package any Windows application for Microsoft Intune in minutes, with no scripting. Built on [PSAppDeployToolkit](https://psappdeploytoolkit.com). Created by [Sérgio Sant'Ana Junior](https://www.linkedin.com/in/sergiosantanacloud/) - [Jornada 365](https://jornada365.cloud).
 
-### New in 2.4
+### Why 2.4.1
 
-- **A connection to Intune that explains itself.** *Connect to Intune* opens a guided window with three ways in: the **automatic setup** (an administrator signs in; the registration *J365 IntunePSApp* is created and approved), a **registration that already exists** (paste the *connection code* an administrator shares) or **Azure Cloud Shell** (one command creates the same registration with the Azure CLI, with no consent screen). Every step is shown; a failure comes with its likely causes and the action that fixes each one, including the "sign-in cancelled / need admin approval" case (PIM activation, another account, or Cloud Shell when the tenant blocks Microsoft Graph Command Line Tools).
-- **Light and dark themes and a new look.** Every page redesigned: new palette, sidebar with the Intune connection, catalog search from anywhere (Ctrl+K), Settings in sections, dialogs in the theme.
-- **No more silent downgrades:** an application that updated itself is no longer replaced by the older version of the package; a newer version already installed is kept.
-- **Uninstall tells the truth:** when the program is still there after the uninstallation, the deployment fails instead of reporting "uninstalled".
-- **Safer publishing:** an app updated in Intune only changes after its new content is confirmed; cancelling cleans up.
-- **Also fixed:** *Path* environment variables are appended (no longer replaced), the PSAppDeployToolkit template must carry its publisher's signature, typographic quotes in the company name, exit code after a failed removal of the previous version, proxies that ask for the Windows sign-in, unsaved changes in the editor.
+On Windows 11 with **Smart App Control** on, 2.4.0 was blocked with *"we couldn't verify its publisher"*. Smart App Control asks Microsoft's cloud service about every program and, when the file is unknown, accepts it only with a valid digital signature; there is no exception for one application, and every new version is a new, unknown file. Code signing is the only fix, and this version makes it ready:
 
-Verified: the new install and uninstall behaviour inside the real PSAppDeployToolkit 4.1.8; publishing (update, failed commit, cancel) against local stand-ins for Microsoft Graph and Azure Storage; every page in both themes and both languages. 214 automated tests. The connection window and Cloud Shell command were not yet run against a real tenant: please report results in the issues.
+- **Signing in the release workflow** with SignPath (free for open-source projects through SignPath Foundation) or Azure Artifact Signing: the executable **and the PowerShell scripts embedded in it** are signed before the release is zipped, hashed and attested, and a release with signing configured stops unless every signature is valid and timestamped.
+- **`tools/Sign-Release.ps1`** signs a published release with a certificate of the author's computer (Certum Open Source in SimplySign, any OV/EV token) or a company's internal authority (`.pfx`, for App Control allow-lists).
+- **Code signing policy** published ([CODE_SIGNING_POLICY.md](https://github.com/sesantanajr/J365-IntunePSApp/blob/main/CODE_SIGNING_POLICY.md)) and [docs/SIGNING.md](https://github.com/sesantanajr/J365-IntunePSApp/blob/main/docs/SIGNING.md) rewritten: how Smart App Control decides, the ways to sign, and what to do until a release is signed.
+- **Settings > About** shows whether the executable is signed and by whom. The update inside the application accepts any publisher of the project, so the signing service can change.
+- The local tests and publishing explain a PowerShell restricted by App Control instead of failing obscurely.
+- **Fixes from a review of 2.4.0**: *keep a newer version* compared with the minimum version of the detection instead of the version of the package (a copy older than the package could be kept); connecting with a code, IDs or Cloud Shell no longer ends a working connection before the new one works; a package with unsaved changes is never replaced or closed without a question; a damaged toolkit copy is installed again; environment variables reach the signed-in user right away.
 
-Full list: [CHANGELOG.md](https://github.com/sesantanajr/J365-IntunePSApp/blob/main/CHANGELOG.md). Update from 2.2 or 2.3 with **Update now** inside the application. Packages are generated again to get the new install and uninstall behaviour.
+Until a release carries a signature: use the application on a computer where Smart App Control is off (company-managed devices usually are), or see the options in docs/SIGNING.md. SmartScreen alone still offers *More info > Run anyway*.
+
+Full list: [CHANGELOG.md](https://github.com/sesantanajr/J365-IntunePSApp/blob/main/CHANGELOG.md).
 
 ### Download
 
@@ -25,23 +27,19 @@ Full list: [CHANGELOG.md](https://github.com/sesantanajr/J365-IntunePSApp/blob/m
 
 Verify: `Get-FileHash <file> -Algorithm SHA256` and `gh attestation verify <file> --repo sesantanajr/J365-IntunePSApp`.
 
-The executable is not code-signed yet: Windows SmartScreen may ask for confirmation (*More info > Run anyway*), and computers with Smart App Control turned on may block it.
-
 ---
 
-## J365 IntunePSApp 2.4.0 (Português)
+## J365 IntunePSApp 2.4.1 (Português)
 
 Empacote qualquer aplicativo Windows para o Microsoft Intune em minutos, sem escrever scripts. Baseado no [PSAppDeployToolkit](https://psappdeploytoolkit.com). Criado por [Sérgio Sant'Ana Junior](https://www.linkedin.com/in/sergiosantanacloud/) - [Jornada 365](https://jornada365.cloud).
 
-**Novo na 2.4:**
+**Por que a 2.4.1:** no Windows 11 com o **Controle Inteligente de Aplicativos** ligado, a 2.4.0 foi bloqueada com *"não conseguimos verificar seu fornecedor"*. Ele consulta o serviço de nuvem da Microsoft sobre cada programa e, quando o arquivo é desconhecido, só o aceita com uma assinatura digital válida; não há exceção para um aplicativo, e cada versão nova é um arquivo novo e desconhecido. A assinatura de código é a única solução, e esta versão a deixa pronta:
 
-- **Uma conexão com o Intune que explica o que acontece.** *Conectar ao Intune* abre uma janela guiada com três caminhos: a **configuração automática** (um administrador entra; o registro *J365 IntunePSApp* é criado e aprovado), um **registro que já existe** (cole o *código de conexão* que um administrador compartilhou) ou o **Azure Cloud Shell** (um comando cria o mesmo registro com o Azure CLI, sem tela de permissão). Cada etapa aparece na tela; uma falha vem com as causas prováveis e a ação que resolve cada uma, inclusive o caso "login cancelado / aprovação do administrador necessária" (ativar a função no PIM, outra conta, ou o Cloud Shell quando o tenant bloqueia o Microsoft Graph Command Line Tools).
-- **Temas claro e escuro e um visual novo.** Todas as telas redesenhadas: paleta nova, barra lateral com a conexão do Intune, busca no catálogo de qualquer lugar (Ctrl+K), Configurações em seções, janelas no tema.
-- **Sem rebaixar versões em silêncio:** um aplicativo que se atualizou sozinho não é mais trocado pela versão mais antiga do pacote; uma versão mais nova já instalada é mantida.
-- **Desinstalação que diz a verdade:** quando o programa continua lá depois da desinstalação, a implantação falha em vez de informar "desinstalado".
-- **Publicação mais segura:** um app atualizado no Intune só muda depois que o conteúdo novo é confirmado; cancelar limpa o que foi criado.
-- **Também corrigido:** variáveis *Path* são acrescentadas (não mais substituídas), o template do PSAppDeployToolkit precisa ter a assinatura do publicador, aspas tipográficas no nome da empresa, código de saída depois de uma falha ao remover a versão anterior, proxies que pedem o login do Windows, alterações não salvas no editor.
+- **Assinatura no workflow de release** com o SignPath (gratuito para código aberto pela SignPath Foundation) ou o Azure Artifact Signing: o executável **e os scripts PowerShell embutidos nele** são assinados antes de a versão ser compactada, ter os hashes calculados e ser atestada, e uma versão com assinatura configurada para se alguma assinatura não for válida e com carimbo de tempo.
+- **`tools/Sign-Release.ps1`** assina uma versão publicada com um certificado do computador do autor (Certum Open Source no SimplySign, qualquer token OV/EV) ou da autoridade interna de uma empresa (`.pfx`, para listas de permissão do Controle de Aplicativos).
+- **Política de assinatura de código** publicada ([CODE_SIGNING_POLICY.md](https://github.com/sesantanajr/J365-IntunePSApp/blob/main/CODE_SIGNING_POLICY.md)) e o [docs/SIGNING.md](https://github.com/sesantanajr/J365-IntunePSApp/blob/main/docs/SIGNING.md) reescrito: como o Controle Inteligente de Aplicativos decide, os caminhos para assinar e o que fazer enquanto a versão não estiver assinada.
+- **Configurações > Sobre** mostra se o executável está assinado e por quem. A atualização dentro do aplicativo aceita qualquer editor do projeto, então o serviço de assinatura pode mudar.
+- Os testes locais e a publicação explicam um PowerShell restrito pelo Controle de Aplicativos, em vez de falhar sem explicação.
+- **Correções de uma revisão da 2.4.0**: *manter versão mais nova* comparava com a versão mínima da detecção em vez da versão do pacote (uma cópia mais antiga que o pacote podia ser mantida); conectar com código, IDs ou Cloud Shell não encerra mais uma conexão que funciona antes de a nova funcionar; um pacote com alterações não salvas nunca é substituído nem fechado sem pergunta; uma cópia danificada do toolkit é instalada de novo; variáveis de ambiente chegam na hora ao usuário conectado.
 
-Verificado: o novo comportamento de instalação e desinstalação dentro do PSAppDeployToolkit 4.1.8 real; a publicação (atualização, confirmação com falha, cancelamento) contra substitutos locais do Microsoft Graph e do Azure Storage; todas as telas nos dois temas e nos dois idiomas. 214 testes automatizados. A janela de conexão e o comando do Cloud Shell ainda não foram executados contra um tenant real: relatos são bem-vindos nas issues.
-
-Atualize a partir da 2.2 ou da 2.3 com **Atualizar agora** dentro do aplicativo. Gere os pacotes de novo para ter o novo comportamento de instalação e desinstalação. O executável ainda não tem assinatura de código: o SmartScreen pode pedir confirmação (*Mais informações > Executar assim mesmo*).
+Enquanto a versão não tiver assinatura: use o aplicativo num computador em que o Controle Inteligente de Aplicativos esteja desligado (dispositivos gerenciados por empresas costumam estar), ou veja as opções no docs/SIGNING.md. Só com o SmartScreen continua valendo *Mais informações > Executar assim mesmo*.

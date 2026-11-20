@@ -179,6 +179,9 @@ namespace J365.IntunePSApp
                     UpdateToolsStatus();
                 }
                 await UpdateService.CheckAsync(false, CancellationToken.None);
+                // Logged once for support: a restricted PowerShell explains failures of the local tests and of publishing.
+                string mode = await Task.Run(() => PowerShellPolicy.LanguageMode);
+                if (PowerShellPolicy.IsRestricted) Log.Warn(T("Log_PowerShellRestricted", mode));
             }
             catch (Exception ex) { Log.Warn(ex.Message); }
         }
@@ -462,6 +465,8 @@ namespace J365.IntunePSApp
         /// </summary>
         public void InstallForUser(bool desktopShortcut)
         {
+            // This copy closes when the installed one starts: a running build and unsaved changes are settled first.
+            if (!ConfirmClosing()) return;
             try
             {
                 var running = AppUpdater.RunningCopies(InstallService.InstalledExe);
@@ -478,7 +483,7 @@ namespace J365.IntunePSApp
                 ConfigStore.Save();
                 string exe = InstallService.Install(desktopShortcut);
                 Process.Start(new ProcessStartInfo(exe, "--installed") { UseShellExecute = true });
-                Application.Current.Shutdown();
+                CloseApplication();
             }
             catch (Exception ex) { Ui.Error(ex.Message); }
         }
@@ -511,6 +516,8 @@ namespace J365.IntunePSApp
                 if (VersionUtil.Compare(release.Version, AppInfo.Version) <= 0) { Toast(T("Update_UpToDate", AppInfo.Version), "ok"); return; }
                 string size = release.ZipSize > 0 ? (release.ZipSize / 1048576d).ToString("N0", Loc.Instance.Culture) + " MB" : "?";
                 if (!Ui.Confirm(T("Update_Confirm", AppInfo.Name, AppInfo.Version, release.Version, size), T("Update_Now"), T("Common_Cancel"))) return;
+                // The application restarts at the end: unsaved changes are settled now, while the update can still be cancelled.
+                if (!ConfirmClosing("Update_WaitBuild")) return;
 
                 ct = ShowBusy(T("Update_DownloadingTitle", release.Version), T("Update_Starting"));
                 SetStatus(T("Update_DownloadingTitle", release.Version), true);
@@ -534,7 +541,7 @@ namespace J365.IntunePSApp
                     HideBusy();
                     Ui.Info(T("Update_RestartManually", release.Version, ex.Message));
                 }
-                Application.Current.Shutdown();
+                CloseApplication();
             }
             catch (OperationCanceledException)
             {
@@ -609,12 +616,38 @@ namespace J365.IntunePSApp
             BtnMax.Content = WindowState == WindowState.Maximized ? "" : "";
         }
 
+        private bool _closingWithoutQuestions;
+
+        /// <summary>
+        /// Before a step that closes the application by itself (update, installation for the user, uninstall of this
+        /// copy): a package being built is waited for, and changes to the open package are not lost without a question.
+        /// True when the step may go on.
+        /// </summary>
+        public bool ConfirmClosing(string buildingMessageKey = "Main_WaitBuild")
+        {
+            if (Editor == null) return true;
+            if (Editor.IsBuilding) { Ui.Warn(T(buildingMessageKey)); return false; }
+            return App.HasArg("--snapshot") || !Editor.HasUnsavedChanges
+                || Ui.Confirm(T("Main_ConfirmExitUnsaved"), T("Main_ExitAnyway"), T("Common_Cancel"), danger: true);
+        }
+
+        /// <summary>Closes the application after <see cref="ConfirmClosing"/>: nothing more is asked, the window placement is saved.</summary>
+        public void CloseApplication()
+        {
+            _closingWithoutQuestions = true;
+            Application.Current.Shutdown();
+        }
+
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
         {
-            if (Editor != null && Editor.IsBuilding && !Ui.Confirm(T("Main_ConfirmExitBuilding"), danger: true)) { e.Cancel = true; return; }
-            // Changes to the open package that were neither saved nor generated are not lost without a question.
-            if (!App.HasArg("--snapshot") && Editor != null && !Editor.IsBuilding && Editor.HasUnsavedChanges
-                && !Ui.Confirm(T("Main_ConfirmExitUnsaved"), T("Main_ExitAnyway"), T("Common_Cancel"), danger: true)) { e.Cancel = true; return; }
+            // An update, an installation or an uninstall asked already (ConfirmClosing); at this point it cannot be cancelled.
+            if (!_closingWithoutQuestions)
+            {
+                if (Editor != null && Editor.IsBuilding && !Ui.Confirm(T("Main_ConfirmExitBuilding"), danger: true)) { e.Cancel = true; return; }
+                // Changes to the open package that were neither saved nor generated are not lost without a question.
+                if (!App.HasArg("--snapshot") && Editor != null && !Editor.IsBuilding && Editor.HasUnsavedChanges
+                    && !Ui.Confirm(T("Main_ConfirmExitUnsaved"), T("Main_ExitAnyway"), T("Common_Cancel"), danger: true)) { e.Cancel = true; return; }
+            }
             SavePlacement();
             base.OnClosing(e);
         }
