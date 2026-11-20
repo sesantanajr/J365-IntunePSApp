@@ -66,6 +66,9 @@ namespace J365.IntunePSApp.Core
         public string ExtraSuccessCodes { get; set; } = "";
         public string Description { get; set; } = "";
         public string Homepage { get; set; } = "";
+        public string PrivacyUrl { get; set; } = "";
+        public string Developer { get; set; } = "";
+        public string Owner { get; set; } = "";
         public string MinimumOs { get; set; } = "W10_1607";
         /// <summary>Icon shown in Intune and in the Company Portal. Empty: the icon of the installer, or a tile with the initials.</summary>
         public string AppIconPath { get; set; } = "";
@@ -262,6 +265,7 @@ namespace J365.IntunePSApp.Core
         public string CatalogMatch { get; set; }   // hash | productcode | download | name
         public string Description { get; set; }
         public string Homepage { get; set; }
+        public string PrivacyUrl { get; set; }
         public List<string> Notes { get; set; } = new List<string>();
 
         [JsonIgnore] public bool IsCatalogExact => CatalogMatch is "hash" or "productcode" or "download";
@@ -317,6 +321,7 @@ namespace J365.IntunePSApp.Core
         [JsonPropertyName("d")] public string Description { get; set; }
         [JsonPropertyName("dpt")] public string DescriptionPt { get; set; }
         [JsonPropertyName("hp")] public string Homepage { get; set; }
+        [JsonPropertyName("pu")] public string PrivacyUrl { get; set; }
         [JsonPropertyName("lic")] public string License { get; set; }
         [JsonPropertyName("m")] public string Moniker { get; set; }
         [JsonPropertyName("tg")] public List<string> Tags { get; set; }

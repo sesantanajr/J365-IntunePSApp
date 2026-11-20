@@ -1,45 +1,27 @@
-## J365 IntunePSApp 2.4.5
+## J365 IntunePSApp 2.5.0
 
-Package any Windows application for Microsoft Intune in minutes, with no scripting. Built on [PSAppDeployToolkit](https://psappdeploytoolkit.com). Created by [Sérgio Sant'Ana Junior](https://www.linkedin.com/in/sergiosantanacloud/) - [Jornada 365](https://jornada365.cloud).
+### Português
 
-### Why 2.4.5
+- **Nome limpo no Intune:** Amazon WorkSpaces; versão 5.37.0.3866 no campo próprio. A prévia e a janela de instalação também mostram apenas o nome.
+- **Metadados completos:** Desenvolvedor, Proprietário e URL de privacidade editáveis. Desenvolvedor usa o editor como padrão; proprietário usa a empresa. O catálogo importa a URL de privacidade quando o manifesto a informa.
+- **Interface refinada:** versão em um indicador separado, contraste melhor no tema escuro, campos consistentes e foco visível. Revisão antes de gerar com nome, versão e metadados separados.
+- **Praticidade:** Ctrl+S para salvar, Ctrl+O para abrir e Ctrl+N para novo projeto, dentro do editor.
+- **Estabilidade:** validação de URLs antes de gerar e correção de conflitos entre salvamentos simultâneos.
 
-A test of the Adobe Acrobat Reader package in a real tenant asked whether a required installation really shows the dialog of the preview. It did not quite: the preview used sentences of its own and listed every program. The generation showed no progress. And publishing failed because the Intune subscription of the tenant had expired, which the application now shows plan by plan.
+Projetos antigos continuam legíveis. A atualização do programa **não renomeia automaticamente os aplicativos já publicados no tenant**. Gere novamente e escolha explicitamente o aplicativo existente na publicação, ou altere seu nome no Intune.
 
-- **The preview is the dialog of the toolkit:** the texts and the layout of PSAppDeployToolkit 4.1.8 in the language of the dialogs, at three moments of a required installation (an application open, none open, the last notice after the deferrals). The preview also says when the dialog does not appear at all.
-- **Progress while generating:** the step, the percentage and the time left, also on the status bar and the taskbar.
-- **Test like Intune:** in Windows Sandbox the package runs as SYSTEM, so its dialogs appear as in a required installation.
-- **The plans of the tenant:** *Check the subscription* lists the plans of Intune with their status and says how to reactivate them. Publishing retries the upload more, waits for the app to be published before assigning it, keeps the icon on an update, and never creates an app twice.
-- **Validity of the certificate:** 6, 12 or 24 months, chosen in the connection window when connecting or renewing (12 by default). A policy of the tenant that limits it is explained.
+A URL de privacidade do catálogo depende da atualização da base e da existência do campo no manifesto. Não foi feita validação em tenant real nesta revisão. A inspeção visual manual ficou pendente por bloqueio do ambiente de execução.
 
-Full list: [CHANGELOG.md](https://github.com/sesantanajr/J365-IntunePSApp/blob/main/CHANGELOG.md). How to connect: [docs/INTUNE-PUBLISH.md](https://github.com/sesantanajr/J365-IntunePSApp/blob/main/docs/INTUNE-PUBLISH.md).
+### English
 
-On Windows 11 with **Smart App Control** on, an unsigned release is blocked: see [docs/SIGNING.md](https://github.com/sesantanajr/J365-IntunePSApp/blob/main/docs/SIGNING.md).
+Intune app names and versions are now separate. New editable developer, owner and privacy metadata flow through projects, generated packages and publishing. The editor has a separate version badge, improved dark contrast, consistent input surfaces and project keyboard shortcuts. URL validation and concurrent atomic-save handling improve reliability. Existing projects remain compatible.
+
+Existing tenant apps are not automatically renamed. Regenerate the package and explicitly select the existing app when publishing. Privacy URLs depend on refreshed catalog data. Live-tenant and manual visual validation were not performed in this revision.
 
 ### Download
 
-| File | For |
-|---|---|
-| `J365-IntunePSApp-<version>-win-x64.zip` | **The application.** Extract and run `J365.IntunePSApp.exe`. Windows 10/11 x64, nothing to install. |
-| `J365-IntunePSApp-<version>-source.zip` | **Source package** of this exact release, to audit, build or fork. |
-| `SHA256SUMS.txt` | Checksums of both files (also used by the update inside the application). |
+- `J365-IntunePSApp-2.5.0-win-x64.zip`: portable Windows x64 application; extract and run `J365.IntunePSApp.exe`.
+- `J365-IntunePSApp-2.5.0-source.zip`: source code for this release.
+- `SHA256SUMS.txt`: checksums.
 
-Verify: `Get-FileHash <file> -Algorithm SHA256` and `gh attestation verify <file> --repo sesantanajr/J365-IntunePSApp`.
-
----
-
-## J365 IntunePSApp 2.4.5 (Português)
-
-Empacote qualquer aplicativo Windows para o Microsoft Intune em minutos, sem escrever scripts. Baseado no [PSAppDeployToolkit](https://psappdeploytoolkit.com). Criado por [Sérgio Sant'Ana Junior](https://www.linkedin.com/in/sergiosantanacloud/) - [Jornada 365](https://jornada365.cloud).
-
-**Por que a 2.4.5:** um teste do pacote do Adobe Acrobat Reader num tenant real perguntou se a instalação obrigatória mostra mesmo a janela da prévia. Não exatamente: a prévia usava frases próprias e listava todos os programas. A geração não mostrava progresso. E a publicação falhou porque a assinatura do Intune do tenant expirou, o que o aplicativo agora mostra plano a plano.
-
-- **A prévia é a janela do toolkit:** os textos e o layout do PSAppDeployToolkit 4.1.8, no idioma das janelas, em três momentos de uma instalação obrigatória (um aplicativo aberto, nada aberto, o último aviso depois dos adiamentos). A prévia também avisa quando a janela nem aparece.
-- **Progresso ao gerar:** a etapa, a porcentagem e o tempo restante, também na barra de status e na barra de tarefas.
-- **Teste como o Intune:** no Windows Sandbox o pacote roda como SYSTEM, e as janelas aparecem como numa instalação obrigatória.
-- **Os planos do tenant:** *Verificar a assinatura* lista os planos do Intune com o status deles e diz como reativar. A publicação tenta o envio de novo mais vezes, espera o app ficar publicado antes de atribuir, mantém o ícone numa atualização e nunca cria um app duas vezes.
-- **Validade do certificado:** 6, 12 ou 24 meses, escolhida na janela de conexão ao conectar ou renovar (12 por padrão). Uma política do tenant que a limite é explicada.
-
-Lista completa: [CHANGELOG.md](https://github.com/sesantanajr/J365-IntunePSApp/blob/main/CHANGELOG.md). Como conectar: [docs/INTUNE-PUBLISH.md](https://github.com/sesantanajr/J365-IntunePSApp/blob/main/docs/INTUNE-PUBLISH.md#publicar-no-intune).
-
-No Windows 11 com o **Controle Inteligente de Aplicativos** ligado, uma versão sem assinatura é bloqueada: veja o [docs/SIGNING.md](https://github.com/sesantanajr/J365-IntunePSApp/blob/main/docs/SIGNING.md).
+Based on PSAppDeployToolkit. Created by Sérgio Sant'Ana Junior — Jornada 365.

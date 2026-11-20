@@ -18,20 +18,20 @@
   <SolidColorBrush x:Key="OnBrand" Color="#FFFFFF"/>
 
   <!-- ===================== Neutrals ===================== -->
-  <SolidColorBrush x:Key="PageBg" Color="#0B0F18"/>
-  <SolidColorBrush x:Key="CardBg" Color="#121826"/>
+  <SolidColorBrush x:Key="PageBg" Color="#10141E"/>
+  <SolidColorBrush x:Key="CardBg" Color="#192130"/>
   <SolidColorBrush x:Key="Subtle" Color="#161D2C"/>
   <SolidColorBrush x:Key="Subtle2" Color="#1C2435"/>
   <SolidColorBrush x:Key="Ink" Color="#EEF2F8"/>
   <SolidColorBrush x:Key="Ink2" Color="#C7D0DF"/>
-  <SolidColorBrush x:Key="Muted" Color="#8F9BB1"/>
-  <SolidColorBrush x:Key="Faint" Color="#667289"/>
-  <SolidColorBrush x:Key="Line" Color="#222B3D"/>
+  <SolidColorBrush x:Key="Muted" Color="#A8B5CA"/>
+  <SolidColorBrush x:Key="Faint" Color="#8B9BB3"/>
+  <SolidColorBrush x:Key="Line" Color="#303C50"/>
   <SolidColorBrush x:Key="Line2" Color="#313C52"/>
   <SolidColorBrush x:Key="SurfaceHover" Color="#1A2233"/>
   <SolidColorBrush x:Key="SurfacePressed" Color="#20293B"/>
   <SolidColorBrush x:Key="SelectedBg" Color="#17213B"/>
-  <SolidColorBrush x:Key="InputBg" Color="#0F1521"/>
+  <SolidColorBrush x:Key="InputBg" Color="#141B28"/>
   <SolidColorBrush x:Key="TrackOff" Color="#3A4559"/>
   <SolidColorBrush x:Key="CaptionHover" Color="#16FFFFFF"/>
   <SolidColorBrush x:Key="StatusBarBg" Color="#0D121C"/>
@@ -74,7 +74,7 @@
   </LinearGradientBrush>
   <SolidColorBrush x:Key="SidebarText" Color="#A3AEC2"/>
   <SolidColorBrush x:Key="SidebarTextStrong" Color="#FFFFFF"/>
-  <SolidColorBrush x:Key="SidebarMuted" Color="#667289"/>
+  <SolidColorBrush x:Key="SidebarMuted" Color="#8B9BB3"/>
   <SolidColorBrush x:Key="SidebarHover" Color="#0FFFFFFF"/>
   <SolidColorBrush x:Key="SidebarActive" Color="#19FFFFFF"/>
   <SolidColorBrush x:Key="SidebarLine" Color="#14FFFFFF"/>

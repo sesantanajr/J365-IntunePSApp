@@ -383,6 +383,7 @@ namespace J365.IntunePSApp.Core
                 info.AppVersion = app.Version;
             info.Description = app.LocalizedDescription;
             info.Homepage = app.Homepage;
+            info.PrivacyUrl = app.PrivacyUrl;
 
             string arpName = null, arpVersion = null;
             if (inst != null)

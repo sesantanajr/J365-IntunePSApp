@@ -220,7 +220,7 @@ namespace J365.IntunePSApp.Core
                 "",
                 "    # Dialog titles.",
                 "    InstallName = ''",
-                $"    InstallTitle = {Lit((s.AppName + " " + s.AppVersion).Trim())}",
+                $"    InstallTitle = {Lit(s.AppName.Trim())}",
                 "",
                 "    # Script variables (do not change).",
                 "    DeployAppScriptFriendlyName = $MyInvocation.MyCommand.Name",

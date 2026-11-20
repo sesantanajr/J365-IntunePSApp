@@ -143,6 +143,13 @@ namespace J365.IntunePSApp
                 e.Handled = true;
                 return;
             }
+            if (Keyboard.Modifiers == ModifierKeys.Control && !IsModalOverlayOpen && PageHost.Content == Editor
+                && (e.Key == Key.S || e.Key == Key.O || e.Key == Key.N))
+            {
+                Editor.ProjectShortcut(e.Key);
+                e.Handled = true;
+                return;
+            }
             base.OnPreviewKeyDown(e);
         }
 

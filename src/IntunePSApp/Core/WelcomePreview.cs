@@ -107,7 +107,7 @@ namespace J365.IntunePSApp.Core
             bool listed = apps && moment != WelcomeMoment.AppClosed;
             bool canDefer = input.AllowDefer && moment != WelcomeMoment.LastNotice;
             bool counting = !canDefer && listed && countdown > TimeSpan.Zero;
-            string title = $"{input.AppName} {input.AppVersion}".Trim();
+            string title = (input.AppName ?? "").Trim();
             string company = string.IsNullOrWhiteSpace(input.Company) ? AppInfo.PsadtName : input.Company.Trim();
             string subtitle = Str("Prev_Subtitle", "CloseAppsPrompt", "Fluent", "Subtitle", "Install");
             subtitle = subtitle.Contains("{0}") ? string.Format(CultureInfo.InvariantCulture, subtitle, company)

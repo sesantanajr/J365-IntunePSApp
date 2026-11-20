@@ -18,6 +18,7 @@ namespace J365.IntunePSApp.Core
 {
     public static class Json
     {
+        private static readonly object SaveLock = new object();
         public static readonly JsonSerializerOptions Options = new JsonSerializerOptions
         {
             WriteIndented = true,
@@ -48,10 +49,17 @@ namespace J365.IntunePSApp.Core
         /// <summary>Atomic save: writes to a temporary file and swaps it in.</summary>
         public static void Save<TValue>(string path, TValue value)
         {
+            path = Path.GetFullPath(path);
             Directory.CreateDirectory(Path.GetDirectoryName(path));
-            string tmp = path + ".tmp";
-            File.WriteAllText(tmp, JsonSerializer.Serialize(value, Options), new UTF8Encoding(false));
-            File.Move(tmp, path, true);
+            // Concurrent saves must not share a staging file. Serialize before touching the destination.
+            string text = JsonSerializer.Serialize(value, Options);
+            string tmp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
+            {
+                File.WriteAllText(tmp, text, new UTF8Encoding(false));
+                lock (SaveLock) File.Move(tmp, path, true);
+            }
+            finally { if (File.Exists(tmp)) File.Delete(tmp); }
         }
     }
 

@@ -264,6 +264,7 @@ public static class Program
             Description = Trim(description ?? descriptionPt, 260),
             DescriptionPt = Trim(descriptionPt, 260),
             Homepage = S(defaultLocale, "PackageUrl") ?? S(defaultLocale, "PublisherUrl"),
+            PrivacyUrl = S(defaultLocale, "PrivacyUrl"),
             License = Trim(S(defaultLocale, "License"), 60),
             Moniker = S(defaultLocale, "Moniker"),
         };
@@ -390,6 +391,7 @@ public class CatalogApp
     [JsonPropertyName("d")] public string Description { get; set; }
     [JsonPropertyName("dpt")] public string DescriptionPt { get; set; }
     [JsonPropertyName("hp")] public string Homepage { get; set; }
+    [JsonPropertyName("pu")] public string PrivacyUrl { get; set; }
     [JsonPropertyName("lic")] public string License { get; set; }
     [JsonPropertyName("m")] public string Moniker { get; set; }
     [JsonPropertyName("tg")] public List<string> Tags { get; set; }

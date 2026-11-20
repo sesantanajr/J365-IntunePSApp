@@ -220,7 +220,7 @@ namespace J365.IntunePSApp.Tests
             // the left and Defer on the right; no countdown while the user can defer.
             var open = WelcomePreview.Build(adobe, WelcomeMoment.AppOpen, table);
             Assert.True(open.Shown);
-            Assert.Equal("Adobe Acrobat Reader 26.003.22110", open.Title);
+            Assert.Equal("Adobe Acrobat Reader", open.Title);
             Assert.Equal("Jornada 365 - Instalação do Aplicativo", open.Subtitle);
             Assert.StartsWith("Por favor, salve seu trabalho", open.Message);
             Assert.Equal("Adobe Acrobat Reader", open.AppName);

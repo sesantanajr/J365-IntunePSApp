@@ -1356,5 +1356,11 @@
   "Ed_ProjectLoaded": "Projeto carregado: {0}",
   "Ed_ProjectMissingInstaller": "O instalador deste projeto não foi encontrado. Selecione-o novamente na etapa 1 (as configurações são mantidas).",
   "Ed_ProjectInvalid": "Projeto inválido: {0}",
-  "Ed_ProjectSaved": "Projeto salvo."
+  "Ed_ProjectSaved": "Projeto salvo.",
+  "Ed_PrivacyUrl": "URL da política de privacidade",
+  "Ed_Developer": "Desenvolvedor",
+  "Ed_Owner": "Proprietário",
+  "Ed_MetadataHint": "Opcionais: desenvolvedor usa o editor; proprietário usa sua empresa. A URL de privacidade vem do catálogo quando disponível.",
+  "Ed_NameHint": "O Intune recebe nome e versão em campos separados. A janela de instalação mostra apenas o nome.",
+  "Val_WebUrl": "Informe uma URL HTTP ou HTTPS completa: {0}"
 }

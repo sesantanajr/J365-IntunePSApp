@@ -41,6 +41,17 @@
     <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
     <Setter Property="TextWrapping" Value="Wrap"/>
   </Style>
+  <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+    <Setter Property="Background" Value="{DynamicResource InputBg}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource Line2}"/>
+    <Setter Property="MinHeight" Value="36"/>
+    <Setter Property="SelectionBrush" Value="{DynamicResource Brand}"/>
+    <Style.Triggers>
+      <Trigger Property="IsKeyboardFocusWithin" Value="True">
+        <Setter Property="BorderBrush" Value="{DynamicResource Brand}"/>
+      </Trigger>
+    </Style.Triggers>
+  </Style>
   <Style x:Key="Label" TargetType="TextBlock">
     <Setter Property="FontSize" Value="13"/>
     <Setter Property="FontWeight" Value="SemiBold"/>

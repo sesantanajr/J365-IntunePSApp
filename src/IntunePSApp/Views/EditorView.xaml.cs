@@ -108,6 +108,9 @@ namespace J365.IntunePSApp.Views
                 TxtProcesses.Text = string.Join(", ", s.ProcessesToClose);
                 TxtDescription.Text = s.Description;
                 TxtHomepage.Text = s.Homepage;
+                TxtPrivacy.Text = s.PrivacyUrl;
+                TxtDeveloper.Text = s.Developer;
+                TxtOwner.Text = s.Owner;
                 TxtAppIcon.Text = s.AppIconPath;
                 SelectTag(CmbMinOs, s.MinimumOs);
                 ChkWaitChildren.IsChecked = s.WaitForChildProcesses;
@@ -277,6 +280,9 @@ namespace J365.IntunePSApp.Views
             s.ProcessesToClose = Names.ParseProcessList(TxtProcesses.Text);
             s.Description = TxtDescription.Text.Trim();
             s.Homepage = TxtHomepage.Text.Trim();
+            s.PrivacyUrl = TxtPrivacy.Text.Trim();
+            s.Developer = TxtDeveloper.Text.Trim();
+            s.Owner = TxtOwner.Text.Trim();
             s.AppIconPath = TxtAppIcon.Text.Trim().Trim('"');
             s.MinimumOs = TagOf(CmbMinOs);
             s.WaitForChildProcesses = ChkWaitChildren.IsChecked == true;
@@ -607,7 +613,9 @@ namespace J365.IntunePSApp.Views
         private void UpdateHeader()
         {
             if (HeaderTitle == null) return;
-            var name = $"{TxtName.Text} {TxtVersion.Text}".Trim();
+            var name = TxtName.Text.Trim();
+            HeaderVersion.Text = TxtVersion.Text.Trim();
+            VersionBadge.Visibility = string.IsNullOrWhiteSpace(TxtVersion.Text) ? Visibility.Collapsed : Visibility.Visible;
             HeaderTitle.Text = string.IsNullOrEmpty(name) ? T("Nav_Editor") : name;
             var file = _s?.InstallerPath;
             HeaderSub.Text = string.IsNullOrEmpty(file)
@@ -1124,7 +1132,11 @@ namespace J365.IntunePSApp.Views
             string mode = s.DeployMode switch { "Silent" => T("Opt_ModeSilent"), "Interactive" => T("Opt_ModeInteractive"), "WhenNeeded" => T("Opt_ModeWhenNeeded"), _ => T("Opt_ModeAuto") };
             SummaryList.ItemsSource = new List<Tuple<string, string>>
             {
-                Tuple.Create(T("Rev_App"), $"{s.AppName} {s.AppVersion}  ·  {s.AppVendor}"),
+                Tuple.Create(T("Sum_F_Name"), s.AppName),
+                Tuple.Create(T("Ed_Version"), s.AppVersion),
+                Tuple.Create(T("Ed_Developer"), string.IsNullOrWhiteSpace(s.Developer) ? s.AppVendor : s.Developer),
+                Tuple.Create(T("Ed_Owner"), string.IsNullOrWhiteSpace(s.Owner) ? s.CompanyName : s.Owner),
+                Tuple.Create(T("Ed_PrivacyUrl"), string.IsNullOrWhiteSpace(s.PrivacyUrl) ? "—" : s.PrivacyUrl),
                 Tuple.Create(T("Rev_Installer"), string.IsNullOrEmpty(s.InstallerPath) ? "—" : $"{Path.GetFileName(s.InstallerPath)}  ({s.InstallerType}) {s.InstallArgs}"),
                 Tuple.Create(T("Ed_InstallFor"), (s.InstallBehavior == "User" ? T("Rev_V_User") : T("Rev_V_System")) + "  ·  " + PackageBuilder.MinimumOsLabel(s.MinimumOs) + "+"),
                 Tuple.Create(T("Rev_Experience"), mode + (s.ProcessesToClose.Count > 0 ? T("Rev_V_Closes", string.Join(", ", s.ProcessesToClose)) : "") + (s.AllowDefer ? T("Rev_V_Defer", s.DeferTimes) : "")),
@@ -1746,6 +1758,14 @@ namespace J365.IntunePSApp.Views
                 Ui.Warn(T("Ed_ProjectInvalid", ex.Message));
                 return false;
             }
+        }
+
+        public void ProjectShortcut(System.Windows.Input.Key key)
+        {
+            if (IsBuilding || !IsEnabled) return;
+            if (key == System.Windows.Input.Key.S) SaveProject_Click(this, new RoutedEventArgs());
+            else if (key == System.Windows.Input.Key.O) OpenProject_Click(this, new RoutedEventArgs());
+            else if (key == System.Windows.Input.Key.N) New_Click(this, new RoutedEventArgs());
         }
 
         private void OpenProject_Click(object sender, RoutedEventArgs e)

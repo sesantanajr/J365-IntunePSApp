@@ -43,17 +43,22 @@
         </Grid>
       </Border>
       <StackPanel Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Center">
-        <TextBlock x:Name="HeaderTitle" Style="{StaticResource PageTitle}" FontSize="24" TextTrimming="CharacterEllipsis"/>
+        <DockPanel>
+          <Border x:Name="VersionBadge" DockPanel.Dock="Right" Background="{DynamicResource BrandSoft}" BorderBrush="{DynamicResource Line2}" BorderThickness="1" CornerRadius="8" Padding="10,4" Margin="12,0,12,0" VerticalAlignment="Center">
+            <TextBlock x:Name="HeaderVersion" Foreground="{DynamicResource BrandText}" FontSize="12" FontWeight="SemiBold" ToolTip="{l:T Ed_Version}"/>
+          </Border>
+          <TextBlock x:Name="HeaderTitle" Style="{StaticResource PageTitle}" FontSize="24" TextTrimming="CharacterEllipsis"/>
+        </DockPanel>
         <TextBlock x:Name="HeaderSub" Style="{StaticResource MutedText}" FontSize="13"/>
       </StackPanel>
       <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
         <Button Style="{StaticResource GhostButton}" Click="New_Click" ToolTip="{l:T Ed_NewTip}">
           <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE710;" Style="{StaticResource Icon}" FontSize="13" Margin="0,0,6,0"/><TextBlock Text="{l:T Ed_New}"/></StackPanel>
         </Button>
-        <Button Style="{StaticResource GhostButton}" Click="OpenProject_Click" Margin="4,0,0,0">
+        <Button Style="{StaticResource GhostButton}" Click="OpenProject_Click" ToolTip="Ctrl+O" Margin="4,0,0,0">
           <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8E5;" Style="{StaticResource Icon}" FontSize="13" Margin="0,0,6,0"/><TextBlock Text="{l:T Ed_OpenProject}"/></StackPanel>
         </Button>
-        <Button Style="{StaticResource GhostButton}" Click="SaveProject_Click" Margin="4,0,0,0">
+        <Button Style="{StaticResource GhostButton}" Click="SaveProject_Click" ToolTip="Ctrl+S" Margin="4,0,0,0">
           <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE74E;" Style="{StaticResource Icon}" FontSize="13" Margin="0,0,6,0"/><TextBlock Text="{l:T Ed_SaveProject}"/></StackPanel>
         </Button>
       </StackPanel>
@@ -200,10 +205,19 @@
             <Border Style="{StaticResource Section}">
               <StackPanel>
                 <TextBlock Text="{l:T Ed_IntuneInfo}" Style="{StaticResource H2}"/>
+                <Border Style="{StaticResource Notice}" Margin="0,12,0,0"><TextBlock Text="{l:T Ed_NameHint}" TextWrapping="Wrap" Foreground="{DynamicResource Ink2}"/></Border>
                 <TextBlock Text="{l:T Ed_Description}" Style="{StaticResource Label}"/>
                 <TextBox x:Name="TxtDescription" Style="{StaticResource Multi}" MinHeight="54"/>
                 <TextBlock Text="{l:T Ed_Homepage}" Style="{StaticResource Label}"/>
                 <TextBox x:Name="TxtHomepage"/>
+                <TextBlock Text="{l:T Ed_PrivacyUrl}" Style="{StaticResource Label}"/>
+                <TextBox x:Name="TxtPrivacy"/>
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                  <StackPanel><TextBlock Text="{l:T Ed_Developer}" Style="{StaticResource Label}"/><TextBox x:Name="TxtDeveloper"/></StackPanel>
+                  <StackPanel Grid.Column="2"><TextBlock Text="{l:T Ed_Owner}" Style="{StaticResource Label}"/><TextBox x:Name="TxtOwner"/></StackPanel>
+                </Grid>
+                <TextBlock Text="{l:T Ed_MetadataHint}" Style="{StaticResource Hint}"/>
                 <!-- Application icon (Intune and Company Portal). Empty = the icon of the installer, or a tile with the initials. -->
                 <TextBlock Text="{l:T Ed_AppIcon}" Style="{StaticResource Label}"/>
                 <Grid>

@@ -784,6 +784,12 @@ try
         )
     }
     if ([string]$app.informationUrl -match '^https?://') { $body['informationUrl'] = [string]$app.informationUrl }
+    # Optional fields are omitted for old packages, preserving existing tenant metadata on update.
+    foreach ($field in 'developer', 'owner')
+    {
+        if (-not [string]::IsNullOrWhiteSpace([string]$app.$field)) { $body[$field] = [string]$app.$field }
+    }
+    if ([string]$app.privacyInformationUrl -match '^https?://') { $body['privacyInformationUrl'] = [string]$app.privacyInformationUrl }
     if ($icon) { $body['largeIcon'] = [ordered]@{ type = 'image/png'; value = [Convert]::ToBase64String([System.IO.File]::ReadAllBytes($icon)) } }
     elseif ($targetId)
     {

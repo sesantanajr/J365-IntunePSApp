@@ -33,12 +33,15 @@ namespace J365.IntunePSApp.Core
             var rows = new List<(string, string, string)>
             {
                 (g1, T("Sum_F_File"), Path.GetFileName(r.IntuneWinFile)),
-                (g2, T("Sum_F_Name"), $"{s.AppName} {s.AppVersion}".Trim()),
+                (g2, T("Sum_F_Name"), s.AppName.Trim()),
                 (g2, T("Sum_F_Description"), desc),
                 (g2, T("Sum_F_Publisher"), string.IsNullOrWhiteSpace(s.AppVendor) ? s.AppName : s.AppVendor),
                 (g2, T("Sum_F_AppVersion"), s.AppVersion),
             };
             if (!string.IsNullOrWhiteSpace(s.Homepage)) rows.Add((g2, T("Sum_F_InfoUrl"), s.Homepage));
+            if (!string.IsNullOrWhiteSpace(s.PrivacyUrl)) rows.Add((g2, T("Ed_PrivacyUrl"), s.PrivacyUrl));
+            rows.Add((g2, T("Ed_Developer"), string.IsNullOrWhiteSpace(s.Developer) ? s.AppVendor : s.Developer));
+            rows.Add((g2, T("Ed_Owner"), string.IsNullOrWhiteSpace(s.Owner) ? s.CompanyName : s.Owner));
             rows.Add((g2, T("Sum_F_Logo"), r.AppIcon != null ? T("Sum_V_LogoFile", Path.GetFileName(r.AppIcon)) : T("Sum_V_Optional")));
             rows.Add((g3, T("Sum_F_InstallCmd"), cmd.Install));
             rows.Add((g3, T("Sum_F_UninstallCmd"), cmd.Uninstall));

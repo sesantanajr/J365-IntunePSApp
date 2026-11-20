@@ -2,6 +2,17 @@
 
 All notable changes to J365 IntunePSApp. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.5.0 - 2026-11-20
+
+- Intune names no longer append the version: `Amazon WorkSpaces` and `5.37.0.3866` go to separate fields. Generated installation titles and previews use the app name only. Package filenames still contain the version.
+- Editable developer, owner and privacy-policy URL, persisted in projects and included in metadata and manual instructions. Developer defaults to publisher, owner to company. The catalog builder imports the manifest PrivacyUrl when present; no URL is invented.
+- HTTP(S) URL validation before generation. Old projects remain readable; optional fields absent from older packages do not overwrite tenant metadata.
+- Editor header separates version into a badge. Improved dark surface contrast, consistent input backgrounds, visible input focus, and explicit name/version/owner fields in the review step. Ctrl+S, Ctrl+O and Ctrl+N operate in the editor, guarded during builds and modal overlays.
+- Atomic JSON saving uses unique staging files and serializes replacements within the process; concurrent saves no longer share a temporary file. Failed staging files are cleaned up.
+- Regression coverage for metadata generation, invalid URLs, old project compatibility and concurrent saves.
+
+Existing apps in a tenant are not renamed by installing this release. Regenerate the package and explicitly select the existing Intune app to update it, or edit its name in Intune. Review the target before publishing: older apps may still have a version in their name.
+
 ## 2.4.5 - 2026-11-20
 
 ### Why this version

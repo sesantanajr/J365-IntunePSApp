@@ -1356,5 +1356,11 @@
   "Ed_ProjectLoaded": "Project loaded: {0}",
   "Ed_ProjectMissingInstaller": "The installer of this project was not found. Select it again on step 1 (your settings are kept).",
   "Ed_ProjectInvalid": "Invalid project: {0}",
-  "Ed_ProjectSaved": "Project saved."
+  "Ed_ProjectSaved": "Project saved.",
+  "Ed_PrivacyUrl": "Privacy policy URL",
+  "Ed_Developer": "Developer",
+  "Ed_Owner": "Owner",
+  "Ed_MetadataHint": "Optional: developer defaults to publisher; owner defaults to your company. Privacy URL comes from the catalog when available.",
+  "Ed_NameHint": "Intune receives the app name and version in separate fields. The installation dialog shows only the name.",
+  "Val_WebUrl": "Enter a complete HTTP or HTTPS URL: {0}"
 }

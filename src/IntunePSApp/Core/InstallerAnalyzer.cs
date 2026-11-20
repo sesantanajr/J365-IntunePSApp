@@ -333,6 +333,7 @@ namespace J365.IntunePSApp.Core
             s.DetectionFilePath = info.DetectionFilePath ?? "";
             s.Description = info.Description ?? "";
             s.Homepage = info.Homepage ?? "";
+            s.PrivacyUrl = info.PrivacyUrl ?? "";
             if (info.RemovePrevious.HasValue) s.RemovePreviousVersions = info.RemovePrevious.Value;
         }
 

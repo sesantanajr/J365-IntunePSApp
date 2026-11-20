@@ -76,6 +76,9 @@ namespace J365.IntunePSApp.Core
         public string Publisher { get; set; }
         public string AppVersion { get; set; }
         public string InformationUrl { get; set; }
+        public string PrivacyInformationUrl { get; set; }
+        public string Developer { get; set; }
+        public string Owner { get; set; }
         public string Notes { get; set; }
         public string IntuneWinFile { get; set; }
         public string IntuneWinSha256 { get; set; }
@@ -148,6 +151,11 @@ namespace J365.IntunePSApp.Core
                 v.Errors.Add(T("Val_InstallerFolderInOutput"));
             if (string.IsNullOrWhiteSpace(s.AppName)) v.Errors.Add(T("Val_AppName"));
             if (string.IsNullOrWhiteSpace(s.AppVersion)) v.Errors.Add(T("Val_AppVersion"));
+
+            foreach (var url in new[] { s.Homepage, s.PrivacyUrl })
+                if (!string.IsNullOrWhiteSpace(url) && (!Uri.TryCreate(url, UriKind.Absolute, out var uri)
+                    || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp) || string.IsNullOrEmpty(uri.Host)))
+                    v.Errors.Add(T("Val_WebUrl", url));
 
             string pat = s.UninstallPattern ?? "";
             if (string.IsNullOrWhiteSpace(pat)) v.Errors.Add(T("Val_UninstallPattern"));
@@ -451,11 +459,14 @@ namespace J365.IntunePSApp.Core
                 Generator = $"{AppInfo.Name} {AppInfo.Version}",
                 GeneratedUtc = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture),
                 PsadtVersion = r.PsadtVersion,
-                DisplayName = $"{s.AppName} {s.AppVersion}".Trim(),
+                DisplayName = s.AppName.Trim(),
                 Description = desc,
                 Publisher = string.IsNullOrWhiteSpace(s.AppVendor) ? s.AppName : s.AppVendor,
                 AppVersion = s.AppVersion,
                 InformationUrl = s.Homepage ?? "",
+                PrivacyInformationUrl = s.PrivacyUrl ?? "",
+                Developer = string.IsNullOrWhiteSpace(s.Developer) ? s.AppVendor : s.Developer,
+                Owner = string.IsNullOrWhiteSpace(s.Owner) ? s.CompanyName : s.Owner,
                 Notes = $"Packaged with {AppInfo.Name} {AppInfo.Version} ({AppInfo.PsadtName} {r.PsadtVersion})",
                 IntuneWinFile = Path.GetFileName(r.IntuneWinFile),
                 IntuneWinSha256 = r.Sha256,
