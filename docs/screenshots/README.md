@@ -18,3 +18,7 @@ Source: [interface-captures artifact, workflow run 44848884088](https://github.c
 `pt-BR/` uses the `dark` / `light` artifact folders; `en/` uses `en-dark` / `en-light`. The demonstration project's name is user data and stays in Portuguese when the interface language changes. The sample package on the stale-result screen is a UI test fixture, not an installable package. Connection screens are staged UI states.
 
 Obsolete, unreferenced screenshots were removed; historical versions remain in Git history. To regenerate, use the build workflow and its `interface-captures` artifact. See [BUILDING.md](../BUILDING.md).
+
+## Expanded product showcase
+
+The primary Portuguese README and separate English README display 14 screenshots each without collapsed galleries. Additional captures from the same 2.5.1 run cover application metadata (`03-editor-2-end`), experience (`03-editor-3`), actions (`03-editor-4`), uninstall (`03-editor-5`), detection (`03-editor-6`), connection choices (`08-connect-choose`), Intune settings (`06-settings-intune`), appearance (`06-settings-appearance`) and defaults (`06-settings-defaults`). All added PNGs are unmodified captures. The SVG covers are promotional workflow illustrations, not application screenshots.
