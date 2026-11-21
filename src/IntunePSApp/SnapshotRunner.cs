@@ -150,6 +150,30 @@ namespace J365.IntunePSApp
                 }
                 // Walking through the steps changes nothing: the package must not count as "unsaved".
                 File.WriteAllText(Path.Combine(dir, "editor-state.txt"), "unsaved=" + w.Editor.HasUnsavedChanges);
+                // Disposable UI regression fixture: no installer, test script or tenant operation is executed.
+                if (App.HasArg("--snapshot-state-checks"))
+                {
+                    var settings = w.Editor.Collect();
+                    string fixture = Path.Combine(AppPaths.Temp, "workspace-check-" + Guid.NewGuid().ToString("N"));
+                    Directory.CreateDirectory(Path.Combine(fixture, PackageLayout.PackageDir));
+                    Directory.CreateDirectory(Path.Combine(fixture, PackageLayout.IntuneDir));
+                    File.WriteAllText(Path.Combine(fixture, PackageLayout.IntuneDir, "fixture.intunewin"), "UI fixture only");
+                    string fixtureProject = Path.Combine(fixture, PackageLayout.ProjectFile);
+                    Json.Save(fixtureProject, settings);
+                    PackageRevision.Save(fixture, settings);
+                    w.Editor.LoadProject(fixtureProject);
+                    if (!w.Editor.CurrentBuildMatchesSettings) throw new InvalidOperationException("A freshly loaded build does not match its settings.");
+                    var owner = (System.Windows.Controls.TextBox)w.Editor.FindName("TxtOwner");
+                    owner.Text += " changed";
+                    if (!w.Editor.HasUnsavedChanges || w.Editor.CurrentBuildMatchesSettings) throw new InvalidOperationException("Editing did not invalidate the build.");
+                    w.Editor.ProjectShortcut(System.Windows.Input.Key.S);
+                    if (w.Editor.HasUnsavedChanges || w.Editor.CurrentBuildMatchesSettings) throw new InvalidOperationException("Saving incorrectly refreshed the built package.");
+                    await Shot("04-editor-needs-rebuild");
+                    w.Editor.LoadProject(fixtureProject);
+                    if (w.Editor.LastIntuneFolder != null) throw new InvalidOperationException("Reopening offered a stale build.");
+                    await Shot("04-editor-reopened-changes");
+                    File.WriteAllText(Path.Combine(dir, "workspace-checks.txt"), "load, edit, save, stale build and reopen: passed");
+                }
                 if (App.HasArg("--snapshot-build"))
                 {
                     var s = w.Editor.Collect();

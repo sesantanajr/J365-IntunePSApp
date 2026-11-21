@@ -24,12 +24,17 @@
     </DockPanel>
 
     <Grid x:Name="FilterBar" Grid.Row="1" Margin="0,0,0,12">
-      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
       <Grid>
         <TextBox x:Name="Filter" Padding="38,8,12,8" VerticalContentAlignment="Center" TextChanged="Filter_TextChanged"/>
         <TextBlock Text="&#xE721;" Style="{StaticResource Icon}" Foreground="{DynamicResource Muted}" Margin="13,0,0,0" HorizontalAlignment="Left" IsHitTestVisible="False"/>
         <TextBlock x:Name="FilterHint" Text="{l:T Packages_FilterHint}" Foreground="{DynamicResource Faint}" Margin="40,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
       </Grid>
+      <ComboBox x:Name="Sort" Grid.Column="2" MinWidth="150" Margin="16,0,0,0" SelectedIndex="0" SelectionChanged="Sort_Changed" AutomationProperties.Name="{l:T Packages_Sort}">
+        <ComboBoxItem Content="{l:T Packages_SortRecent}"/>
+        <ComboBoxItem Content="{l:T Packages_SortName}"/>
+        <ComboBoxItem Content="{l:T Packages_SortUpdates}"/>
+      </ComboBox>
       <CheckBox x:Name="OnlyOutdated" Grid.Column="1" Style="{StaticResource Switch}" Content="{l:T Packages_OnlyOutdated}" Margin="18,0,0,0" VerticalAlignment="Center" Checked="OnlyOutdated_Changed" Unchecked="OnlyOutdated_Changed"/>
     </Grid>
 
@@ -42,7 +47,18 @@
       </StackPanel>
     </Border>
 
-    <ListBox x:Name="List" Grid.Row="2" BorderThickness="0" Background="Transparent" ItemContainerStyle="{StaticResource PlainListItem}" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+    <Border x:Name="NoResults" Grid.Row="2" Style="{StaticResource Card}" VerticalAlignment="Top" Padding="32" Visibility="Collapsed">
+      <StackPanel HorizontalAlignment="Center">
+        <TextBlock Text="&#xE721;" Style="{StaticResource Icon}" FontSize="32" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center"/>
+        <TextBlock Text="{l:T Packages_NoResults}" Style="{StaticResource H2}" Margin="0,12,0,6"/>
+        <TextBlock Text="{l:T Packages_NoResultsHint}" Style="{StaticResource MutedText}" TextAlignment="Center"/>
+        <Button Content="{l:T Packages_ClearFilters}" Style="{StaticResource SecondaryButton}" HorizontalAlignment="Center" Margin="0,16,0,0" Click="ClearFilter_Click"/>
+      </StackPanel>
+    </Border>
+    <Border x:Name="RefreshError" Grid.Row="2" Background="{DynamicResource WarningSoft}" CornerRadius="10" Padding="16" VerticalAlignment="Top" Visibility="Collapsed" Panel.ZIndex="1">
+      <TextBlock x:Name="RefreshErrorText" Foreground="{DynamicResource Warning}" TextWrapping="Wrap"/>
+    </Border>
+    <ListBox x:Name="List" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" Grid.Row="2" BorderThickness="0" Background="Transparent" ItemContainerStyle="{StaticResource PlainListItem}" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
       <ListBox.ItemTemplate>
         <DataTemplate>
           <Border Style="{StaticResource FlatCard}" Margin="0,0,0,10" Padding="18,14">
@@ -64,7 +80,10 @@
               </Border>
               <StackPanel Grid.Column="1" Margin="14,0" VerticalAlignment="Center">
                 <StackPanel Orientation="Horizontal">
-                  <TextBlock Text="{Binding Title}" Style="{StaticResource H3}" FontSize="15" TextTrimming="CharacterEllipsis"/>
+                  <TextBlock Text="{Binding AppName}" Style="{StaticResource H3}" FontSize="15" TextTrimming="CharacterEllipsis"/>
+                  <Border Style="{StaticResource Chip}" Background="{DynamicResource BrandSoft}" Margin="10,0,0,0">
+                    <TextBlock Text="{Binding AppVersion}" Foreground="{DynamicResource BrandText}" FontSize="11.5"/>
+                  </Border>
                   <Border Style="{StaticResource Chip}" Background="{DynamicResource WarningSoft}" Margin="10,0,0,0" VerticalAlignment="Center"
                           Visibility="{Binding HasUpdate, Converter={StaticResource BoolToVis}}" ToolTip="{l:T Packages_UpdateTip}">
                     <TextBlock Foreground="{DynamicResource Warning}" FontSize="11.5" FontWeight="SemiBold">

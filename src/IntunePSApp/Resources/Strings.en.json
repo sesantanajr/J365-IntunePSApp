@@ -1362,5 +1362,22 @@
   "Ed_Owner": "Owner",
   "Ed_MetadataHint": "Optional: developer defaults to publisher; owner defaults to your company. Privacy URL comes from the catalog when available.",
   "Ed_NameHint": "Intune receives the app name and version in separate fields. The installation dialog shows only the name.",
-  "Val_WebUrl": "Enter a complete HTTP or HTTPS URL: {0}"
+  "Val_WebUrl": "Enter a complete HTTP or HTTPS URL: {0}",
+  "Ed_StateBuilding": "Building package • editing paused",
+  "Ed_StateStale": "Changed • rebuild the package",
+  "Ed_StateModified": "Unsaved changes",
+  "Ed_StateDraft": "New project",
+  "Ed_StateSaved": "Project saved",
+  "Ed_StateDraftHint": "Save to continue later • Ctrl+S",
+  "Ed_StateStaleHint": "Settings have changed since the last build. Build a new package before publishing or testing. Saving the project does not update the generated package.",
+  "Ed_SaveAs": "Save as…",
+  "Packages_Loading": "Loading your packages…",
+  "Packages_LoadFailed": "Could not refresh the list. Check the output folder and try Refresh. {0}",
+  "Packages_Sort": "Sort packages",
+  "Packages_SortRecent": "Most recent",
+  "Packages_SortName": "Name A–Z",
+  "Packages_SortUpdates": "Updates first",
+  "Packages_NoResults": "No matching packages",
+  "Packages_NoResultsHint": "Try a different name or remove the filters.",
+  "Packages_ClearFilters": "Clear filters"
 }

@@ -69,6 +69,33 @@ jobs:
       - name: Build the database generator
         run: dotnet build tools/CatalogBuilder -c Release
 
+      - name: Render interface smoke checks
+        timeout-minutes: 5
+        shell: pwsh
+        run: |
+          $env:J365_INTUNEPSAPP_DATA = Join-Path $env:RUNNER_TEMP 'j365-visual-data'
+          $demo = Join-Path $env:RUNNER_TEMP 'j365-visual-project.json'
+          @{ AppName = 'Aplicativo corporativo'; AppVersion = '3.2.0'; AppVendor = 'Sua organização'; CompanyName = 'Jornada 365'; Description = 'Distribuição gerenciada de aplicativos para sua organização.'; UninstallPattern = 'Corporate App*'; DetectionNamePattern = 'Corporate App*'; AccentColor = '#2563EB'; AppArch = 'x64' } | ConvertTo-Json | Set-Content $demo -Encoding utf8
+          foreach ($mode in @(@{ Theme = 'dark'; Size = '1440x900' }, @{ Theme = 'light'; Size = '1024x768' })) {
+            $folder = Join-Path $env:GITHUB_WORKSPACE "visual-checks/$($mode.Theme)"
+            $args = @('--snapshot', "`"$folder`"", '--snapshot-project', "`"$demo`"", '--theme', $mode.Theme, '--lang', 'pt-BR', '--snapshot-size', $mode.Size, '--no-update', '--no-setup', '--snapshot-state-checks')
+            $process = Start-Process src/IntunePSApp/bin/Release/net10.0-windows/J365.IntunePSApp.exe -ArgumentList $args -PassThru -WindowStyle Hidden
+            if (-not $process.WaitForExit(120000)) { $process.Kill(); throw 'Interface rendering timed out.' }
+            if ($process.ExitCode -ne 0) { throw "Interface rendering failed: $($process.ExitCode)" }
+            if (Test-Path "$folder/error.txt") { throw (Get-Content "$folder/error.txt" -Raw) }
+            if (-not (Test-Path "$folder/workspace-checks.txt")) { throw 'Workspace regression checks did not complete.' }
+            if (-not (Test-Path "$folder/03-editor-2.png")) { throw 'The editor capture is missing.' }
+            if ((Get-Content "$folder/editor-state.txt" -Raw).Trim() -ne 'unsaved=False') { throw 'Navigating changed the project.' }
+          }
+
+      - name: Upload interface captures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: interface-captures
+          path: visual-checks/
+          if-no-files-found: error
+
       # ------------------------------------------------------------------ companion scripts
       # Publish-ToIntune.ps1 and Sandbox-Test.ps1 are embedded in the executable and written into every package, so
       # they are signed before the build: signed, they keep full PowerShell where Windows App Control (or Smart App

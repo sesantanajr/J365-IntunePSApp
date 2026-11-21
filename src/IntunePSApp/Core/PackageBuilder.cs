@@ -273,7 +273,18 @@ namespace J365.IntunePSApp.Core
 
         // ------------------------------------------------------------------ build
 
+        private static readonly SemaphoreSlim BuildGate = new SemaphoreSlim(1, 1);
+
         public static async Task<BuildResult> BuildAsync(PackageSettings input, bool forceNative, CancellationToken ct, IProgress<BuildProgressInfo> progress = null)
+        {
+            // The package log and tool cache are process-wide. Capture inputs before waiting.
+            var snapshot = input.Clone();
+            await BuildGate.WaitAsync(ct);
+            try { return await BuildCoreAsync(snapshot, forceNative, ct, progress); }
+            finally { BuildGate.Release(); }
+        }
+
+        private static async Task<BuildResult> BuildCoreAsync(PackageSettings input, bool forceNative, CancellationToken ct, IProgress<BuildProgressInfo> progress)
         {
             var s = input.Clone();
             Migrate(s);
@@ -297,8 +308,8 @@ namespace J365.IntunePSApp.Core
 
             Directory.CreateDirectory(outRoot);
             string name = Names.Safe($"{s.AppName}_{s.AppVersion}");
-            string pkgRoot = Path.Combine(outRoot, name);
-            if (Directory.Exists(pkgRoot)) pkgRoot = Path.Combine(outRoot, $"{name}_{DateTime.Now:yyyyMMdd-HHmmss}");
+            using var reservation = PackageDirectory.Reserve(outRoot, name);
+            string pkgRoot = reservation.Folder;
             string srcDir = Path.Combine(pkgRoot, PackageLayout.PackageDir);
             string intuneDir = Path.Combine(pkgRoot, PackageLayout.IntuneDir);
             Directory.CreateDirectory(srcDir);
@@ -433,6 +444,7 @@ namespace J365.IntunePSApp.Core
                 result.SummaryHtml = html;
                 result.SummaryTxt = txt;
                 Json.Save(result.ProjectFile, s);
+                PackageRevision.Save(pkgRoot, s);
                 Log.Ok(T("Log_BuildDone", sw.Elapsed.TotalSeconds.ToString("N0", Culture())));
                 bp.Complete(T("Ed_Done"));
                 return result;
@@ -586,12 +598,13 @@ namespace J365.IntunePSApp.Core
 
         // ------------------------------------------------------------------ history
 
-        public static List<PackageHistoryItem> History(string outputRoot)
+        public static List<PackageHistoryItem> History(string outputRoot, CancellationToken ct = default)
         {
             var list = new List<PackageHistoryItem>();
             if (string.IsNullOrWhiteSpace(outputRoot) || !Directory.Exists(outputRoot)) return list;
-            foreach (var dir in Directory.GetDirectories(outputRoot))
+            foreach (var dir in Directory.EnumerateDirectories(outputRoot))
             {
+                ct.ThrowIfCancellationRequested();
                 string proj = PackageLayout.FindProject(dir);
                 if (proj == null) continue;
                 try
@@ -633,6 +646,7 @@ namespace J365.IntunePSApp.Core
             try
             {
                 string dir = Path.GetDirectoryName(projectFile);
+                if (!PackageRevision.Matches(dir, s)) return null;
                 string iw = PackageLayout.FindIntuneWin(dir);
                 string pkg = PackageLayout.FindPackageDir(dir);
                 if (iw == null || pkg == null) return null;

@@ -28,6 +28,10 @@ namespace J365.IntunePSApp.Views
         private readonly ObservableCollection<string> _extraFiles = new ObservableCollection<string>();
         private readonly ObservableCollection<LogEntry> _log = new ObservableCollection<LogEntry>();
         private BuildResult _last;
+        private string _builtSnapshot;
+        private string _projectPath;
+        private bool _requiresRebuild;
+        private readonly System.Windows.Threading.DispatcherTimer _stateTimer = new() { Interval = TimeSpan.FromMilliseconds(600) };
         private InstallerInfo _info;
         private string _installerIcon;
         private CancellationTokenSource _buildCts;
@@ -37,6 +41,7 @@ namespace J365.IntunePSApp.Views
 
         /// <summary>The Intune folder of the package generated last (capture mode), or null.</summary>
         internal string LastIntuneFolder => _last?.IntuneFolder;
+        internal bool CurrentBuildMatchesSettings => IsCurrentBuild;
 
         public EditorView()
         {
@@ -57,6 +62,9 @@ namespace J365.IntunePSApp.Views
             LoadSettings(ConfigStore.Current.NewPackage());
             GoStep(0);
             SizeChanged += (s, e) => UpdatePreviewVisibility();
+            _stateTimer.Tick += (s, e) => { if (IsVisible) UpdateWorkspaceState(); };
+            Loaded += (s, e) => { _stateTimer.Start(); UpdateWorkspaceState(); };
+            Unloaded += (s, e) => _stateTimer.Stop();
         }
 
         public void Refresh()
@@ -92,8 +100,11 @@ namespace J365.IntunePSApp.Views
 
         public void LoadSettings(PackageSettings s)
         {
+            if (IsBuilding) return;
             _loading = true;
             _s = s;
+            _projectPath = null;
+            _requiresRebuild = false;
             // Another package: the preview starts again at its first moment.
             _momentChosen = false;
             try
@@ -176,13 +187,43 @@ namespace J365.IntunePSApp.Views
                 var s = Collect();
                 // The output folder comes from Settings: changing it there is not an edit of this package.
                 s.OutputRoot = null;
-                return System.Text.Json.JsonSerializer.Serialize(s, Json.Options);
+                return System.Text.Json.JsonSerializer.Serialize(s, Json.Options) + "\n" + TxtDeferTimes.Text + "|" + TxtCountdown.Text + "|" + TxtRestart.Text;
             }
             catch { return null; }
         }
 
         /// <summary>Remembers the package as saved, generated or loaded: what changes after this is "unsaved".</summary>
-        private void MarkClean() => _cleanSnapshot = Snapshot();
+        private void MarkClean() { _cleanSnapshot = Snapshot(); UpdateWorkspaceState(); }
+
+        private bool IsCurrentBuild => !NumericInputErrors().Any() && _last != null && _builtSnapshot != null && _builtSnapshot == PackageRevision.Fingerprint(Collect());
+
+        private void UpdateWorkspaceState()
+        {
+            if (_s == null || WorkspaceState == null || _loading) return;
+            bool stale = _requiresRebuild || (_last != null && !IsCurrentBuild);
+            WorkspaceState.Text = IsBuilding ? T("Ed_StateBuilding") : stale ? T("Ed_StateStale")
+                : HasUnsavedChanges ? T("Ed_StateModified") : _projectPath == null ? T("Ed_StateDraft") : T("Ed_StateSaved");
+            WorkspaceState.SetResourceReference(TextBlock.ForegroundProperty, stale || HasUnsavedChanges ? "Warning" : "Muted");
+            WorkspacePath.Text = _projectPath == null ? T("Ed_StateDraftHint") : Path.GetFileName(_projectPath);
+            WorkspacePath.ToolTip = _projectPath;
+            StaleNotice.Visibility = stale ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private bool RequireCurrentBuild()
+        {
+            if (_last == null || IsBuilding) return false;
+            if (IsCurrentBuild) return true;
+            GoStep(ReviewStep);
+            UpdateWorkspaceState();
+            MainWindow.Current.Toast(T("Ed_StateStaleHint"), "warn");
+            return false;
+        }
+
+        private void SetEditingEnabled(bool enabled)
+        {
+            ProjectActions.IsEnabled = enabled;
+            for (int i = 0; i < ReviewStep; i++) ((UIElement)FindName("Step" + i)).IsEnabled = enabled;
+        }
 
         /// <summary>True when the open package has changes that were neither saved nor generated.</summary>
         public bool HasUnsavedChanges
@@ -198,6 +239,7 @@ namespace J365.IntunePSApp.Views
         /// <summary>Asks before the open package is replaced while it has unsaved changes. True when it may be replaced.</summary>
         public bool ConfirmDiscard()
         {
+            if (IsBuilding) { MainWindow.Current.Toast(T("Ed_BusyBuilding"), "warn"); return false; }
             if (!HasUnsavedChanges) return true;
             return Ui.Confirm(T("Ed_ConfirmDiscard", $"{TxtName.Text} {TxtVersion.Text}".Trim()), T("Ed_Discard"), T("Common_Cancel"), danger: true);
         }
@@ -355,6 +397,7 @@ namespace J365.IntunePSApp.Views
         /// </summary>
         public async Task AnalyzeFileAsync(string path, CatalogApp app = null, CatalogInstaller inst = null, bool keepCustomisations = false)
         {
+            if (IsBuilding) { MainWindow.Current.Toast(T("Ed_BusyBuilding"), "warn"); return; }
             var main = MainWindow.Current;
             main.SetStatus(T("Ed_Analyzing"), true);
             main.ShowBusy(T("Ed_AnalyzingTitle"), Path.GetFileName(path), false);
@@ -1125,6 +1168,13 @@ namespace J365.IntunePSApp.Views
 
         // ------------------------------------------------------------------ review and build
 
+        private IEnumerable<string> NumericInputErrors()
+        {
+            if (ChkDefer.IsChecked == true && !int.TryParse(TxtDeferTimes.Text, out _)) yield return T("Val_DeferTimes");
+            if (!int.TryParse(TxtCountdown.Text, out _)) yield return T("Val_CloseCountdown");
+            if (ChkRestart.IsChecked == true && !int.TryParse(TxtRestart.Text, out _)) yield return T("Val_RestartCountdown");
+        }
+
         private void BuildSummary()
         {
             var s = Collect();
@@ -1147,6 +1197,7 @@ namespace J365.IntunePSApp.Views
                 Tuple.Create(T("Sum_F_InstallCmd"), cmds.Install),
             };
             var v = PackageBuilder.Validate(s);
+            v.Errors.AddRange(NumericInputErrors());
             // Item1 is the kind (error, warn, ok): the template picks the theme colors for it.
             var items = v.Errors.Select(x => Tuple.Create("error", "✖  " + x, ""))
                 .Concat(v.Warnings.Select(x => Tuple.Create("warn", "⚠  " + x, ""))).ToList();
@@ -1159,6 +1210,7 @@ namespace J365.IntunePSApp.Views
             if (IsBuilding) return;
             var s = Collect();
             var v = PackageBuilder.Validate(s);
+            v.Errors.AddRange(NumericInputErrors());
             if (!v.IsValid)
             {
                 GoStep(ReviewStep);
@@ -1174,7 +1226,11 @@ namespace J365.IntunePSApp.Views
 
         public async Task<BuildResult> BuildAsync(PackageSettings s)
         {
+            if (IsBuilding) return null;
+            s = s.Clone();
             IsBuilding = true;
+            SetEditingEnabled(false);
+            UpdateWorkspaceState();
             BtnGenerate.IsEnabled = BtnGenerate2.IsEnabled = false;
             SetBuildButton(true);
             ResetSandboxStatus();
@@ -1207,6 +1263,9 @@ namespace J365.IntunePSApp.Views
                 var r = await Task.Run(() => PackageBuilder.BuildAsync(s, native, ct, progress));
                 _last = r;
                 _s = s;
+                _requiresRebuild = false;
+                _projectPath = r.ProjectFile;
+                _builtSnapshot = PackageRevision.Fingerprint(s);
                 MarkClean();
                 ShowResult(r);
                 LogTitle.Text = T("Ed_Done");
@@ -1235,6 +1294,10 @@ namespace J365.IntunePSApp.Views
             {
                 Log.Entry -= OnLog;
                 IsBuilding = false;
+                SetEditingEnabled(true);
+                UpdateWorkspaceState();
+                _buildCts?.Dispose();
+                _buildCts = null;
                 EndBuildProgress(main);
                 BtnGenerate.IsEnabled = BtnGenerate2.IsEnabled = true;
                 SetBuildButton(false);
@@ -1326,7 +1389,7 @@ namespace J365.IntunePSApp.Views
 
         private void RunTest(string type)
         {
-            if (_last == null) return;
+            if (!RequireCurrentBuild()) return;
             if (!Ui.Confirm(type == "Install" ? T("Ed_TestConfirmInstall") : T("Ed_TestConfirmUninstall"), danger: true)) return;
             try
             {
@@ -1340,7 +1403,7 @@ namespace J365.IntunePSApp.Views
         /// <summary>Installs the package inside Windows Sandbox (a disposable Windows), without touching this computer.</summary>
         private async void Sandbox_Click(object sender, RoutedEventArgs e)
         {
-            if (_last == null) return;
+            if (!RequireCurrentBuild()) return;
             switch (SandboxService.State)
             {
                 case SandboxState.NotSupported:
@@ -1488,7 +1551,7 @@ namespace J365.IntunePSApp.Views
 
         private async void Publish_Click(object sender, RoutedEventArgs e)
         {
-            if (_last == null || _publishRunning) return;
+            if (_publishRunning || !RequireCurrentBuild()) return;
             // Nothing set up yet, the registration gone, or a certificate that cannot be used: the connection comes first
             // (the certificate is the recommended way). A user connection without a session signs in again in the dialog.
             if (IntuneConnection.NeedsSetup && !ConnectWindow.Run(Window.GetWindow(this))) return;
@@ -1744,11 +1807,15 @@ namespace J365.IntunePSApp.Views
                 DetResult.Visibility = Visibility.Collapsed;
                 DropText.Text = string.IsNullOrEmpty(s.InstallerPath) ? T("Ed_DropHere") : Path.GetFileName(s.InstallerPath);
                 // A project inside a package folder brings the previous result back (commands, tests, publishing).
+                _projectPath = path;
+                _requiresRebuild = !PackageRevision.Matches(Path.GetDirectoryName(path), s);
                 _last = PackageBuilder.TryLoadResult(path, s);
+                _builtSnapshot = _last == null ? null : PackageRevision.Fingerprint(Collect());
+                UpdateWorkspaceState();
                 if (_last != null) { ShowResult(_last); ShowLastSandboxResult(_last.PackageFolder); ShowLastPublishResult(_last.IntuneFolder); }
                 else ResultCard.Visibility = Visibility.Collapsed;
                 main.Navigate("editor");
-                GoStep(_last != null ? ReviewStep : 1);
+                GoStep(_last != null || _requiresRebuild ? ReviewStep : 1);
                 if (!string.IsNullOrEmpty(s.InstallerPath) && !File.Exists(s.InstallerPath)) main.Toast(T("Ed_ProjectMissingInstaller"), "warn");
                 else if (!quiet) main.Toast(T("Ed_ProjectLoaded", $"{s.AppName} {s.AppVersion}".Trim()), "ok");
                 return true;
@@ -1763,7 +1830,7 @@ namespace J365.IntunePSApp.Views
         public void ProjectShortcut(System.Windows.Input.Key key)
         {
             if (IsBuilding || !IsEnabled) return;
-            if (key == System.Windows.Input.Key.S) SaveProject_Click(this, new RoutedEventArgs());
+            if (key == System.Windows.Input.Key.S) SaveProject((System.Windows.Input.Keyboard.Modifiers & System.Windows.Input.ModifierKeys.Shift) != 0);
             else if (key == System.Windows.Input.Key.O) OpenProject_Click(this, new RoutedEventArgs());
             else if (key == System.Windows.Input.Key.N) New_Click(this, new RoutedEventArgs());
         }
@@ -1775,12 +1842,23 @@ namespace J365.IntunePSApp.Views
             if (dlg.ShowDialog(Window.GetWindow(this)) == true) LoadProject(dlg.FileName, quiet: false, confirmed: true);
         }
 
-        private void SaveProject_Click(object sender, RoutedEventArgs e)
+        private void SaveProject_Click(object sender, RoutedEventArgs e) => SaveProject(false);
+        private void SaveAs_Click(object sender, RoutedEventArgs e) => SaveProject(true);
+
+        private void SaveProject(bool saveAs)
         {
+            if (IsBuilding) return;
+            var errors = NumericInputErrors().ToList();
+            if (errors.Count > 0) { Ui.Warn(string.Join("\n", errors)); return; }
             var s = Collect();
-            var dlg = new SaveFileDialog { Filter = T("Filter_Project") + "|*.json", FileName = "project_" + Names.Safe($"{s.AppName}_{s.AppVersion}") + ".json" };
-            if (dlg.ShowDialog(Window.GetWindow(this)) != true) return;
-            try { Json.Save(dlg.FileName, s); MarkClean(); MainWindow.Current.Toast(T("Ed_ProjectSaved"), "ok"); }
+            string path = _projectPath;
+            if (saveAs || string.IsNullOrEmpty(path))
+            {
+                var dlg = new SaveFileDialog { Filter = T("Filter_Project") + "|*.json", FileName = "project_" + Names.Safe($"{s.AppName}_{s.AppVersion}") + ".json" };
+                if (dlg.ShowDialog(Window.GetWindow(this)) != true) return;
+                path = dlg.FileName;
+            }
+            try { Json.Save(path, s); _projectPath = path; MarkClean(); MainWindow.Current.Toast(T("Ed_ProjectSaved"), "ok"); }
             catch (Exception ex) { Ui.Error(ex.Message); }
         }
 

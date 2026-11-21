@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using J365.IntunePSApp.Core;
@@ -14,12 +16,37 @@ namespace J365.IntunePSApp.Views
     {
         private List<PackageHistoryItem> _all = new List<PackageHistoryItem>();
 
-        public PackagesView() { InitializeComponent(); }
-
-        public void Refresh()
+        private CancellationTokenSource _refreshCts;
+        public PackagesView()
         {
-            _all = PackageBuilder.History(ConfigStore.Current.OutputFolder);
-            ApplyFilter();
+            InitializeComponent();
+            Unloaded += (s, e) => _refreshCts?.Cancel();
+        }
+
+        public async void Refresh()
+        {
+            _refreshCts?.Cancel();
+            var source = new CancellationTokenSource();
+            _refreshCts = source;
+            string root = ConfigStore.Current.OutputFolder;
+            Subtitle.Text = T("Packages_Loading");
+            RefreshError.Visibility = Visibility.Collapsed;
+            try
+            {
+                var items = await Task.Run(() => PackageBuilder.History(root, source.Token), source.Token);
+                if (source.IsCancellationRequested || _refreshCts != source) return;
+                _all = items;
+                ApplyFilter();
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                if (_refreshCts != source || source.IsCancellationRequested) return;
+                RefreshErrorText.Text = T("Packages_LoadFailed", ex.Message);
+                RefreshError.Visibility = Visibility.Visible;
+                Subtitle.Text = root;
+            }
+            finally { if (_refreshCts == source) _refreshCts = null; source.Dispose(); }
         }
 
         public void OnLanguageChanged() => Refresh();
@@ -31,11 +58,15 @@ namespace J365.IntunePSApp.Views
             if (q.Length > 0)
                 items = items.Where(i => (i.Title ?? "").Contains(q, StringComparison.OrdinalIgnoreCase) || (i.Vendor ?? "").Contains(q, StringComparison.OrdinalIgnoreCase));
             if (OnlyOutdated.IsChecked == true) items = items.Where(i => i.HasUpdate);
+            items = Sort.SelectedIndex == 1 ? items.OrderBy(i => i.AppName, StringComparer.CurrentCultureIgnoreCase).ThenByDescending(i => i.Date)
+                : Sort.SelectedIndex == 2 ? items.OrderByDescending(i => i.HasUpdate).ThenBy(i => i.AppName, StringComparer.CurrentCultureIgnoreCase)
+                : items.OrderByDescending(i => i.Date);
             var list = items.ToList();
             List.ItemsSource = list;
             bool none = _all.Count == 0;
             Empty.Visibility = none ? Visibility.Visible : Visibility.Collapsed;
-            List.Visibility = none ? Visibility.Collapsed : Visibility.Visible;
+            List.Visibility = list.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+            NoResults.Visibility = !none && list.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             FilterBar.Visibility = none ? Visibility.Collapsed : Visibility.Visible;
             int outdated = _all.Count(i => i.HasUpdate);
             Subtitle.Text = T("Packages_Subtitle", _all.Count, ConfigStore.Current.OutputFolder) + (outdated > 0 ? T("Packages_SubtitleOutdated", outdated) : "");
@@ -51,6 +82,9 @@ namespace J365.IntunePSApp.Views
         {
             if (IsLoaded) ApplyFilter();
         }
+
+        private void Sort_Changed(object sender, SelectionChangedEventArgs e) { if (IsLoaded) ApplyFilter(); }
+        private void ClearFilter_Click(object sender, RoutedEventArgs e) { Filter.Clear(); OnlyOutdated.IsChecked = false; ApplyFilter(); }
 
         private void Refresh_Click(object sender, RoutedEventArgs e) => Refresh();
         private void Catalog_Click(object sender, RoutedEventArgs e) => MainWindow.Current.Navigate("catalog");

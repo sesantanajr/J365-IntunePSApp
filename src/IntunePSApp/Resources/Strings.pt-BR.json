@@ -1362,5 +1362,22 @@
   "Ed_Owner": "Proprietário",
   "Ed_MetadataHint": "Opcionais: desenvolvedor usa o editor; proprietário usa sua empresa. A URL de privacidade vem do catálogo quando disponível.",
   "Ed_NameHint": "O Intune recebe nome e versão em campos separados. A janela de instalação mostra apenas o nome.",
-  "Val_WebUrl": "Informe uma URL HTTP ou HTTPS completa: {0}"
+  "Val_WebUrl": "Informe uma URL HTTP ou HTTPS completa: {0}",
+  "Ed_StateBuilding": "Gerando pacote • edição pausada",
+  "Ed_StateStale": "Alterado • gere o pacote novamente",
+  "Ed_StateModified": "Alterações não salvas",
+  "Ed_StateDraft": "Novo projeto",
+  "Ed_StateSaved": "Projeto salvo",
+  "Ed_StateDraftHint": "Salve para continuar depois • Ctrl+S",
+  "Ed_StateStaleHint": "As configurações mudaram desde a última geração. Gere um novo pacote antes de publicar ou testar. Salvar o projeto não atualiza o pacote já gerado.",
+  "Ed_SaveAs": "Salvar como…",
+  "Packages_Loading": "Carregando seus pacotes…",
+  "Packages_LoadFailed": "Não foi possível atualizar a lista. Verifique a pasta de saída e tente Atualizar. {0}",
+  "Packages_Sort": "Ordenar pacotes",
+  "Packages_SortRecent": "Mais recentes",
+  "Packages_SortName": "Nome A–Z",
+  "Packages_SortUpdates": "Atualizações primeiro",
+  "Packages_NoResults": "Nenhum pacote encontrado",
+  "Packages_NoResultsHint": "Tente outro nome ou remova os filtros.",
+  "Packages_ClearFilters": "Limpar filtros"
 }

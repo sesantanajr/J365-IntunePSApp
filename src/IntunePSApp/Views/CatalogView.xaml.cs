@@ -59,6 +59,7 @@ namespace J365.IntunePSApp.Views
         private void Search_TextChanged(object sender, TextChangedEventArgs e)
         {
             SearchHint.Visibility = string.IsNullOrEmpty(Search.Text) ? Visibility.Visible : Visibility.Collapsed;
+            ++_searchVersion; // Invalidate in-flight results immediately, before the debounce expires.
             _debounce.Stop();
             _debounce.Start();
         }
