@@ -1379,5 +1379,6 @@
   "Packages_SortUpdates": "Atualizações primeiro",
   "Packages_NoResults": "Nenhum pacote encontrado",
   "Packages_NoResultsHint": "Tente outro nome ou remova os filtros.",
-  "Packages_ClearFilters": "Limpar filtros"
+  "Packages_ClearFilters": "Limpar filtros",
+  "Ed_PreviousResult": "Pacote anterior • gere novamente"
 }

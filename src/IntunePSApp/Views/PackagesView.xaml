@@ -52,7 +52,7 @@
         <TextBlock Text="&#xE721;" Style="{StaticResource Icon}" FontSize="32" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center"/>
         <TextBlock Text="{l:T Packages_NoResults}" Style="{StaticResource H2}" Margin="0,12,0,6"/>
         <TextBlock Text="{l:T Packages_NoResultsHint}" Style="{StaticResource MutedText}" TextAlignment="Center"/>
-        <Button Content="{l:T Packages_ClearFilters}" Style="{StaticResource SecondaryButton}" HorizontalAlignment="Center" Margin="0,16,0,0" Click="ClearFilter_Click"/>
+        <Button x:Name="BtnClearFilters" Content="{l:T Packages_ClearFilters}" Style="{StaticResource SecondaryButton}" HorizontalAlignment="Center" Margin="0,16,0,0" Click="ClearFilter_Click"/>
       </StackPanel>
     </Border>
     <Border x:Name="RefreshError" Grid.Row="2" Background="{DynamicResource WarningSoft}" CornerRadius="10" Padding="16" VerticalAlignment="Top" Visibility="Collapsed" Panel.ZIndex="1">

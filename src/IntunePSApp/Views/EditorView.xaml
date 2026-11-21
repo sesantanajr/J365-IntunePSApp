@@ -559,11 +559,11 @@
             <Border x:Name="ResultCard" Style="{StaticResource Section}" Visibility="Collapsed" BorderBrush="{DynamicResource SuccessLine}">
               <StackPanel>
                 <StackPanel Orientation="Horizontal">
-                  <Border Width="34" Height="34" CornerRadius="17" Background="{DynamicResource SuccessSoft}" Margin="0,0,12,0">
-                    <TextBlock Text="&#xE73E;" Style="{StaticResource Icon}" Foreground="{DynamicResource Success}" HorizontalAlignment="Center"/>
+                  <Border x:Name="ResultIndicator" Width="34" Height="34" CornerRadius="17" Background="{DynamicResource SuccessSoft}" Margin="0,0,12,0">
+                    <TextBlock x:Name="ResultIndicatorIcon" Text="&#xE73E;" Style="{StaticResource Icon}" Foreground="{DynamicResource Success}" HorizontalAlignment="Center"/>
                   </Border>
                   <StackPanel VerticalAlignment="Center">
-                    <TextBlock Text="{l:T Ed_ResultTitle}" Style="{StaticResource H2}"/>
+                    <TextBlock x:Name="ResultTitle" Text="{l:T Ed_ResultTitle}" Style="{StaticResource H2}"/>
                     <TextBlock x:Name="ResultFile" Style="{StaticResource MutedText}"/>
                     <TextBlock x:Name="ResultHash" Style="{StaticResource MutedText}" FontFamily="{StaticResource MonoFont}" FontSize="11" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
                   </StackPanel>
@@ -600,6 +600,7 @@
                   <Button Style="{StaticResource SecondaryButton}" Click="OpenInstructions_Click" Margin="0,0,8,8">
                     <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8A5;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock Text="{l:T Ed_Instructions}"/></StackPanel>
                   </Button>
+                  <WrapPanel x:Name="TestActions">
                   <Button Style="{StaticResource SecondaryButton}" Click="TestInstall_Click" Margin="0,0,8,8">
                     <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE768;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock Text="{l:T Ed_TestInstall}"/></StackPanel>
                   </Button>
@@ -609,6 +610,7 @@
                   <Button x:Name="BtnSandbox" Style="{StaticResource SecondaryButton}" Click="Sandbox_Click" Margin="0,0,8,8" ToolTip="{l:T Ed_SandboxTip}">
                     <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE7F8;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock Text="{l:T Ed_Sandbox}"/></StackPanel>
                   </Button>
+                  </WrapPanel>
                 </WrapPanel>
                 <!-- Result of the Windows Sandbox test, read from Sandbox\Results\result.json -->
                 <Border x:Name="SandboxStatus" CornerRadius="10" Padding="14,10" Margin="0,6,0,0" Background="{DynamicResource BrandSoft}" Visibility="Collapsed">

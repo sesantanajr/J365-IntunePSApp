@@ -155,6 +155,7 @@ namespace J365.IntunePSApp
                 {
                     var settings = w.Editor.Collect();
                     string fixture = Path.Combine(AppPaths.Temp, "workspace-check-" + Guid.NewGuid().ToString("N"));
+                    ConfigStore.Current.OutputFolder = Path.GetDirectoryName(fixture);
                     Directory.CreateDirectory(Path.Combine(fixture, PackageLayout.PackageDir));
                     Directory.CreateDirectory(Path.Combine(fixture, PackageLayout.IntuneDir));
                     File.WriteAllText(Path.Combine(fixture, PackageLayout.IntuneDir, "fixture.intunewin"), "UI fixture only");
@@ -169,6 +170,8 @@ namespace J365.IntunePSApp
                     w.Editor.ProjectShortcut(System.Windows.Input.Key.S);
                     if (w.Editor.HasUnsavedChanges || w.Editor.CurrentBuildMatchesSettings) throw new InvalidOperationException("Saving incorrectly refreshed the built package.");
                     await Shot("04-editor-needs-rebuild");
+                    if (((FrameworkElement)w.Editor.FindName("PublishCallout")).IsEnabled || ((FrameworkElement)w.Editor.FindName("TestActions")).IsEnabled)
+                        throw new InvalidOperationException("Stale package actions remain visually enabled.");
                     w.Editor.LoadProject(fixtureProject);
                     if (w.Editor.LastIntuneFolder != null) throw new InvalidOperationException("Reopening offered a stale build.");
                     await Shot("04-editor-reopened-changes");
@@ -189,6 +192,18 @@ namespace J365.IntunePSApp
 
                 w.Navigate("packages");
                 await Shot("05-packages");
+                if (App.HasArg("--snapshot-state-checks"))
+                {
+                    var packages = w.Packages;
+                    var filter = (System.Windows.Controls.TextBox)packages.FindName("Filter");
+                    filter.Text = "no-matching-package-ui-check";
+                    await Shot("05-packages-no-results");
+                    if (((FrameworkElement)packages.FindName("NoResults")).Visibility != Visibility.Visible)
+                        throw new InvalidOperationException("The package library does not explain empty search results.");
+                    ((System.Windows.Controls.Button)packages.FindName("BtnClearFilters")).RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                    if (filter.Text.Length != 0 || ((System.Windows.Controls.ListBox)packages.FindName("List")).Items.Count == 0)
+                        throw new InvalidOperationException("Clearing the package filters did not restore the results.");
+                }
                 w.Navigate("settings");
                 await Shot("06-settings");
                 foreach (var section in new[] { "appearance", "company", "defaults", "intune", "tools", "about" })

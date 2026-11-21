@@ -207,6 +207,12 @@ namespace J365.IntunePSApp.Views
             WorkspacePath.Text = _projectPath == null ? T("Ed_StateDraftHint") : Path.GetFileName(_projectPath);
             WorkspacePath.ToolTip = _projectPath;
             StaleNotice.Visibility = stale ? Visibility.Visible : Visibility.Collapsed;
+            ResultTitle.Text = stale ? T("Ed_PreviousResult") : T("Ed_ResultTitle");
+            ResultCard.SetResourceReference(Border.BorderBrushProperty, stale ? "WarningLine" : "SuccessLine");
+            ResultIndicator.SetResourceReference(Border.BackgroundProperty, stale ? "WarningSoft" : "SuccessSoft");
+            ResultIndicatorIcon.Text = stale ? "\uE7BA" : "\uE73E";
+            ResultIndicatorIcon.SetResourceReference(TextBlock.ForegroundProperty, stale ? "Warning" : "Success");
+            PublishCallout.IsEnabled = TestActions.IsEnabled = !stale && !IsBuilding;
         }
 
         private bool RequireCurrentBuild()
@@ -1337,6 +1343,7 @@ namespace J365.IntunePSApp.Views
             ResultUninstall.Text = r.UninstallCommand;
             ResultCard.Visibility = Visibility.Visible;
             UpdatePublishCallout();
+            UpdateWorkspaceState();
         }
 
         /// <summary>The publish card of the result: the connection it will use, or how to connect.</summary>

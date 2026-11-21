@@ -1379,5 +1379,6 @@
   "Packages_SortUpdates": "Updates first",
   "Packages_NoResults": "No matching packages",
   "Packages_NoResultsHint": "Try a different name or remove the filters.",
-  "Packages_ClearFilters": "Clear filters"
+  "Packages_ClearFilters": "Clear filters",
+  "Ed_PreviousResult": "Previous package • rebuild required"
 }

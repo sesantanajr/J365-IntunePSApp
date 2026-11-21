@@ -1,27 +1,33 @@
-## J365 IntunePSApp 2.5.0
+## J365 IntunePSApp 2.5.1
 
 ### Português
 
-- **Nome limpo no Intune:** Amazon WorkSpaces; versão 5.37.0.3866 no campo próprio. A prévia e a janela de instalação também mostram apenas o nome.
-- **Metadados completos:** Desenvolvedor, Proprietário e URL de privacidade editáveis. Desenvolvedor usa o editor como padrão; proprietário usa a empresa. O catálogo importa a URL de privacidade quando o manifesto a informa.
-- **Interface refinada:** versão em um indicador separado, contraste melhor no tema escuro, campos consistentes e foco visível. Revisão antes de gerar com nome, versão e metadados separados.
-- **Praticidade:** Ctrl+S para salvar, Ctrl+O para abrir e Ctrl+N para novo projeto, dentro do editor.
-- **Estabilidade:** validação de URLs antes de gerar e correção de conflitos entre salvamentos simultâneos.
+Uma evolução do fluxo completo de empacotamento para Microsoft Intune: preparar, revisar, gerar, testar e publicar, com uma distinção clara entre o projeto editável e o pacote gerado.
 
-Projetos antigos continuam legíveis. A atualização do programa **não renomeia automaticamente os aplicativos já publicados no tenant**. Gere novamente e escolha explicitamente o aplicativo existente na publicação, ou altere seu nome no Intune.
+- **Projeto e pacote sincronizados:** alterações nas configurações exigem uma nova geração antes de publicar ou testar. Salvar o projeto não transforma um pacote antigo em um pacote atualizado. A verificação continua ao reabrir os pacotes gerados nesta versão.
+- **Trabalho mais prático:** Ctrl+S salva no arquivo atual; Salvar como e Ctrl+Shift+S criam outra cópia. O editor mostra o arquivo aberto, as alterações não salvas e a necessidade de gerar novamente.
+- **Geração mais confiável:** configurações protegidas durante a geração, cancelamento com liberação de recursos, isolamento das pastas de saída e serialização das gerações dentro do processo.
+- **Biblioteca mais fluida:** leitura de pacotes em segundo plano, cancelamento de buscas antigas, ordenação por data, nome ou atualizações disponíveis e uma mensagem com ação para limpar filtros quando não há resultados.
+- **Interface mais clara:** nome e versão separados também nos cartões de pacotes, estados visíveis no editor e avisos contextualizados. A busca do catálogo descarta resultados de consultas anteriores enquanto você digita.
+- **Validação antes da ação:** entradas numéricas inválidas não são substituídas silenciosamente por valores padrão ao salvar ou gerar.
+- **Qualidade contínua:** testes de regressão de concorrência e revisão de pacotes, além de capturas e verificações automatizadas do editor nos temas claro e escuro, incluindo janela compacta.
 
-A URL de privacidade do catálogo depende da atualização da base e da existência do campo no manifesto. Não foi feita validação em tenant real nesta revisão. A inspeção visual manual ficou pendente por bloqueio do ambiente de execução.
+Inclui as melhorias da 2.5.0: nome separado da versão no Intune, campos de desenvolvedor/proprietário/privacidade, validação de URLs e salvamento atômico.
+
+Projetos anteriores continuam legíveis. A identificação da revisão acompanha novos pacotes; pacotes antigos sem essa identificação permanecem compatíveis. A identificação compara configurações: não é assinatura digital nem monitoramento dos arquivos de origem. Aplicativos já publicados no tenant só mudam quando você escolhe atualizá-los explicitamente. A validação em tenant real continua pendente.
 
 ### English
 
-Intune app names and versions are now separate. New editable developer, owner and privacy metadata flow through projects, generated packages and publishing. The editor has a separate version badge, improved dark contrast, consistent input surfaces and project keyboard shortcuts. URL validation and concurrent atomic-save handling improve reliability. Existing projects remain compatible.
+This update improves the complete packaging workflow. The editor distinguishes saved projects from current build output and prevents publishing or testing a stale build after settings change. New build revision records preserve that check when reopening a package. Ctrl+S saves to the current file; Save As and Ctrl+Shift+S create a copy. Project state and version badges improve clarity.
 
-Existing tenant apps are not automatically renamed. Regenerate the package and explicitly select the existing app when publishing. Privacy URLs depend on refreshed catalog data. Live-tenant and manual visual validation were not performed in this revision.
+Build directories are reserved independently, builds in the same process are serialized, and editing is paused during generation. Package history loads asynchronously with cancellation, sorting and actionable empty results. Catalog search discards superseded results. Invalid numeric input is rejected before saving or generating. CI now renders light/dark interfaces and checks editing, saving and reopening behavior.
+
+Earlier projects remain compatible. Legacy packages without a revision record remain readable. Revision records compare settings; they are not digital signatures or source-file monitoring. Live-tenant validation remains pending.
 
 ### Download
 
-- `J365-IntunePSApp-2.5.0-win-x64.zip`: portable Windows x64 application; extract and run `J365.IntunePSApp.exe`.
-- `J365-IntunePSApp-2.5.0-source.zip`: source code for this release.
-- `SHA256SUMS.txt`: checksums.
+- `J365-IntunePSApp-2.5.1-win-x64.zip`: extraia e execute `J365.IntunePSApp.exe` / extract and run the portable application.
+- `J365-IntunePSApp-2.5.1-source.zip`: código-fonte / source code.
+- `SHA256SUMS.txt`: verificações SHA-256 / SHA-256 checksums.
 
-Based on PSAppDeployToolkit. Created by Sérgio Sant'Ana Junior — Jornada 365.
+Baseado no PSAppDeployToolkit. Criado por Sérgio Sant'Ana Junior — Jornada 365.
