@@ -2,9 +2,21 @@
 
 All notable changes to J365 IntunePSApp. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.5.1 - 2026-11-20
+
+- Track the settings used to generate each new package; block publishing/testing stale output after edits, saving and reopening.
+- Save to the current project with Ctrl+S; Save As and Ctrl+Shift+S create another copy. Show the current file and project state.
+- Reserve independent output directories, serialize builds within the process, pause editing during builds and release cancellation resources.
+- Load package history asynchronously with cancellation, sort by date/name/updates and explain empty search results with a clear-filters action.
+- Separate app name/version in package cards; use a warning title and disable publishing/testing when rebuilding is required.
+- Reject invalid numeric input before saving or generating; invalidate superseded catalog searches immediately.
+- Validate with 292 automated tests and interface regression checks. Documentation includes fresh 2.5.1 screenshots in both languages and direct download buttons.
+
+Live-tenant validation remains pending. See [the quality review](docs/QUALITY-25.md) for scope and limitations.
+
 ## 2.5.0 - 2026-11-20
 
-- Intune names no longer append the version: `Amazon WorkSpaces` and `5.37.0.3866` go to separate fields. Generated installation titles and previews use the app name only. Package filenames still contain the version.
+- Intune names no longer append the version: the application name and version go to separate fields. Generated installation titles and previews use the app name only. Package filenames still contain the version.
 - Editable developer, owner and privacy-policy URL, persisted in projects and included in metadata and manual instructions. Developer defaults to publisher, owner to company. The catalog builder imports the manifest PrivacyUrl when present; no URL is invented.
 - HTTP(S) URL validation before generation. Old projects remain readable; optional fields absent from older packages do not overwrite tenant metadata.
 - Editor header separates version into a badge. Improved dark surface contrast, consistent input backgrounds, visible input focus, and explicit name/version/owner fields in the review step. Ctrl+S, Ctrl+O and Ctrl+N operate in the editor, guarded during builds and modal overlays.

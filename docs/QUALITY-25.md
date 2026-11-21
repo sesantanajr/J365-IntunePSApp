@@ -1,4 +1,4 @@
-# Revisão de qualidade da linha 2.5
+# Revisão de qualidade — versão 2.5.1
 
 Esta revisão examina os limites entre projeto, geração, interface e publicação. O objetivo é reduzir resultados incorretos e tornar o estado do trabalho compreensível.
 

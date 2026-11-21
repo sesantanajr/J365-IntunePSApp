@@ -81,3 +81,7 @@ Para usar um banco de dados gerado por você: *Configurações > Banco de dados 
 - **Caminhos longos.** O Windows não inicia um executável cujo caminho completo passe de 260 caracteres. Se `dotnet run` ou `dotnet test` falhar com erro de nome de arquivo muito longo, clone o repositório em uma pasta mais curta.
 - **Controle Inteligente de Aplicativos (Smart App Control).** Em computadores com essa proteção ativada, o Windows pode bloquear executáveis recém-compilados e sem assinatura. Ela não pode ser configurada por aplicativo; compile e teste em um computador (ou máquina virtual) em que esteja desativada.
 - **Versão.** Enviar uma tag `vX.Y.Z` faz o GitHub Actions rodar os testes, compilar o executável e publicar a versão com checksums, pacote de código-fonte e atestado de procedência.
+
+## Documentation captures for 2.5.1
+
+The build workflow renders the current application with an isolated demonstration project in English and Portuguese, light and dark themes. It also exercises edit/save/reopen and empty-filter recovery. The `interface-captures` artifact contains PNGs and state-check results. Screenshot provenance and filename mapping are documented in [screenshots/README.md](screenshots/README.md). These captures do not perform a tenant deployment.
