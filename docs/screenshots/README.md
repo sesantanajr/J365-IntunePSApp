@@ -8,10 +8,10 @@ They show a fictitious company, *Contoso*, with an isolated data folder (`C:\Use
 
 ```powershell
 dotnet build src/IntunePSApp -c Release
-.\tools\Render-Screenshots.ps1 -Installer <7z…-x64.msi> -Extra <VC_redist.x64.exe> -CopyFrom "$env:LOCALAPPDATA\J365\IntunePSApp"
+pwsh .\tools\Render-Screenshots.ps1 -Installer <7z…-x64.msi> -Extra <VC_redist.x64.exe> -CopyFrom "$env:LOCALAPPDATA\J365\IntunePSApp"
 ```
 
-[`tools/Render-Screenshots.ps1`](../../tools/Render-Screenshots.ps1) builds the demonstration data (database and PSAppDeployToolkit copied from `-CopyFrom`, or downloaded with `--setup`), renders every page in both languages and both themes at 1440×900, renders the editor checks (an outdated package, an empty search) apart, copies the captures below into this folder and removes the demonstration folder. The build workflow renders the same pages for its interface checks (`interface-captures` artifact) with a generic project.
+[`tools/Render-Screenshots.ps1`](../../tools/Render-Screenshots.ps1) (PowerShell 7) builds the demonstration data (database and PSAppDeployToolkit copied from `-CopyFrom`, or downloaded with `--setup`), renders every page in both languages and both themes at 1440×900, renders the editor checks (an outdated package, an empty search) apart, copies the captures below into this folder and removes the demonstration folder. The build workflow renders the same pages for its interface checks (`interface-captures` artifact) with a generic project.
 
 ## Files
 

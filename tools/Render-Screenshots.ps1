@@ -21,10 +21,15 @@
     A data folder of the application that already has catalog\catalog.json.gz and tools\ (for example
     %LOCALAPPDATA%\J365\IntunePSApp). Without it the application downloads them (--setup).
 
+.NOTES
+    Needs PowerShell 7 (pwsh): Windows PowerShell 5.1 writes dates in JSON as "\/Date(...)\/", which the application
+    does not read, so the demonstration settings would be ignored.
+
 .EXAMPLE
     dotnet build src/IntunePSApp -c Release
-    .\tools\Render-Screenshots.ps1 -Installer C:\Installers\7z2606-x64.msi -CopyFrom "$env:LOCALAPPDATA\J365\IntunePSApp"
+    pwsh .\tools\Render-Screenshots.ps1 -Installer C:\Installers\7z2606-x64.msi -CopyFrom "$env:LOCALAPPDATA\J365\IntunePSApp"
 #>
+#Requires -Version 7.0
 [CmdletBinding()]
 param
 (
