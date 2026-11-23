@@ -1,8 +1,8 @@
-# Screenshots — J365 IntunePSApp 2.6
+# Screenshots — J365 IntunePSApp 2.7
 
-Unmodified PNG captures rendered by the application on the Windows CI runner, in English and Portuguese, light and dark themes, with a generic demonstration project and isolated data: no tenant connection, installation or publication.
+Unmodified PNG captures rendered by the application itself, in English and Portuguese, light and dark themes, with a generic demonstration project and isolated data: no tenant connection, installation or publication.
 
-Source: `interface-captures` artifact of [workflow run 45189845492](https://github.com/sesantanajr/J365-IntunePSApp/actions/runs/45189845492) (2.6.1, 2026-11-23). The pages shown did not change in 2.6.2.
+Source: J365 IntunePSApp 2.7.0, rendered on 2026-11-23 with exactly the command of the *Render interface smoke checks* step of [`build.yml`](../../.github/workflows/build.yml) (same demonstration project, sizes, themes and languages; isolated data folder). Every build of the workflow produces the same set as its `interface-captures` artifact.
 
 | Documentation file | Capture | Theme / size |
 | --- | --- | --- |

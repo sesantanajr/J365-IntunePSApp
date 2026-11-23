@@ -31,7 +31,11 @@ namespace J365.IntunePSApp.Core
             public string ZipUrl { get; set; } = "";
             public long ZipSize { get; set; }
             public string SumsUrl { get; set; } = "";
+            /// <summary>Where the version was read: <see cref="SourceFiles"/>, <see cref="SourceApi"/> or <see cref="SourcePage"/>.</summary>
+            public string Source { get; set; } = "";
         }
+
+        public const string SourceFiles = "files", SourceApi = "api", SourcePage = "page";
 
         /// <summary>Release API. J365_UPDATE_API points it elsewhere (an internal mirror, tests).</summary>
         public static string ApiUrl
@@ -61,31 +65,76 @@ namespace J365.IntunePSApp.Core
         public static async Task<string> LatestVersionFromPageAsync(CancellationToken ct)
             => VersionFromReleaseUrl(await Http.FinalUrlAsync(AppInfo.ReleasesUrl, 30, ct));
 
+        /// <summary>
+        /// The release named by a SHA256SUMS.txt: the line of the application zip ("HASH  J365-IntunePSApp-2.7.0-win-x64.zip")
+        /// gives the version, and the files have the names every release of this project uses. Null when it lists no zip.
+        /// </summary>
+        public static Release ReleaseFromSums(string sums)
+        {
+            foreach (var line in (sums ?? "").Split('\n'))
+            {
+                var m = Regex.Match(line.Trim(), @"^[0-9A-Fa-f]{64}\s+\*?J365-IntunePSApp-(?<v>\d+(\.\d+){1,3})-win-x64\.zip$", RegexOptions.IgnoreCase);
+                if (!m.Success) continue;
+                var r = ReleaseFromVersion(m.Groups["v"].Value);
+                r.Source = SourceFiles;
+                return r;
+            }
+            return null;
+        }
+
         /// <summary>False when this copy cannot replace itself (read-only folder): the release page is offered instead.</summary>
         public static bool CanUpdateInPlace => CanWrite(Path.GetDirectoryName(AppPaths.ExePath));
 
         /// <summary>
-        /// The latest release: the API of GitHub first (asked past the caches of the network); when it does not answer
-        /// (proxy, the limit of 60 requests an hour, a release whose files are still being attached), the page of the latest
-        /// release, with the file names of the project. Throws, saying why, when neither answers.
+        /// The latest release, asked past the caches of the network, from three places in turn:
+        /// 1. the SHA256SUMS.txt of the latest release (github.com/…/releases/latest/download/SHA256SUMS.txt). It is not the
+        ///    API, so it has no limit of 60 requests an hour per address — a company network shares one address with every
+        ///    colleague, and copies up to 2.6.0 said "up to date" whenever that limit was reached. It names the zip, so it
+        ///    also proves the release has its files;
+        /// 2. the API of GitHub (it also gives the size of the zip);
+        /// 3. the page of the latest release, which redirects to its tag.
+        /// A mirror set with J365_UPDATE_API answers alone. Throws, saying why each one failed, when none answers.
         /// </summary>
         public static async Task<Release> GetLatestAsync(CancellationToken ct)
         {
+            var errors = new List<string>();
+            if (!UsesCustomApi)
+            {
+                var (sums, sumsError) = await Http.GetStringAsync(AppInfo.LatestSumsUrl, 30, ct, noCache: true);
+                ct.ThrowIfCancellationRequested();
+                if (ReleaseFromSums(sums) is Release fromFiles) return fromFiles;
+                errors.Add("github.com: " + (sumsError ?? T("Update_ErrNoHash", "J365-IntunePSApp-*-win-x64.zip")));
+            }
+
             var (json, error) = await Http.GetStringAsync(ApiUrl, 30, ct, noCache: true);
             ct.ThrowIfCancellationRequested();
             if (json != null)
             {
-                try { return ParseRelease(json); }
+                try
+                {
+                    var r = ParseRelease(json);
+                    r.Source = SourceApi;
+                    return r;
+                }
                 catch (Exception ex) when (ex is InvalidDataException || ex is JsonException || ex is KeyNotFoundException) { error = ex.Message; }
             }
+            errors.Add(UsesCustomApi ? error : "api.github.com: " + error);
+
             if (!UsesCustomApi && await LatestVersionFromPageAsync(ct) is string version)
             {
-                Log.Info(T("Log_UpdateFromPage", version, error ?? ""));
-                return ReleaseFromVersion(version);
+                Log.Info(T("Log_UpdateFromPage", version, string.Join("; ", errors)));
+                var r = ReleaseFromVersion(version);
+                r.Source = SourcePage;
+                return r;
             }
             ct.ThrowIfCancellationRequested();
-            throw new IOException(T("Update_ErrNoInfo") + (string.IsNullOrEmpty(error) ? "" : $" ({error})"));
+            string why = string.Join("; ", errors.Where(e => !string.IsNullOrWhiteSpace(e)));
+            throw new IOException(T("Update_ErrNoInfo") + (why.Length == 0 ? "" : $" ({why})"));
         }
+
+        /// <summary>The size of the release zip when its source did not say it (a HEAD request); 0 when unknown.</summary>
+        public static async Task<long> ZipSizeAsync(Release r, CancellationToken ct)
+            => r.ZipSize > 0 ? r.ZipSize : await Http.ContentLengthAsync(r.ZipUrl, 20, ct) ?? 0;
 
         /// <summary>Reads a GitHub release (JSON of /releases/latest): version, the win-x64 zip and SHA256SUMS.txt.</summary>
         public static Release ParseRelease(string json)

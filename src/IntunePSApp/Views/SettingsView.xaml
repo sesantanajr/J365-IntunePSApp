@@ -115,9 +115,10 @@
               <TextBlock Text="{l:T Settings_Output}" Style="{StaticResource Label}"/>
               <Grid>
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <TextBox x:Name="TxtOutput"/>
+                <TextBox x:Name="TxtOutput" TextChanged="Output_TextChanged"/>
                 <Button Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="{l:T Common_Browse}" Margin="8,0,0,0" Click="Output_Click"/>
               </Grid>
+              <TextBlock x:Name="OutputSyncHint" Style="{StaticResource Hint}" Foreground="{DynamicResource Warning}" Margin="0,6,0,0" Visibility="Collapsed"/>
               <TextBlock Text="{l:T Settings_Data}" Style="{StaticResource Label}"/>
               <Grid>
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>

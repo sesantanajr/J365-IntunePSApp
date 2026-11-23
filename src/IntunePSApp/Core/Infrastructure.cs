@@ -42,22 +42,44 @@ namespace J365.IntunePSApp.Core
             {
                 if (File.Exists(path)) return JsonSerializer.Deserialize<TValue>(File.ReadAllText(path, Encoding.UTF8), Options) ?? new TValue();
             }
-            catch (Exception ex) { Log.Warn(T("Log_FileReadFailed", Path.GetFileName(path), ex.Message)); }
+            catch (Exception ex)
+            {
+                // The defaults are used, and the next save replaces the file: the damaged one is kept aside first, so the
+                // settings it held (the Intune connection, branding...) can still be recovered by hand.
+                Log.Error(T("Log_FileReadFailed", Path.GetFileName(path), ex.Message));
+                try
+                {
+                    string aside = path + ".bad-" + DateTime.Now.ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture);
+                    File.Copy(path, aside, true);
+                    Log.Warn(T("Log_FileKeptAside", aside));
+                }
+                catch { }
+            }
             return new TValue();
         }
 
-        /// <summary>Atomic save: writes to a temporary file and swaps it in.</summary>
+        /// <summary>
+        /// Atomic save: writes a temporary file, flushes it to the disk and swaps it in. Without the flush, a power cut right
+        /// after a save could leave a file of zeros (the rename is journaled, the data not) and every setting was lost.
+        /// </summary>
         public static void Save<TValue>(string path, TValue value)
         {
             path = Path.GetFullPath(path);
             Directory.CreateDirectory(Path.GetDirectoryName(path));
-            // Concurrent saves must not share a staging file. Serialize before touching the destination.
-            string text = JsonSerializer.Serialize(value, Options);
             string tmp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
             try
             {
-                File.WriteAllText(tmp, text, new UTF8Encoding(false));
-                lock (SaveLock) File.Move(tmp, path, true);
+                // Serialized inside the lock: of two saves at the same time, the newer state is the one that stays.
+                lock (SaveLock)
+                {
+                    byte[] bytes = new UTF8Encoding(false).GetBytes(JsonSerializer.Serialize(value, Options));
+                    using (var fs = new FileStream(tmp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                    {
+                        fs.Write(bytes, 0, bytes.Length);
+                        fs.Flush(true);
+                    }
+                    File.Move(tmp, path, true);
+                }
             }
             finally { if (File.Exists(tmp)) File.Delete(tmp); }
         }
@@ -102,6 +124,27 @@ namespace J365.IntunePSApp.Core
         public static string ConfigFile => Path.Combine(Data, "config.json");
 
         private static string Ensure(string p) { Directory.CreateDirectory(p); return p; }
+
+        /// <summary>
+        /// The OneDrive folder that synchronises <paramref name="path"/> (the variables OneDrive sets for the user), or null.
+        /// Documents is often moved into OneDrive by company policy: packages there are uploaded to the cloud (an installer
+        /// and its .intunewin of hundreds of MB each) and their paths get long.
+        /// </summary>
+        public static string OneDriveRoot(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return null;
+            string full;
+            try { full = Path.GetFullPath(path.Trim().Trim('"')).TrimEnd('\\') + "\\"; }
+            catch (Exception ex) when (ex is ArgumentException || ex is NotSupportedException || ex is PathTooLongException) { return null; }
+            foreach (var name in new[] { "OneDriveCommercial", "OneDriveConsumer", "OneDrive" })
+            {
+                string root = Environment.GetEnvironmentVariable(name);
+                if (string.IsNullOrWhiteSpace(root)) continue;
+                root = root.Trim().TrimEnd('\\');
+                if (full.StartsWith(root + "\\", StringComparison.OrdinalIgnoreCase)) return root;
+            }
+            return null;
+        }
 
         private static bool CanWrite(string dir)
         {
@@ -256,11 +299,43 @@ namespace J365.IntunePSApp.Core
                 using var request = new HttpRequestMessage(HttpMethod.Get, url);
                 if (noCache) request.Headers.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue { NoCache = true };
                 using var resp = await Client.SendAsync(request, cts.Token);
-                if (!resp.IsSuccessStatusCode) return (null, $"HTTP {(int)resp.StatusCode}");
+                if (!resp.IsSuccessStatusCode) return (null, Describe(resp));
                 return (await resp.Content.ReadAsStringAsync(cts.Token), null);
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return (null, "timeout"); }
             catch (Exception ex) { return (null, ex.GetBaseException().Message); }
+        }
+
+        /// <summary>
+        /// "HTTP 403", and for the API of GitHub when its limit was reached (60 requests an hour per address without
+        /// sign-in, shared by everyone behind the same company address) when it frees up again.
+        /// </summary>
+        internal static string Describe(HttpResponseMessage resp)
+        {
+            int status = (int)resp.StatusCode;
+            string text = $"HTTP {status}";
+            if ((status == 403 || status == 429)
+                && resp.Headers.TryGetValues("X-RateLimit-Remaining", out var left) && left.FirstOrDefault()?.Trim() == "0")
+            {
+                string until = resp.Headers.TryGetValues("X-RateLimit-Reset", out var reset) && long.TryParse(reset.FirstOrDefault(), out long epoch)
+                    ? DateTimeOffset.FromUnixTimeSeconds(epoch).ToLocalTime().ToString("t", Localization.Loc.Instance.Culture) : "?";
+                text += " - " + T("Http_RateLimited", until);
+            }
+            return text;
+        }
+
+        /// <summary>Size of a file on the web from a HEAD request (redirections followed), or null when unknown.</summary>
+        public static async Task<long?> ContentLengthAsync(string url, int timeoutSeconds, CancellationToken ct)
+        {
+            try
+            {
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+                using var request = new HttpRequestMessage(HttpMethod.Head, url);
+                using var resp = await Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+                return resp.IsSuccessStatusCode ? resp.Content.Headers.ContentLength : null;
+            }
+            catch { return null; }
         }
 
         /// <summary>

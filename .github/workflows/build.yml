@@ -51,7 +51,7 @@ jobs:
         shell: pwsh
         run: |
           if ($env:GITHUB_REF_TYPE -eq 'tag') { $ver = $env:GITHUB_REF_NAME.TrimStart('v') }
-          else { $ver = ([xml](Get-Content src/IntunePSApp/IntunePSApp.csproj)).Project.PropertyGroup[0].Version }
+          else { $ver = (Select-Xml -Path src/IntunePSApp/IntunePSApp.csproj -XPath '//Version').Node.InnerText.Trim() }
           # Signing never runs for pull requests (they have no access to the secrets).
           $mode = 'none'
           if ($env:GITHUB_EVENT_NAME -ne 'pull_request') {
@@ -243,14 +243,15 @@ jobs:
           path: dist/*
 
       - name: Create the release
-        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        # A push to main, a v* tag, or "Run workflow" on main (to publish a version whose run was skipped).
+        if: startsWith(github.ref, 'refs/tags/v') || ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main')
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = "v$env:VERSION"
           if ($env:VERSION -notmatch '^\d+\.\d+\.\d+$') { throw 'Release version must be major.minor.patch.' }
-          $projectVersion = ([xml](Get-Content src/IntunePSApp/IntunePSApp.csproj)).Project.PropertyGroup[0].Version
+          $projectVersion = (Select-Xml -Path src/IntunePSApp/IntunePSApp.csproj -XPath '//Version').Node.InnerText.Trim()
           if ($projectVersion -ne $env:VERSION) { throw 'Tag and project versions must match.' }
           $releases = gh release list --limit 100 --json tagName | ConvertFrom-Json
           if ($LASTEXITCODE -ne 0) { throw 'Could not check existing releases.' }
@@ -258,7 +259,14 @@ jobs:
           if ($env:GITHUB_REF -eq 'refs/heads/main') {
             $head = gh api "repos/$env:GITHUB_REPOSITORY/commits/main" --jq '.sha'
             if ($LASTEXITCODE -ne 0) { throw 'Could not verify main.' }
-            if ($head -ne $env:GITHUB_SHA) { Write-Host 'A newer main commit exists; this run will not publish.'; exit 0 }
+            if ($head -ne $env:GITHUB_SHA) {
+              # A newer commit that only changes documentation (paths-ignore) starts no build of its own: this run
+              # still publishes, or the version would never be released. Any other newer commit publishes itself.
+              $files = @(gh api "repos/$env:GITHUB_REPOSITORY/compare/$env:GITHUB_SHA...$head" --jq '.files[].filename')
+              if ($LASTEXITCODE -ne 0) { throw 'Could not compare with main.' }
+              if ($files | Where-Object { $_ -notmatch '\.md$|^docs/|^catalog/curated\.json$' }) { Write-Host 'A newer main commit exists and will publish; this run will not.'; exit 0 }
+              Write-Host 'Newer main commits only change documentation: publishing this version.'
+            }
             $refs = gh api "repos/$env:GITHUB_REPOSITORY/git/matching-refs/tags/$tag" | ConvertFrom-Json
             if ($LASTEXITCODE -ne 0) { throw 'Could not check the release tag.' }
             if ($refs.ref -contains "refs/tags/$tag") { throw 'Tag already exists without a release. Run its tag build explicitly.' }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Security;
 using System.Text;
 using System.Text.Json;
@@ -215,7 +216,9 @@ namespace J365.IntunePSApp.Core
                 $"    <Command>{SecurityElement.Escape(command)}</Command>\r\n" +
                 "  </LogonCommand>\r\n" +
                 "</Configuration>\r\n";
-            string wsb = Path.Combine(dir, Names.Safe(Path.GetFileName(root)) + ".wsb");
+            // A short name: the folder of the package is already in the path, and Windows opens a .wsb file by its full
+            // path (repeating a long package name took it past 260 characters).
+            string wsb = Path.Combine(dir, "Sandbox-Test.wsb");
             File.WriteAllText(wsb, xml, new UTF8Encoding(false));
             return wsb;
         }
@@ -423,8 +426,16 @@ namespace J365.IntunePSApp.Core
         {
             var psi = ToolsService.PowerShellStartInfo($"-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"{publishScript}\" -ValidateOnly");
             psi.WorkingDirectory = Path.GetDirectoryName(publishScript);
-            var run = ToolsService.RunPowerShell(psi, 120000);
-            return (!run.TimedOut && run.ExitCode == 0, (run.Output ?? "").Trim());
+            // The script writes UTF-8 when its output is read by the application (accented names arrive intact).
+            psi.StandardOutputEncoding = Encoding.UTF8;
+            psi.StandardErrorEncoding = Encoding.UTF8;
+            // It hashes the whole .intunewin first: a large package (or one OneDrive has to download) takes longer.
+            long size = 0;
+            try { size = Directory.GetFiles(Path.GetDirectoryName(publishScript) ?? "", "*.intunewin").Sum(f => new FileInfo(f).Length); } catch { }
+            int limit = (int)Math.Clamp(120_000 + size / (1024 * 1024) * 500, 120_000, 1_800_000);
+            var run = ToolsService.RunPowerShell(psi, limit);
+            if (run.TimedOut) return (false, T("Publish_ValidateTimeout", limit / 60000));
+            return (run.ExitCode == 0, (run.Output ?? "").Trim());
         }
 
         public static string ResultFile(string intuneFolder) => Path.Combine(intuneFolder, ResultFileName);

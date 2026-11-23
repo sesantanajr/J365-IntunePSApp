@@ -94,6 +94,9 @@ namespace J365.IntunePSApp.Views
             UpdateExistingFlow();
             RefreshSandboxStatus();
             RefreshPublishStatus();
+            // Texts built in code on the Uninstall and Detection steps follow the language too.
+            UpdateDetectionPanels();
+            UpdateUninstallByCode();
         }
 
         // ------------------------------------------------------------------ load / collect
@@ -142,6 +145,7 @@ namespace J365.IntunePSApp.Views
                 _extraFiles.Clear(); foreach (var f in s.ExtraFiles) _extraFiles.Add(f);
                 ChkRemovePrev.IsChecked = s.RemovePreviousVersions;
                 ChkKeepNewer.IsChecked = s.KeepNewerVersion;
+                ChkKeepSame.IsChecked = s.KeepSameVersion != false;
                 TxtPattern.Text = s.UninstallPattern;
                 TxtUninstallArgs.Text = s.UninstallExeArgs;
                 RbDetName.IsChecked = s.DetectionMethod == "Registry";
@@ -353,6 +357,8 @@ namespace J365.IntunePSApp.Views
             s.ExtraFiles = _extraFiles.ToList();
             s.RemovePreviousVersions = ChkRemovePrev.IsChecked == true;
             s.KeepNewerVersion = ChkKeepNewer.IsChecked != false;
+            // Null is the default (keep it): a project that keeps it saves nothing new and its build record still matches.
+            s.KeepSameVersion = ChkKeepSame.IsChecked == false ? false : null;
             s.UninstallPattern = TxtPattern.Text.Trim();
             s.UninstallExeArgs = TxtUninstallArgs.Text.Trim();
             s.DetectionMethod = RbDetCode.IsChecked == true ? "ProductCode" : RbDetFile.IsChecked == true ? "File" : "Registry";
@@ -997,10 +1003,11 @@ namespace J365.IntunePSApp.Views
         private void SaveCompany_Click(object sender, RoutedEventArgs e)
         {
             var s = Collect();
-            var c = ConfigStore.Current;
-            c.CompanyName = s.CompanyName;
+            // Checked first: a refused save leaves the company defaults as they were.
             if (!string.IsNullOrWhiteSpace(s.AccentColor) && !Regex.IsMatch(s.AccentColor.Trim(), "^#?[0-9A-Fa-f]{6}$")) { Ui.Warn(T("Val_AccentColor")); return; }
             if (!string.IsNullOrWhiteSpace(s.LogoPath) && !File.Exists(s.LogoPath)) { Ui.Warn(T("Val_LogoMissing", s.LogoPath)); return; }
+            var c = ConfigStore.Current;
+            c.CompanyName = s.CompanyName;
             c.AccentColor = s.AccentColor;
             c.DialogStyle = s.DialogStyle;
             c.Language = s.Language;
@@ -1194,8 +1201,17 @@ namespace J365.IntunePSApp.Views
         {
             var s = Collect();
             (bool Detected, bool NoMark, string Output) r;
+            // PowerShell takes a few seconds: the button waits for it, so repeated clicks do not start runs that overwrite
+            // each other's result.
+            var button = sender as Button;
+            if (button != null) button.IsEnabled = false;
+            DetResult.Visibility = Visibility.Visible;
+            DetResult.SetResourceReference(Border.BackgroundProperty, "InfoSoft");
+            DetResultText.SetResourceReference(TextBlock.ForegroundProperty, "InfoText");
+            DetResultText.Text = T("Ed_DetTesting");
             try { r = await Task.Run(() => PackageBuilder.TestDetection(s)); }
-            catch (Exception ex) { Ui.Error(ex.Message); return; }
+            catch (Exception ex) { DetResult.Visibility = Visibility.Collapsed; Ui.Error(ex.Message); return; }
+            finally { if (button != null) button.IsEnabled = true; }
             DetResult.Visibility = Visibility.Visible;
             DetResult.SetResourceReference(Border.BackgroundProperty, r.Detected ? "SuccessSoft" : "WarningSoft");
             DetResultText.SetResourceReference(TextBlock.ForegroundProperty, r.Detected ? "SuccessText" : "WarningText");
@@ -1594,7 +1610,9 @@ namespace J365.IntunePSApp.Views
 
         private async void Publish_Click(object sender, RoutedEventArgs e)
         {
-            if (_publishRunning || !RequireCurrentBuild()) return;
+            // A publication still running (in its PowerShell window, or here) says so instead of ignoring the click.
+            if (_publishRunning) { MainWindow.Current.Toast(T("Ed_PublishRunning"), "warn"); return; }
+            if (!RequireCurrentBuild()) return;
             // Nothing set up yet, the registration gone, or a certificate that cannot be used: the connection comes first
             // (the certificate is the recommended way). A user connection without a session signs in again in the dialog.
             if (IntuneConnection.NeedsSetup && !ConnectWindow.Run(Window.GetWindow(this))) return;
@@ -1605,7 +1623,7 @@ namespace J365.IntunePSApp.Views
             try { script = IntunePublisher.Prepare(intune); }
             catch (Exception ex) { Ui.Error(ex.Message); return; }
 
-            var dialog = new PublishDialog(script, HeaderTitle.Text, IntuneDisplayName(intune), Collect().AppName) { Owner = Window.GetWindow(this) };
+            var dialog = new PublishDialog(script, HeaderTitle.Text, IntuneDisplayName(intune), Collect().AppName, IntuneMetadata(intune, "appVersion")) { Owner = Window.GetWindow(this) };
             if (dialog.ShowDialog() != true) return;
             if (dialog.InAppOptions != null) { await PublishInAppAsync(script, intune, dialog.InAppOptions); return; }
             if (dialog.Started == null) return;
@@ -1640,9 +1658,12 @@ namespace J365.IntunePSApp.Views
         private static string Brief(string text) => text.Length > 220 ? text.Substring(0, 217).TrimEnd() + "…" : text;
 
         /// <summary>Name of the app in Intune, as the publishing script will send it (Intune\intune-app.json).</summary>
-        private static string IntuneDisplayName(string intuneFolder)
+        private static string IntuneDisplayName(string intuneFolder) => IntuneMetadata(intuneFolder, "displayName");
+
+        /// <summary>A text field of Intune\intune-app.json (displayName, appVersion...), or null.</summary>
+        private static string IntuneMetadata(string intuneFolder, string field)
         {
-            try { return System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(Path.Combine(intuneFolder, PackageLayout.MetadataFile)))?["displayName"]?.GetValue<string>(); }
+            try { return System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(Path.Combine(intuneFolder, PackageLayout.MetadataFile)))?[field]?.GetValue<string>(); }
             catch { return null; }
         }
 

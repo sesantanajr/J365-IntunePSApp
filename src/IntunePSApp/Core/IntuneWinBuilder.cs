@@ -28,13 +28,19 @@ namespace J365.IntunePSApp.Core
         public static async Task<string> BuildAsync(string sourceFolder, string outputFile, bool forceNative, CancellationToken ct, Action<double> progress = null)
         {
             string exe = forceNative ? null : await ToolsService.EnsureIntuneWinAppUtilAsync(ct);
+            // A short name: the output folder may already be deep (OneDrive, Documents, a long application name).
+            string tmpOut = Path.Combine(Path.GetDirectoryName(outputFile), "_iwau_" + Guid.NewGuid().ToString("N")[..8]);
+            if (exe != null && LongestPath(sourceFolder, tmpOut) is int longest && longest > MaxToolPath)
+            {
+                Log.Info(T("Log_IwauLongPath", longest, MaxToolPath));
+                exe = null;
+            }
             // What IntuneWinAppUtil reached before failing: the built-in packager carries on from there (the bar never goes back).
             double reached = 0;
             if (exe != null)
             {
                 var tool = progress;
                 progress = tool == null ? null : f => { reached = Math.Max(reached, f); tool(f); };
-                string tmpOut = Path.Combine(Path.GetDirectoryName(outputFile), "_iwau_" + Guid.NewGuid().ToString("N"));
                 // Its working copies go to a folder of its own (TEMP of the process): watched for the progress, and removed
                 // afterwards even when the tool is stopped halfway.
                 string work = Path.Combine(AppPaths.Temp, "_iwau_work_" + Guid.NewGuid().ToString("N"));
@@ -53,6 +59,12 @@ namespace J365.IntunePSApp.Core
                     }
                     Log.Warn(T("Log_IwauFailed", code, output.Trim()));
                 }
+                // The tool could not even start (blocked by AppLocker or App Control, removed by an antivirus...): the
+                // built-in packager makes the same file, so the build goes on instead of failing.
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    Log.Warn(T("Log_IwauFailed", "-", ex.Message));
+                }
                 finally
                 {
                     try { Directory.Delete(tmpOut, true); } catch { }
@@ -66,6 +78,27 @@ namespace J365.IntunePSApp.Core
             progress?.Invoke(0);
             await Task.Run(() => BuildNative(sourceFolder, SetupFile, outputFile, ct, progress), ct);
             return T("Tool_Native");
+        }
+
+        /// <summary>
+        /// The longest full path IntuneWinAppUtil.exe accepts. It is a .NET Framework program without long path support:
+        /// a file at 260 characters or more makes it compress for minutes and then fail ("Could not find a part of the
+        /// path"), as a package of 770 MB did in a OneDrive folder with a long name. Such a package goes straight to the
+        /// built-in packager, which has no such limit.
+        /// </summary>
+        public const int MaxToolPath = 259;
+
+        /// <summary>The longest full path the tool would read (the package files) or write (its .intunewin).</summary>
+        internal static int LongestPath(string sourceFolder, string outFolder)
+        {
+            int longest = Path.Combine(Path.GetFullPath(outFolder), Path.GetFileNameWithoutExtension(SetupFile) + ".intunewin").Length;
+            try
+            {
+                foreach (var f in Directory.EnumerateFiles(Path.GetFullPath(sourceFolder), "*", SearchOption.AllDirectories))
+                    longest = Math.Max(longest, f.Length);
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException) { }
+            return longest;
         }
 
         /// <summary>
@@ -118,6 +151,20 @@ namespace J365.IntunePSApp.Core
             lock (output) return (p.ExitCode, output.ToString());
         }
 
+        /// <summary>
+        /// Installers and archives are compressed already: compressing them again took about 100 s of a 770 MB installer to
+        /// save 0.6%. Such a file over 8 MB is stored as it is (a zip entry any extractor reads); everything else, the
+        /// scripts and the toolkit, is compressed.
+        /// </summary>
+        internal static CompressionLevel LevelFor(string file)
+        {
+            string ext = Path.GetExtension(file).ToLowerInvariant();
+            bool packed = ext is ".exe" or ".msi" or ".msp" or ".msu" or ".cab" or ".zip" or ".7z" or ".rar" or ".gz" or ".msix" or ".msixbundle"
+                or ".appx" or ".appxbundle" or ".nupkg" or ".iso" or ".wim" or ".esd" or ".jar" or ".mp4" or ".jpg" or ".png";
+            try { return packed && new FileInfo(file).Length > 8L * 1024 * 1024 ? CompressionLevel.NoCompression : CompressionLevel.Optimal; }
+            catch { return CompressionLevel.Optimal; }
+        }
+
         public static void BuildNative(string sourceFolder, string setupFile, string outputFile, CancellationToken ct = default, Action<double> progress = null)
         {
             // The two working copies (zip and encrypted zip) go to the application's temporary folder, not next to the
@@ -142,7 +189,7 @@ namespace J365.IntunePSApp.Core
                     foreach (var f in files)
                     {
                         ct.ThrowIfCancellationRequested();
-                        var entry = zip.CreateEntry(f.Substring(src.Length + 1).Replace('\\', '/'), CompressionLevel.Optimal);
+                        var entry = zip.CreateEntry(f.Substring(src.Length + 1).Replace('\\', '/'), LevelFor(f));
                         entry.LastWriteTime = ZipDate(File.GetLastWriteTime(f));
                         using var es = entry.Open();
                         using var input = new FileStream(f, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 20, FileOptions.SequentialScan);

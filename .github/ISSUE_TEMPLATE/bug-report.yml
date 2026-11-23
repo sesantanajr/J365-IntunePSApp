@@ -21,12 +21,12 @@ body:
     id: version
     attributes:
       label: J365 IntunePSApp version and Windows version / Versão do aplicativo e do Windows
-      placeholder: "2.6.2 - Windows 11 25H2 - portable / installed"
+      placeholder: "2.7.0 - Windows 11 25H2 - portable / installed"
     validations:
       required: true
   - type: textarea
     id: logs
     attributes:
       label: Logs
-      description: "Content of build.log and/or the PSAppDeployToolkit log. Remove sensitive data first. / Conteúdo do build.log e/ou do log do PSAppDeployToolkit. Remova dados sensíveis antes."
+      description: "Application log (Settings > General > Logs, or %LOCALAPPDATA%\\J365\\IntunePSApp\\logs\\app-YYYYMMDD.log), build.log of the package and/or the PSAppDeployToolkit log. Remove sensitive data first. / Log do aplicativo (Configurações > Geral > Logs, ou %LOCALAPPDATA%\\J365\\IntunePSApp\\logs\\app-AAAAMMDD.log), build.log do pacote e/ou log do PSAppDeployToolkit. Remova dados sensíveis antes."
       render: text

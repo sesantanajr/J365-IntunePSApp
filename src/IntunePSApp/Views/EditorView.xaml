@@ -424,6 +424,9 @@
                 <TextBlock Text="{l:T Ed_RemovePrevHint}" Style="{StaticResource Hint}" Margin="52,6,0,0"/>
                 <CheckBox x:Name="ChkKeepNewer" Style="{StaticResource Switch}" Content="{l:T Ed_KeepNewer}" Margin="0,14,0,0"/>
                 <TextBlock Text="{l:T Ed_KeepNewerHint}" Style="{StaticResource Hint}" Margin="52,6,0,0"/>
+                <CheckBox x:Name="ChkKeepSame" Style="{StaticResource Switch}" Content="{l:T Ed_KeepSame}" Margin="0,14,0,0"
+                          IsEnabled="{Binding IsChecked, ElementName=ChkKeepNewer}"/>
+                <TextBlock Text="{l:T Ed_KeepSameHint}" Style="{StaticResource Hint}" Margin="52,6,0,0"/>
                 <TextBlock Text="{l:T Ed_ProgramName}" Style="{StaticResource Label}"/>
                 <Grid>
                   <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>

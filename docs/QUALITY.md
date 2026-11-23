@@ -1,4 +1,4 @@
-# Revisão de qualidade — versão 2.6
+# Revisão de qualidade — versão 2.7
 
 *English summary below.*
 
@@ -6,12 +6,38 @@
 
 | Etapa | O que verifica |
 | --- | --- |
-| Testes automatizados (Windows, a cada push) | **349 testes**: geração do script do PSAppDeployToolkit (validado pelo Windows PowerShell 5.1), detecção, marca do pacote, `.intunewin`, metadados do Intune, textos da publicação, leitura da Microsoft Store, planejamento e regras do lote, ícones genéricos, idiomas (chaves e marcadores nos dois idiomas). |
+| Testes automatizados (Windows, a cada push) | **409 testes**: geração do script do PSAppDeployToolkit (validado pelo Windows PowerShell 5.1), detecção, marca do pacote, `.intunewin`, metadados do Intune, textos da publicação, leitura da Microsoft Store, planejamento e regras do lote, ícones genéricos, idiomas (chaves e marcadores nos dois idiomas), verificação de versões sem a API do GitHub, versões mantidas pelo pacote (executadas no Windows PowerShell 5.1), caminhos longos, publicação sem duplicatas. `J365_LIVE_TESTS=1` inclui as verificações contra o GitHub real. |
 | Verificações de interface | O aplicativo renderiza início, catálogo, janela de lote, as 8 etapas do editor, pacotes, configurações e conexão, em português e inglês, temas claro e escuro, em dois tamanhos de janela; também exercita editar/salvar/reabrir e o aviso de pacote desatualizado. Uma captura ausente reprova a versão. |
 | Executável publicado | Teste de fumaça (`--version` igual à versão da release), `SHA256SUMS.txt` e atestado de procedência da compilação. |
 | Banco de dados (diário) | O gerador avisa quando um padrão de nome curado não corresponde mais ao que os instaladores registram. |
 
-## O que a 2.6 mudou e como foi verificado
+## O que a 2.7 mudou e como foi verificado
+
+A 2.7 partiu dos logs de uma máquina real (aplicativo, `build.log`, logs do PSAppDeployToolkit e do Intune Management Extension) e de uma revisão de todo o código em quatro frentes: empacotamento, publicação, infraestrutura e interface.
+
+| Área | Constatação | Alteração e verificação |
+| --- | --- | --- |
+| Verificação de versões | Cópias até a 2.6.0 diziam "versão mais recente" com a 2.6.1 publicada: a API do GitHub (60 consultas por hora por endereço) estava esgotada na rede corporativa, que divide um único endereço público. O contador de limite medido começou a janela 12 s depois da verificação que falhou. | Versão lida no `SHA256SUMS.txt` da última release (github.com, sem esse limite), com API e página como alternativas; limite atingido explicado; cada verificação no log; nova verificação a cada 4 h com a janela aberta. Teste ao vivo: a release é encontrada pelos arquivos, sem a API. |
+| Mesma versão instalada | No Intune, o pacote do Adobe Acrobat Reader removeu a versão idêntica (4 min) e a instalou de novo (5 min), depois de pedir para fechar o app. | A mesma versão do mesmo produto (mesmo código de produto MSI ou mesma arquitetura) é mantida e marcada, com as ações pós-instalação. O bloco gerado foi executado no Windows PowerShell 5.1 com instalações simuladas (mesma versão, mais nova, mais antiga, outro código, x86 × x64, ARM64, por usuário). |
+| Caminhos longos | A segunda geração do mesmo pacote numa pasta do OneDrive chegou a 274 caracteres; o IntuneWinAppUtil falhou depois de 100 s. | Nome de pasta curto, nomes longos encurtados, caminho conferido antes da ferramenta, empacotador interno sem recompactar instaladores. Teste com 32 reservas concorrentes repetido 5 vezes. |
+| Microsoft Store | A publicação chamava o Graph v1.0, mas o `winGetApp` só existe no beta (documentação e SDKs conferidos). | Publicação pelo beta; criação sem repetição após timeout ou 5xx, com busca do app criado. Teste com servidor local: 429 é repetido, 500 não. |
+| Configurações | Duas janelas sobrescreviam as configurações uma da outra; o `config.json` não era forçado ao disco e um arquivo danificado era substituído em silêncio. | Uma janela por pasta de dados; gravação com flush; cópia do arquivo danificado. |
+| Interface | Lote iniciável duas vezes durante o login; duplo clique na barra de rolagem baixava um app; catálogo com dados antigos após atualizar o banco; edição perdida nas Configurações; textos cortados entre 1024 e 1366 px. | Correções nos quatro fluxos, botões que quebram linha, indicadores em duas colunas abaixo de 1150 px, Esc nas caixas de diálogo, contraste do tema claro. |
+| Textos | Referências a botões que não existem mais, textos da linha de comando sem acentos, "locatário" e "tenant" misturados. | 37 textos em português revisados; os testes conferem chaves e marcadores nos dois idiomas. |
+| Entrega | Um push só de documentação logo após o aumento de versão impediria a publicação da release. | O workflow publica mesmo assim; o banco de dados não é publicado com mais de 10% menos aplicativos. |
+
+## Limites
+
+- Não houve publicação em um tenant real nesta revisão: a publicação de apps da Microsoft Store pelo Graph beta, o lote com publicação e a manutenção da mesma versão em dispositivos devem ser validados com um grupo piloto.
+- Cópias até a 2.6.0 só consultam a API do GitHub: numa rede com o limite esgotado, precisam ser atualizadas uma vez manualmente.
+- A verificação dos arquivos do PSAppDeployToolkit cobre o módulo e o inicializador assinados; os arquivos não assinados do template são recopiados da release oficial quando a cópia é reinstalada.
+- As verificações de interface não substituem leitor de tela, múltiplos monitores e todas as escalas de DPI. O executável ainda não tem assinatura Authenticode.
+
+## English summary
+
+Each release runs 409 automated tests on Windows, renders every page (including the batch window) in both languages and themes, smoke-tests the published executable and publishes checksums and a provenance attestation. 2.7 started from the logs of a real machine and a review of the whole code: the update check no longer depends on the GitHub API (whose limit a company network shares), the same version already installed is kept instead of reinstalled, long OneDrive paths no longer break IntuneWinAppUtil, the built-in packager stores installers instead of recompressing them, apps of the Microsoft Store are published through Graph beta without duplicates, one window runs per data folder with safely written settings, and many interface and text issues were fixed. Publishing to a live tenant still has to be validated with a pilot group.
+
+## Revisão anterior — versão 2.6
 
 | Área | Constatação | Alteração |
 | --- | --- | --- |
@@ -23,17 +49,6 @@
 | Microsoft Store | Apps da origem msstore do winget (ex.: Microsoft PC Manager, 9PM860492SZD) não existiam no banco. | Pesquisa ao vivo pelo nome ou ID e publicação como *Microsoft Store app (new)*; conferida contra o serviço real (busca, manifesto, catálogo, logo, apps UWP e Win32 da Store). |
 | Atualização | Uma verificação sem resposta do GitHub dizia "você tem a versão mais recente". | O motivo é mostrado; com a API bloqueada, a versão vem da página de releases; o caminho de atualização foi repetido contra a release real (SHA-256 e versão do executável). |
 | Projetos existentes | A nova escolha de notificações entraria na identificação da revisão e marcaria pacotes da 2.5.1 como desatualizados. | Ausente quando automática: projetos e registros de revisão da 2.5.1 continuam válidos. |
-
-## Limites
-
-- Não houve publicação em um tenant real nesta revisão: criação e atribuição de apps da Microsoft Store e a publicação em lote devem ser validadas com um grupo piloto.
-- A disponibilidade de um app na Microsoft Store depende do mercado e das políticas do tenant; o contexto de instalação (sistema para apps UWP/MSIX) pode ser ajustado no Intune se um app não o suportar.
-- As impressões de ícones genéricos cobrem os ícones de fábrica conhecidos; um instalador com ícone de instalador próprio (que não é o ícone do app) não é detectado.
-- As verificações de interface não substituem leitor de tela, múltiplos monitores e todas as escalas de DPI. O executável ainda não tem assinatura Authenticode.
-
-## English summary
-
-Each release runs 349 automated tests on Windows, renders every page (including the batch window) in both languages and themes, smoke-tests the published executable and publishes checksums and a provenance attestation. 2.6 fixed Intune toasts and blocking in silent mode, generic installer icons, discarded silent switches, per-user Inno Setup, the .NET Desktop Runtime 10 detection, the misleading "up to date" after a failed update check and the layout of the batch window, and added batch deploy and apps of the Microsoft Store (checked against the live Store). Publishing to a live tenant still has to be validated with a pilot group.
 
 ## Revisão anterior — versão 2.5.1
 

@@ -32,12 +32,13 @@ namespace J365.IntunePSApp
         protected override void OnStartup(StartupEventArgs e)
         {
             Args = e.Args ?? Array.Empty<string>();
-            Loc.Instance.SetLanguage(Loc.Resolve(Arg("--lang") ?? ConfigStore.Current.UiLanguage));
-            ThemeManager.Initialize(Arg("--theme"));
-
+            // First, so a failure while the settings, the language or the theme load is logged too (with its stack).
             DispatcherUnhandledException += OnUiException;
             AppDomain.CurrentDomain.UnhandledException += (s, ex) => Log.Error(T("Log_Unhandled", ex.ExceptionObject));
-            TaskScheduler.UnobservedTaskException += (s, ex) => { Log.Error(T("Log_TaskError", ex.Exception.GetBaseException().Message)); ex.SetObserved(); };
+            TaskScheduler.UnobservedTaskException += (s, ex) => { Log.Error(T("Log_TaskError", ex.Exception.GetBaseException())); ex.SetObserved(); };
+
+            Loc.Instance.SetLanguage(Loc.Resolve(Arg("--lang") ?? ConfigStore.Current.UiLanguage));
+            ThemeManager.Initialize(Arg("--theme"));
 
             base.OnStartup(e);
             AppPaths.CleanTemp();
@@ -55,7 +56,18 @@ namespace J365.IntunePSApp
                 return;
             }
 
+            // One window per data folder: two windows would each keep their own copy of the settings, and the last one
+            // closed would overwrite what the other saved (the Intune connection, for example). A second start brings the
+            // open window to the front. After an update or an installation the new copy waits for the previous one to close.
+            if (!HasArg("--snapshot") && !SingleInstance.Claim(waitForPrevious: HasArg("--updated") || HasArg("--installed")))
+            {
+                Log.Info(T("Log_AlreadyOpen"));
+                SingleInstance.ActivateOther();
+                Shutdown(0);
+                return;
+            }
             Log.Info(T("Log_Started", AppInfo.Name, AppInfo.Version, AppPaths.Data));
+            Log.Info(T("Log_Environment", InstallMode(), OsVersion(), System.Globalization.CultureInfo.CurrentUICulture.Name, ProxyFor(AppInfo.RepoUrl)));
             var w = new MainWindow();
             MainWindow = w;
             if (HasArg("--snapshot"))
@@ -68,12 +80,55 @@ namespace J365.IntunePSApp
             w.Show();
         }
 
+        private bool _showingError;
+        private readonly Queue<DateTime> _recentErrors = new Queue<DateTime>();
+
         private void OnUiException(object sender, DispatcherUnhandledExceptionEventArgs e)
         {
             Log.Error(T("Log_UiError", e.Exception));
             e.Handled = true;
+            // An error that comes back while its message is open (layout, binding, rendering) is logged, not shown again:
+            // one dialog per occurrence would pile up until the process ends.
+            if (_showingError) return;
+            var now = DateTime.UtcNow;
+            _recentErrors.Enqueue(now);
+            while (_recentErrors.Count > 0 && now - _recentErrors.Peek() > TimeSpan.FromMinutes(1)) _recentErrors.Dequeue();
+            _showingError = true;
             try { Ui.Warn(T("Err_Unexpected", e.Exception.GetBaseException().Message, AppPaths.Logs)); }
             catch { }
+            finally { _showingError = false; }
+            // The window never opened (or the same failure repeats): ending is better than an invisible process.
+            if (MainWindow == null || !MainWindow.IsLoaded || _recentErrors.Count > 3) Shutdown(1);
+        }
+
+        /// <summary>How this copy runs, for the log: installed for the user, portable, or with a data folder of its own.</summary>
+        private static string InstallMode()
+            => !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("J365_INTUNEPSAPP_DATA")) ? T("Env_DataVariable")
+               : AppPaths.IsInstalledCopy ? T("Env_Installed") : AppPaths.IsPortable ? T("Env_Portable") : T("Env_ReadOnly");
+
+        /// <summary>"10.0.26200.9974": the build and its update revision, as winver shows it.</summary>
+        private static string OsVersion()
+        {
+            var v = Environment.OSVersion.Version;
+            try
+            {
+                using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion");
+                if (key?.GetValue("UBR") is int ubr) return $"{v.Major}.{v.Minor}.{v.Build}.{ubr}";
+            }
+            catch { }
+            return v.ToString();
+        }
+
+        /// <summary>The proxy the requests to GitHub go through ("direct" without one): most network failures come from it.</summary>
+        private static string ProxyFor(string url)
+        {
+            try
+            {
+                var target = new Uri(url);
+                var proxy = System.Net.Http.HttpClient.DefaultProxy?.GetProxy(target);
+                return proxy == null || proxy == target ? T("Env_Direct") : proxy.GetLeftPart(UriPartial.Authority);
+            }
+            catch { return "?"; }
         }
 
         // ------------------------------------------------------------------ command line

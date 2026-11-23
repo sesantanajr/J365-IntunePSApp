@@ -402,6 +402,8 @@ namespace J365.IntunePSApp.Views
             _loading = true;
             RefreshSelection(CmbUiLanguage, CmbStyle, CmbLanguage, CmbMode, CmbNotify, CmbArch);
             _loading = false;
+            // The names of the colors (tooltips of the swatches) follow the language too.
+            BuildSwatches();
             foreach (var d in _dependencies) d.RefreshTexts();
             UpdateInfo();
             UpdateIntuneStatus();
@@ -442,6 +444,7 @@ namespace J365.IntunePSApp.Views
             BtnReleases.Visibility = checkError != null && newApp == null ? Visibility.Visible : Visibility.Collapsed;
             BtnUpdateNow.Visibility = newApp != null ? Visibility.Visible : Visibility.Collapsed;
             BtnUpdateNowText.Text = newApp != null ? T("Settings_UpdateTo", newApp) : "";
+            UpdateOutputHint();
 
             // Screenshots never show the installation of the computer that renders them.
             bool installed = InstallService.IsInstalled && !App.HasArg("--snapshot");
@@ -537,12 +540,8 @@ namespace J365.IntunePSApp.Views
             string accent = TxtAccent.Text.Trim();
             if (accent.Length > 0 && !System.Text.RegularExpressions.Regex.IsMatch(accent, "^#?[0-9A-Fa-f]{6}$")) { Ui.Warn(T("Val_AccentColor")); return; }
 
-            var c = ConfigStore.Current;
-            // What a new package gets now; the package open in the editor follows wherever it still had these defaults.
-            var before = c.NewPackage();
-            c.CheckForUpdates = ChkUpdates.IsChecked == true;
-            c.CompanyName = TxtCompany.Text.Trim();
-            c.Author = TxtAuthor.Text.Trim();
+            // Everything that can be refused is checked before the settings change: a refused save leaves them as they were
+            // (any later save, a theme switch or the window closing, would otherwise write the refused values).
             string logo = TxtLogo.Text.Trim().Trim('"');
             if (!string.IsNullOrEmpty(logo))
             {
@@ -556,6 +555,13 @@ namespace J365.IntunePSApp.Views
                 }
                 catch (Exception ex) { Ui.Error(ex.Message); return; }
             }
+
+            var c = ConfigStore.Current;
+            // What a new package gets now; the package open in the editor follows wherever it still had these defaults.
+            var before = c.NewPackage();
+            c.CheckForUpdates = ChkUpdates.IsChecked == true;
+            c.CompanyName = TxtCompany.Text.Trim();
+            c.Author = TxtAuthor.Text.Trim();
             c.LogoPath = logo;
             c.AccentColor = accent;
             c.DialogStyle = TagOf(CmbStyle);
@@ -574,7 +580,7 @@ namespace J365.IntunePSApp.Views
             c.PreferredArch = TagOf(CmbArch);
             c.PreferredLocale = TagOf(CmbLocale);
             c.OutputFolder = string.IsNullOrWhiteSpace(TxtOutput.Text) ? AppPaths.DefaultOutput : TxtOutput.Text.Trim().Trim('"');
-            c.CatalogUrl = string.IsNullOrWhiteSpace(TxtCatalogUrl.Text) ? AppInfo.DefaultCatalogUrl : TxtCatalogUrl.Text.Trim();
+            c.CatalogUrl = CatalogUrlFromField();
             c.CatalogUpdateDays = int.TryParse(TxtCatalogDays.Text, out var days) ? Math.Clamp(days, 1, 90) : 1;
             // The connection to Intune is not part of these settings: the connection window and Disconnect change it.
             ConfigStore.Save();
@@ -591,15 +597,40 @@ namespace J365.IntunePSApp.Views
             if (dlg.ShowDialog(Window.GetWindow(this)) == true) TxtOutput.Text = dlg.FolderName;
         }
 
+        private void Output_TextChanged(object sender, TextChangedEventArgs e) => UpdateOutputHint();
+
+        /// <summary>A packages folder inside OneDrive is uploaded to the cloud with every package: said under the field.</summary>
+        private void UpdateOutputHint()
+        {
+            if (OutputSyncHint == null || TxtOutput == null) return;
+            bool synced = AppPaths.OneDriveRoot(TxtOutput.Text) != null;
+            OutputSyncHint.Text = synced ? T("Settings_OutputOneDrive") : "";
+            OutputSyncHint.Visibility = synced ? Visibility.Visible : Visibility.Collapsed;
+        }
+
         private void OpenData_Click(object sender, RoutedEventArgs e) => Ui.OpenPath(AppPaths.Data);
         private void OpenLogs_Click(object sender, RoutedEventArgs e) => Ui.OpenPath(AppPaths.Logs);
         private void OpenTools_Click(object sender, RoutedEventArgs e) => Ui.OpenPath(AppPaths.Tools);
 
         // ------------------------------------------------------------------ database
 
+        /// <summary>
+        /// The address of the database typed in the field: empty is the default, and anything but HTTPS (or this computer)
+        /// is refused with a message, keeping the address in use (it gives installers and their SHA256).
+        /// </summary>
+        private string CatalogUrlFromField()
+        {
+            string url = TxtCatalogUrl.Text.Trim();
+            if (url.Length == 0) return AppInfo.DefaultCatalogUrl;
+            if (CatalogService.IsAllowedUrl(url)) return url;
+            Ui.Warn(T("Err_CatalogUrlHttps", url));
+            TxtCatalogUrl.Text = ConfigStore.Current.CatalogUrl;
+            return ConfigStore.Current.CatalogUrl;
+        }
+
         private void ApplyCatalogUrl()
         {
-            ConfigStore.Current.CatalogUrl = string.IsNullOrWhiteSpace(TxtCatalogUrl.Text) ? AppInfo.DefaultCatalogUrl : TxtCatalogUrl.Text.Trim();
+            ConfigStore.Current.CatalogUrl = CatalogUrlFromField();
             ConfigStore.Save();
         }
 

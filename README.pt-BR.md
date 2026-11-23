@@ -1,10 +1,10 @@
 <p align="center"><a href="README.md">English</a> · <strong>Português (Brasil)</strong></p>
 
-<p align="center"><img src="docs/assets/hero-pt-BR.svg" alt="J365 IntunePSApp 2.6.2 — do instalador ao Intune, com controle em cada etapa" width="100%"></p>
+<p align="center"><img src="docs/assets/hero-pt-BR.svg" alt="J365 IntunePSApp 2.7.0 — do instalador ao Intune, com controle em cada etapa" width="100%"></p>
 
 <p align="center"><b>Menos tarefas repetitivas. Mais consistência nos seus pacotes.</b><br>Uma interface visual para preparar, personalizar, testar e publicar aplicativos Windows.</p>
-<p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v2.6.2/J365-IntunePSApp-2.6.2-win-x64.zip"><img src="docs/assets/download-pt-BR.svg" alt="Baixar J365 IntunePSApp 2.6.2 — Windows x64" width="400"></a></p>
-<p align="center"><a href="#recursos">Conheça os recursos</a> · <a href="#comecar">Como começar</a> · <a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/tag/v2.6.2">Notas da versão</a></p>
+<p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v2.7.0/J365-IntunePSApp-2.7.0-win-x64.zip"><img src="docs/assets/download-pt-BR.svg" alt="Baixar J365 IntunePSApp 2.7.0 — Windows x64" width="400"></a></p>
+<p align="center"><a href="#recursos">Conheça os recursos</a> · <a href="#comecar">Como começar</a> · <a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/tag/v2.7.0">Notas da versão</a></p>
 <p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/actions/workflows/build.yml"><img alt="Build and tests" src="https://github.com/sesantanajr/J365-IntunePSApp/actions/workflows/build.yml/badge.svg"></a> <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-315CF5?style=flat-square"></a> <img alt="Windows x64" src="https://img.shields.io/badge/Windows-x64-0A5CA8?style=flat-square"></p>
 
 ## Seu próximo pacote começa aqui
@@ -15,14 +15,14 @@ Transforme um instalador MSI ou EXE em um pacote organizado para o Microsoft Int
 | --- | --- | --- |
 | Catálogo do winget e da Microsoft Store, análise de instaladores, sugestões de parâmetros silenciosos e deploy em lote. | Logo, cores, mensagens, adiamentos e padrões reutilizáveis da sua empresa. | Revisão antes de gerar, testes, logs e proteção contra publicação de pacotes desatualizados. |
 
-<a href="docs/screenshots/pt-BR/application-dark.png"><img src="docs/screenshots/pt-BR/application-dark.png" alt="Editor do J365 IntunePSApp 2.6: nome, versão, arquitetura e instalação em uma interface visual" width="100%"></a>
+<a href="docs/screenshots/pt-BR/application-dark.png"><img src="docs/screenshots/pt-BR/application-dark.png" alt="Editor do J365 IntunePSApp 2.7: nome, versão, arquitetura e instalação em uma interface visual" width="100%"></a>
 
 **Um fluxo, do começo ao fim:** instalador → aplicativo → experiência → ações → desinstalação → detecção → visual → gerar → testar → publicar.
 
 <a id="recursos"></a>
 ## Conheça o que você pode fazer
 
-As telas abaixo são capturas reais da **2.6**, com um projeto demonstrativo. Clique nas imagens para ampliar. Os estados de conexão e teste ilustram a interface, sem representar uma implantação em tenant real.
+As telas abaixo são capturas reais da **2.7**, com um projeto demonstrativo. Clique nas imagens para ampliar. Os estados de conexão e teste ilustram a interface, sem representar uma implantação em tenant real.
 
 ### 01 · Apresente melhor seus aplicativos no Intune
 
@@ -91,19 +91,20 @@ O teste pode ser executado localmente ou no **Windows Sandbox**, quando disponí
 2. Abra **`J365.IntunePSApp.exe`** e conclua a preparação das ferramentas. O runtime está incluído; não é necessário instalar o SDK .NET.
 3. Escolha um instalador ou um aplicativo do catálogo, configure o projeto e revise antes de gerar — ou marque vários aplicativos (winget ou Microsoft Store) e faça o deploy de todos juntos. Valide em um grupo piloto antes de distribuir.
 
-## Novidades da 2.6
+## Novidades da 2.7
 
-- **Apps da Microsoft Store:** o catálogo também pesquisa a Microsoft Store ao vivo, pelo nome ou pelo ID (`9PM860492SZD` encontra o Microsoft PC Manager), e publica esses apps no Intune como **Microsoft Store app (new)**: o Intune instala pela Store e mantém atualizado, sem pacote, com o logo oficial no Portal da Empresa. Sozinhos ou em lote.
-- **Deploy em lote:** marque vários aplicativos no catálogo e gere todos de uma vez com as mesmas configurações (nome da empresa, proprietário, modo de exibição, notificações e adiamento). Cada instalador é baixado do link oficial, conferido pelo SHA256 e empacotado como no editor; opcionalmente, cada pacote é publicado no Intune com a mesma atribuição. Um `.exe` sem parâmetros silenciosos conhecidos, ou um nome que também corresponde a outros aplicativos, é pulado com o motivo, nunca adivinhado, e pode ser aberto no editor. Também por linha de comando: `--batch id1,id2 --mode Silent --publish`.
-- **Instalação silenciosa de verdade:** no modo **Silencioso** o pacote não mostra janelas nem bloqueia aplicativos e, por padrão, a atribuição criada na publicação oculta as notificações do Intune (`hideAll`) e não reinicia o computador. A escolha de notificações também pode ser feita por pacote e como padrão da empresa.
-- **Menos campos repetidos:** a opção de desinstalar versões anteriores fica só na etapa Desinstalação; o nome e a versão da detecção acompanham as etapas Desinstalação e Aplicativo até serem alterados.
-- **Ícones corretos:** ícones genéricos de instaladores (Inno Setup, WiX Burn e os ícones de fábrica do NSIS) não vão mais para o Portal da Empresa; entra o ícone do programa instalado ou o bloco com as iniciais.
-- **Atualização confiável:** "Verificar agora" só diz que está atualizado quando conseguiu consultar o GitHub, mostra a versão encontrada e, se a API do GitHub estiver bloqueada, usa a página de versões.
-- **Parâmetros corretos:** switches que a análise encontra no próprio instalador (NSIS, InstallShield, Advanced Installer, Squirrel) não são mais descartados quando o banco de dados não traz switches; instaladores Inno Setup por usuário recebem `/CURRENTUSER`, como no winget (432 aplicativos); e a detecção do .NET Desktop Runtime 10 volta a reconhecer o nome que ele registra.
+- **Atualização que funciona em redes corporativas:** a versão mais recente é lida nos arquivos da última release no github.com, e não mais na API do GitHub, cujas 60 consultas por hora por endereço são divididas por toda a rede da empresa. Uma verificação que falhou diz o motivo (e quando o limite libera), cada verificação fica no log, e uma janela aberta por dias verifica de novo a cada poucas horas. Cópias até a 2.6.0 dependem da API: se uma continuar dizendo "versão mais recente", baixe esta versão uma vez.
+- **A mesma versão já instalada é mantida:** um dispositivo que já tem exatamente esta versão do mesmo produto não é mais desinstalado e reinstalado (9 minutos e um pedido para fechar o Adobe Acrobat Reader numa implantação real): o pacote aplica as ações pós-instalação e grava a sua marca. Uma opção na etapa Desinstalação.
+- **Pacotes mais rápidos e robustos:** nomes de pasta curtos e verificação do caminho antes do IntuneWinAppUtil (caminhos longos no OneDrive o faziam falhar), e um empacotador interno que não recompacta mais os instaladores (segundos em vez de minutos). As Configurações avisam quando a pasta de pacotes está no OneDrive.
+- **Correções na publicação:** apps da Microsoft Store são publicados pelo Microsoft Graph beta (onde o `winGetApp` existe), uma resposta perdida não cria mais duplicatas, e a lista de versões anteriores nunca pré-seleciona um app de outro nome.
+- **Uma janela por vez** e configurações gravadas com segurança: abrir o aplicativo de novo traz a janela aberta para a frente, em vez de uma segunda janela que sobrescrevia as configurações da primeira.
+- **Interface e textos:** o lote não inicia duas vezes durante o login, o catálogo se atualiza após uma atualização do banco de dados e ignora cliques duplos na barra de rolagem, as Configurações mantêm o que foi digitado, Esc fecha as caixas de diálogo e os textos em português foram revisados.
+
+A 2.6 trouxe os apps da Microsoft Store, o deploy em lote no Intune, instalações silenciosas de verdade, ícones e parâmetros corretos. Todas as mudanças: [CHANGELOG](CHANGELOG.md).
 
 ## Evolução com qualidade
 
-Cada release passa por **349 testes automatizados** no Windows (scripts gerados validados pelo Windows PowerShell 5.1, empacotamento, detecção, textos da publicação, leitura da Microsoft Store, planejamento do lote, idiomas), além de verificações que renderizam o editor, as configurações e as janelas de conexão e de lote nos dois idiomas e temas. A pesquisa na Microsoft Store e a verificação de atualizações também foram exercitadas nos serviços reais. Veja a [revisão de qualidade](docs/QUALITY.md).
+Cada release passa por **409 testes automatizados** no Windows (scripts gerados validados pelo Windows PowerShell 5.1, empacotamento, detecção, textos da publicação, leitura da Microsoft Store, planejamento do lote, idiomas), além de verificações que renderizam o editor, as configurações e as janelas de conexão e de lote nos dois idiomas e temas. A pesquisa na Microsoft Store e a verificação de atualizações também foram exercitadas nos serviços reais. Veja a [revisão de qualidade](docs/QUALITY.md).
 
 Projetos antigos continuam legíveis. Atualizar o editor não altera automaticamente aplicativos já publicados no tenant. A identificação da revisão acompanha novos pacotes; regenere os antigos para recebê-la.
 
@@ -115,7 +116,7 @@ Projetos antigos continuam legíveis. Atualizar o editor não altera automaticam
 
 [Novidades por versão](CHANGELOG.md) · [Análise técnica](docs/QUALITY.md) · [Publicação no Intune](docs/INTUNE-PUBLISH.md) · [Compilar](docs/BUILDING.md) · [Arquitetura / Architecture](docs/ARCHITECTURE.md)
 
-[Contribuir](CONTRIBUTING.md) · [Relatar um problema](https://github.com/sesantanajr/J365-IntunePSApp/issues) · [Security](SECURITY.md) · [SHA256SUMS.txt](https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v2.6.2/SHA256SUMS.txt)
+[Contribuir](CONTRIBUTING.md) · [Relatar um problema](https://github.com/sesantanajr/J365-IntunePSApp/issues) · [Security](SECURITY.md) · [SHA256SUMS.txt](https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v2.7.0/SHA256SUMS.txt)
 
 ---
 

@@ -198,7 +198,32 @@ namespace J365.IntunePSApp
                 string mode = await Task.Run(() => PowerShellPolicy.LanguageMode);
                 if (PowerShellPolicy.IsRestricted) Log.Warn(T("Log_PowerShellRestricted", mode));
             }
-            catch (Exception ex) { Log.Warn(ex.Message); }
+            // With the stack: a failure of these quiet checks is only ever seen in the log.
+            catch (Exception ex) { Log.Warn(ex.ToString()); }
+            StartUpdateTimer();
+        }
+
+        private DispatcherTimer _updateTimer;
+
+        /// <summary>
+        /// A window left open for days still hears of new versions and keeps a current database (winget changes the SHA256
+        /// of installers whose address stays the same): every few hours the daily checks run again. Each one asks GitHub
+        /// only when it is due (20 hours for the version, the days of Settings for the database) or failed last time.
+        /// </summary>
+        private void StartUpdateTimer()
+        {
+            if (_updateTimer != null) return;
+            _updateTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromHours(4) };
+            _updateTimer.Tick += async (s, e) =>
+            {
+                try
+                {
+                    if (CatalogService.Instance.NeedsUpdateCheck(ConfigStore.Current)) await UpdateCatalogAsync(userRequested: false);
+                    await UpdateService.CheckAsync(false, CancellationToken.None);
+                }
+                catch (Exception ex) { Log.Warn(ex.ToString()); }
+            };
+            _updateTimer.Start();
         }
 
         // ------------------------------------------------------------------ navigation
@@ -220,7 +245,10 @@ namespace J365.IntunePSApp
             _pageKey = key;
             UserControl page = key switch { "catalog" => Catalog, "editor" => Editor, "packages" => Packages, "settings" => Settings, _ => Home };
             UpdateCaption();
-            if (page is IRefreshable r) r.Refresh();
+            // Settings is a form: shown again while it is open (the Intune card of the sidebar, a link of Home), only its
+            // information is refreshed; reloading the fields would throw away what was typed and not saved yet.
+            if (page == Settings && PageHost.Content == Settings) Settings.RefreshInfo();
+            else if (page is IRefreshable r) r.Refresh();
             PageHost.Content = page;
             page.Opacity = 0;
             page.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180)));
@@ -476,7 +504,11 @@ namespace J365.IntunePSApp
             SetupOverlay.Visibility = Visibility.Collapsed;
             _setupClosed?.TrySetResult(true);
             if (PageHost.Content is IRefreshable r) r.Refresh();
-            if (!App.HasArg("--no-update")) _ = UpdateService.CheckAsync(false, CancellationToken.None);
+            if (!App.HasArg("--no-update"))
+            {
+                _ = UpdateService.CheckAsync(false, CancellationToken.None);
+                StartUpdateTimer();
+            }
         }
 
         private async void SetupRetry_Click(object sender, RoutedEventArgs e)
@@ -538,9 +570,11 @@ namespace J365.IntunePSApp
             {
                 var ct = ShowBusy(T("Update_Title"), T("Update_Checking"));
                 var release = await AppUpdater.GetLatestAsync(ct);
-                HideBusy();
                 ConfigStore.Current.LatestAppVersion = release.Version;
-                if (VersionUtil.Compare(release.Version, AppInfo.Version) <= 0) { Toast(T("Update_UpToDate", AppInfo.Version), "ok"); return; }
+                if (VersionUtil.Compare(release.Version, AppInfo.Version) <= 0) { HideBusy(); Toast(T("Update_UpToDate", AppInfo.Version), "ok"); return; }
+                // Read from the files of the release (not the API): the size comes from the download server.
+                release.ZipSize = await AppUpdater.ZipSizeAsync(release, ct);
+                HideBusy();
                 string size = release.ZipSize > 0 ? (release.ZipSize / 1048576d).ToString("N0", Loc.Instance.Culture) + " MB" : "?";
                 if (!Ui.Confirm(T("Update_Confirm", AppInfo.Name, AppInfo.Version, release.Version, size), T("Update_Now"), T("Common_Cancel"))) return;
                 // The application restarts at the end: unsaved changes are settled now, while the update can still be cancelled.

@@ -172,17 +172,18 @@
                 <TextBlock Text="{l:T Catalog_DependenciesHint}" Style="{StaticResource Hint}"/>
               </StackPanel>
 
-              <StackPanel Orientation="Horizontal" Margin="0,22,0,0">
-                <Button x:Name="BtnPackage" Style="{StaticResource PrimaryButton}" Click="Package_Click">
+              <!-- A WrapPanel: at 1024-1366 px the three buttons do not fit on one line, and the last one was cut off. -->
+              <WrapPanel Orientation="Horizontal" Margin="0,22,0,-8">
+                <Button x:Name="BtnPackage" Style="{StaticResource PrimaryButton}" Margin="0,0,10,8" Click="Package_Click">
                   <StackPanel Orientation="Horizontal"><TextBlock x:Name="BtnPackageIcon" Text="&#xE896;" Style="{StaticResource Icon}" Foreground="White" Margin="0,0,10,0"/><TextBlock x:Name="BtnPackageText" Text="{l:T Catalog_DownloadAndPackage}"/></StackPanel>
                 </Button>
-                <Button x:Name="BtnQueue" Style="{StaticResource SecondaryButton}" Margin="10,0,0,0" Click="Queue_Click">
+                <Button x:Name="BtnQueue" Style="{StaticResource SecondaryButton}" Margin="0,0,10,8" Click="Queue_Click">
                   <StackPanel Orientation="Horizontal"><TextBlock x:Name="BtnQueueIcon" Text="&#xE710;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock x:Name="BtnQueueText" Text="{l:T Catalog_BatchAdd}"/></StackPanel>
                 </Button>
-                <Button x:Name="BtnSite" Style="{StaticResource SecondaryButton}" Margin="10,0,0,0" Click="Site_Click">
+                <Button x:Name="BtnSite" Style="{StaticResource SecondaryButton}" Margin="0,0,10,8" Click="Site_Click">
                   <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE774;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock Text="{l:T Catalog_Website}"/></StackPanel>
                 </Button>
-              </StackPanel>
+              </WrapPanel>
               <Button x:Name="BtnSearchStore" Style="{StaticResource GhostButton}" HorizontalAlignment="Left" Margin="-8,10,0,0" Visibility="Collapsed" Click="SearchStore_Click">
                 <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE721;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock Text="{l:T Catalog_SearchStore}"/></StackPanel>
               </Button>

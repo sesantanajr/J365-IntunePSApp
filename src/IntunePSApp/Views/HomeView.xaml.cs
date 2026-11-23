@@ -34,16 +34,23 @@ namespace J365.IntunePSApp.Views
 
         /// <summary>Page width (DIPs) under which the page switches to its narrow layout.</summary>
         private const double NarrowBelow = 900;
+        /// <summary>
+        /// Under this width the four indicators go to 2 columns: at 1024-1280 px a quarter of the page left 160-187 px for
+        /// values like "Not connected" (about 200 px at their size), which were cut.
+        /// </summary>
+        private const double FourStatsFrom = 1150;
         private bool? _narrow;
+        private bool? _twoStats;
 
         /// <summary>Narrow window: indicators in 2 columns, the two information cards stacked and no artwork in the banner.</summary>
         private void ApplyResponsiveLayout()
         {
             if (ActualWidth <= 0) return;
+            bool twoStats = ActualWidth < FourStatsFrom;
+            if (_twoStats != twoStats) { _twoStats = twoStats; Stats.Columns = twoStats ? 2 : 4; }
             bool narrow = ActualWidth < NarrowBelow;
             if (_narrow == narrow) return;
             _narrow = narrow;
-            Stats.Columns = narrow ? 2 : 4;
             HeroArt.Visibility = narrow ? Visibility.Collapsed : Visibility.Visible;
             Info.ColumnDefinitions[1].Width = new GridLength(narrow ? 0 : 16);
             Info.ColumnDefinitions[2].Width = narrow ? new GridLength(0) : new GridLength(1, GridUnitType.Star);

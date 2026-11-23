@@ -37,11 +37,13 @@ namespace J365.IntunePSApp.Core
         }
 
         /// <summary>
-        /// True when the text is empty or a list of whole numbers separated by commas, semicolons or spaces.
-        /// Anything else ("3010-3015", "0x10") would be dropped without notice when the script is written.
+        /// True when the text is empty or a list of whole numbers (32-bit, as exit codes are) separated by commas,
+        /// semicolons or spaces. Anything else ("3010-3015", "0x10", 3221225477) would be dropped without notice when the
+        /// script is written, or refused by PowerShell when it runs.
         /// </summary>
         public static bool IsCodeList(string text)
-            => Regex.Split((text ?? "").Trim(), @"[,;\s]+").All(c => c.Length == 0 || Regex.IsMatch(c, @"^-?\d{1,10}$"));
+            => Regex.Split((text ?? "").Trim(), @"[,;\s]+").All(c => c.Length == 0
+                || int.TryParse(c, System.Globalization.NumberStyles.AllowLeadingSign, System.Globalization.CultureInfo.InvariantCulture, out _));
 
         /// <summary>Text for a comment line: one line, and never the end of a block comment.</summary>
         private static string Comment(string text) => Ascii(Regex.Replace(text ?? "", @"[\r\n]+", " ").Replace("#>", "# >"));
@@ -353,12 +355,18 @@ namespace J365.IntunePSApp.Core
         {
             var L = new List<string>();
             string version = PackageVersion(s);
-            string pattern = (string.IsNullOrWhiteSpace(s.UninstallPattern) ? s.DetectionNamePattern : s.UninstallPattern)?.Trim() ?? "";
+            string pattern = KeepPattern(s);
             if (!s.KeepNewerVersion || !Regex.IsMatch(version, @"\d") || pattern.Trim('*', '?', ' ').Length < 3) return L;
             string pat = Lit(pattern);
+            string sameProduct = s.KeepSameVersion != false ? SameProductCondition(s) : null;
             L.Add("    ## A newer version than this package is already installed (the application updated itself, or it was installed");
             L.Add("    ## some other way): it is kept, because installing this package would downgrade it.");
-            L.Add("    function Test-J365NewerVersion([string]$Installed, [string]$Package)");
+            if (sameProduct != null)
+            {
+                L.Add("    ## The same version installed some other way is kept too: removing it and installing it again would only interrupt");
+                L.Add("    ## the user. It has to be the same product (the same MSI product code, or the same architecture).");
+            }
+            L.Add("    function Test-J365NewerVersion([string]$Installed, [string]$Package, [switch]$OrSame)");
             L.Add("    {");
             L.Add("        $a = @([regex]::Matches([string]$Installed, '\\d+') | Select-Object -First 4 | ForEach-Object { [decimal]$_.Value })");
             L.Add("        $b = @([regex]::Matches([string]$Package, '\\d+') | Select-Object -First 4 | ForEach-Object { [decimal]$_.Value })");
@@ -370,17 +378,64 @@ namespace J365.IntunePSApp.Core
             L.Add("            if ($x -gt $y) { return $true }");
             L.Add("            if ($x -lt $y) { return $false }");
             L.Add("        }");
-            L.Add("        return $false");
+            L.Add("        return [bool]$OrSame");
             L.Add("    }");
-            L.Add($"    $newerApps = @(Get-ADTApplication -Name {pat} -NameMatch 'Wildcard' | Where-Object {{ Test-J365NewerVersion -Installed $_.DisplayVersion -Package {Lit(version)} }})");
-            L.Add("    if ($newerApps.Count -gt 0)");
+            L.Add($"    $installedApps = @(Get-ADTApplication -Name {pat} -NameMatch 'Wildcard')");
+            L.Add($"    $keptApps = @($installedApps | Where-Object {{ Test-J365NewerVersion -Installed $_.DisplayVersion -Package {Lit(version)} }})");
+            L.Add("    $keptReason = 'A newer version is already installed and is kept (this package would downgrade it): '");
+            if (sameProduct != null)
+            {
+                L.Add("    if ($keptApps.Count -eq 0)");
+                L.Add("    {");
+                L.Add($"        $keptApps = @($installedApps | Where-Object {{ {sameProduct} -and (Test-J365NewerVersion -Installed $_.DisplayVersion -Package {Lit(version)} -OrSame) }})");
+                L.Add("        $keptReason = 'The same version is already installed and is kept (installing it again would only interrupt the user): '");
+                L.Add("    }");
+            }
+            L.Add("    if ($keptApps.Count -gt 0)");
             L.Add("    {");
-            L.Add("        Write-ADTLogEntry -Message ('A newer version is already installed and is kept (this package would downgrade it): ' + (($newerApps | ForEach-Object { \"$($_.DisplayName) $($_.DisplayVersion)\".Trim() }) -join '; '))");
+            L.Add("        Write-ADTLogEntry -Message ($keptReason + (($keptApps | ForEach-Object { \"$($_.DisplayName) $($_.DisplayVersion)\".Trim() }) -join '; '))");
+            // The copy that is kept gets the configuration of the package too (registry settings, shortcuts, files): the
+            // post-install actions run before the mark, so a failed action leaves no mark and Intune tries again.
+            var post = s.Actions.Where(a => a.Phase == "PostInstall").ToList();
+            if (post.Count > 0)
+            {
+                L.Add("        ## The post-install actions of the package also apply to the copy that is kept.");
+                foreach (var a in post) L.AddRange(ActionCatalog.Generate(a, s.InstallBehavior == "User").Select(x => x.Length > 0 ? "    " + x : x));
+            }
             if (s.DetectionRequireMark) L.AddRange(WriteMarkLines(s).Select(x => x.Length > 0 ? "    " + x : x));
             L.Add("        return");
             L.Add("    }");
             L.Add("");
             return L;
+        }
+
+        /// <summary>
+        /// The name the kept copy is looked for with: the one the detection uses when it detects by name, so a copy the
+        /// package keeps is also one the detection finds (a broader name could keep a copy the detection does not see, and
+        /// Intune would report the installation as failed at every check); otherwise the name of the uninstallation.
+        /// </summary>
+        internal static string KeepPattern(PackageSettings s)
+            => (s.DetectionMethod == "Registry" && !string.IsNullOrWhiteSpace(s.DetectionNamePattern) ? s.DetectionNamePattern
+                : string.IsNullOrWhiteSpace(s.UninstallPattern) ? s.DetectionNamePattern : s.UninstallPattern)?.Trim() ?? "";
+
+        /// <summary>
+        /// The PowerShell condition ($_ = an installed application with the name of the package) that tells the same product
+        /// as the package: the same MSI product code when the package has one (an x86 and an x64 edition have different
+        /// codes), otherwise the same architecture (Is64BitApplication). Null when it cannot be told apart safely (ARM64
+        /// without a product code: an x64 copy also registers as 64-bit there), so the same version is installed again.
+        /// </summary>
+        internal static string SameProductCondition(PackageSettings s)
+        {
+            if (MsiCode(s) is string code) return $"(([string]$_.ProductCode).Trim('{{', '}}') -eq {Lit(code.Trim('{', '}'))})";
+            // Per-user entries (HKCU) are all reported as 64-bit by the toolkit: the architecture tells nothing there.
+            if (s.InstallBehavior == "User") return null;
+            return (s.AppArch ?? "").Trim().ToLowerInvariant() switch
+            {
+                "x64" => "$_.Is64BitApplication",
+                "x86" => "(-not $_.Is64BitApplication)",
+                "" => "$true",
+                _ => null
+            };
         }
 
         private static List<string> UninstallBody(PackageSettings s)

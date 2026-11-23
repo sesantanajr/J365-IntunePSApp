@@ -7,6 +7,11 @@ on:
   schedule:
     - cron: '17 4 * * *'   # every day at 04:17 UTC
   workflow_dispatch:
+    inputs:
+      allow_smaller:
+        description: 'Publish even when the new database has more than 10% fewer applications than the one in use'
+        type: boolean
+        default: false
   push:
     branches: [ main ]
     paths: [ 'catalog/curated.json', 'tools/CatalogBuilder/**' ]
@@ -23,6 +28,8 @@ jobs:
   catalog:
     name: Build catalog.json.gz from winget-pkgs
     runs-on: ubuntu-latest
+    # A stalled download of the winget-pkgs tarball would otherwise run for 6 hours and hold the queue.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -36,12 +43,21 @@ jobs:
       - name: Publish to the "catalog" release
         env:
           GH_TOKEN: ${{ github.token }}
+          ALLOW_SMALLER: ${{ inputs.allow_smaller }}
         run: |
           COUNT=$(jq .count out/catalog-meta.json)
           GEN=$(jq -r .generated out/catalog-meta.json)
           COMMIT=$(jq -r .commit out/catalog-meta.json)
-          # Safety net: never replace the database with a suspiciously small one.
+          # Safety net: never replace the database with a suspiciously small one. Every copy of the application takes
+          # the new one within a day, so a parsing problem upstream must not reach them: an absolute floor, and no more
+          # than 10% fewer applications than the database in use (Run workflow with allow_smaller overrides it).
           if [ "$COUNT" -lt 5000 ]; then echo "Only $COUNT applications: refusing to publish."; exit 1; fi
+          if [ "$ALLOW_SMALLER" != "true" ] && gh release download catalog -p catalog-meta.json -D prev 2>/dev/null; then
+            PREV=$(jq .count prev/catalog-meta.json)
+            if [ -n "$PREV" ] && [ "$PREV" -gt 0 ] && [ $((COUNT * 10)) -lt $((PREV * 9)) ]; then
+              echo "Only $COUNT applications against $PREV in the release in use: refusing to publish."; exit 1
+            fi
+          fi
           if ! gh release view catalog >/dev/null 2>&1; then
             gh release create catalog --title "Application database" --notes "Generated automatically." --latest=false
           fi

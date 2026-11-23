@@ -100,11 +100,29 @@ namespace J365.IntunePSApp.Core
             return await UpdatePsadtAsync(ct, progress);
         }
 
-        /// <summary>Latest stable 4.x release of the toolkit template, or null when GitHub cannot be reached.</summary>
+        /// <summary>
+        /// Latest stable 4.x release of the toolkit template, or null when GitHub cannot be reached. The API first; when it
+        /// does not answer (its limit of 60 requests an hour is shared by everyone behind the same company address), the
+        /// page of the latest release, which redirects to its tag (the template has the same name in every 4.x release).
+        /// </summary>
         public static async Task<(string Version, string Url)?> GetLatestPsadtReleaseAsync(CancellationToken ct)
+            => ParsePsadtReleases(await Http.TryGetStringAsync(ReleasesApi, 30, ct))
+               ?? PsadtReleaseFromUrl(await Http.FinalUrlAsync(LatestPsadtPage, 30, ct));
+
+        private const string LatestPsadtPage = "https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/latest";
+
+        /// <summary>".../releases/tag/4.1.8" → ("4.1.8", ".../releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip"); null for anything but 4.x.</summary>
+        internal static (string Version, string Url)? PsadtReleaseFromUrl(string url)
         {
-            string json = await Http.TryGetStringAsync(ReleasesApi, 30, ct);
-            if (json == null) return null;
+            var m = Regex.Match(url ?? "", @"/PSAppDeployToolkit/releases/tag/(?<tag>v?(?<v>4\.\d+(\.\d+){0,2}))/?(\?.*)?$", RegexOptions.IgnoreCase);
+            if (!m.Success) return null;
+            return (m.Groups["v"].Value, $"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/{m.Groups["tag"].Value}/PSAppDeployToolkit_Template_v4.zip");
+        }
+
+        /// <summary>The newest stable 4.x release with a template zip in the JSON of the releases API, or null.</summary>
+        internal static (string Version, string Url)? ParsePsadtReleases(string json)
+        {
+            if (string.IsNullOrEmpty(json)) return null;
             try
             {
                 using var doc = JsonDocument.Parse(json);

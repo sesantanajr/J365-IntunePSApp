@@ -23,6 +23,12 @@ namespace J365.IntunePSApp.Views
         private readonly ObservableCollection<BatchItem> _items;
         private CancellationTokenSource _cts;
         private bool _running, _closeWhenDone;
+        /// <summary>
+        /// Between the click on Start and the batch itself: the sign-in in the browser (up to 5 minutes) and the
+        /// confirmation. A second click then would start a second batch over the same items.
+        /// </summary>
+        private bool _preparing, _closed;
+        private CancellationTokenSource _signInCts;
         /// <summary>Every application comes from the Microsoft Store: nothing to build, the window publishes them.</summary>
         private readonly bool _storeOnly;
 
@@ -61,6 +67,8 @@ namespace J365.IntunePSApp.Views
             IntuneConnection.Changed += OnConnectionChanged;
             Closed += (s, e) =>
             {
+                _closed = true;
+                _signInCts?.Cancel();
                 Loc.Instance.LanguageChanged -= OnLanguageChanged;
                 IntuneConnection.Changed -= OnConnectionChanged;
             };
@@ -139,7 +147,7 @@ namespace J365.IntunePSApp.Views
                 : _items.Any(i => i.IsFinished) && pending > 0 ? T("Batch_Retry", pending)
                 : _storeOnly ? T("Batch_StartStore", pending)
                 : publish ? T("Batch_StartPublish", pending) : T("Batch_Start", pending);
-            BtnStart.IsEnabled = !_running && pending > 0;
+            BtnStart.IsEnabled = !_running && !_preparing && pending > 0;
             BtnClose.Content = _running ? T("Common_Cancel") : T("Common_Close");
             SettingsCard.IsEnabled = !_running;
             BtnOpenFolder.Visibility = _items.Any(i => i.Built) && !_running ? Visibility.Visible : Visibility.Collapsed;
@@ -183,9 +191,13 @@ namespace J365.IntunePSApp.Views
             if (IntuneConnection.NeedsSetup && !ConnectWindow.Run(this)) return false;
             if (!IntuneConnection.IsSignedIn)
             {
-                try { await IntuneConnectUi.SignInAsync(null, CancellationToken.None); }
+                // Closing the window stops the wait for the browser.
+                _signInCts = new CancellationTokenSource();
+                try { await IntuneConnectUi.SignInAsync(null, _signInCts.Token); }
                 catch (OperationCanceledException) { return false; }
-                catch (Exception ex) { Ui.Error(T("Auth_Failed", ex.Message)); return false; }
+                catch (Exception ex) { if (!_closed) Ui.Error(T("Auth_Failed", ex.Message)); return false; }
+                finally { _signInCts.Dispose(); _signInCts = null; }
+                if (_closed) return false;
             }
             UpdatePublish();
             if (!IntuneConnection.IsSignedIn || IntuneConnection.NeedsSetup) { Ui.Warn(T("Batch_PublishNotConnected")); return false; }
@@ -201,11 +213,24 @@ namespace J365.IntunePSApp.Views
 
         private async void Start_Click(object sender, RoutedEventArgs e)
         {
-            if (_running) return;
+            if (_running || _preparing) return;
             var o = Options();
             if (o.AllowDefer && (o.DeferTimes < 1 || o.DeferTimes > 99)) { Ui.Warn(T("Val_DeferTimes")); return; }
             if (MainWindow.Current?.Editor?.IsBuilding == true) { Ui.Warn(T("Ed_BusyBuilding")); return; }
-            if (o.Publish && !await ReadyToPublishAsync(o)) return;
+            if (o.Publish)
+            {
+                _preparing = true;
+                UpdateButtons();
+                bool ready;
+                try { ready = await ReadyToPublishAsync(o); }
+                finally
+                {
+                    _preparing = false;
+                    if (!_closed) UpdateButtons();
+                }
+                // Closed while signing in or confirming: nothing starts without the window.
+                if (!ready || _closed) return;
+            }
             if (ChkSaveDefaults.IsChecked == true)
             {
                 var cfg = ConfigStore.Current;

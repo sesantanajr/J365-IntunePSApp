@@ -240,7 +240,26 @@ namespace J365.IntunePSApp.Core
             // Without the package mark, a copy installed some other way (same name, same or newer version) already counts
             // as installed: Intune never runs this package on that device, so the removal never happens there.
             else if (s.RemovePreviousVersions && !s.DetectionRequireMark) v.Warnings.Add(T("Val_Warn_NoPackageMark"));
+            // A newer version usually has another product code: the package keeps it, but the detection by the code of
+            // this version does not find it, so Intune reports a failure at every check on that device.
+            if (s.KeepNewerVersion && s.DetectionMethod == "ProductCode") v.Warnings.Add(T("Val_Warn_KeepNewerProductCode"));
             return v;
+        }
+
+        /// <summary>
+        /// The folder of a package: "7-Zip_26.06". A long name is cut (application 40 characters, version 20): the folder
+        /// sits in a path that may already be long (Documents moved into OneDrive), and the PSAppDeployToolkit template
+        /// adds 95 characters under it, so "Microsoft_Visual_C++_2015-2022_Redistributable_(x64)_14.44.35211.0" took the
+        /// paths of its package past the 260 characters IntuneWinAppUtil.exe accepts.
+        /// </summary>
+        public static string FolderName(PackageSettings s)
+        {
+            string name = Names.Safe($"{s.AppName}_{s.AppVersion}");
+            if (name.Length <= 61) return name;
+            string app = Names.Safe(s.AppName), version = Names.Safe(s.AppVersion);
+            if (app.Length > 40) app = app[..40].TrimEnd('_', '.', '-', ' ');
+            if (version.Length > 20) version = version[..20].TrimEnd('_', '.', '-', ' ');
+            return Names.Safe($"{app}_{version}");
         }
 
         /// <summary>Names of package files (SupportFiles) an action depends on.</summary>
@@ -331,7 +350,7 @@ namespace J365.IntunePSApp.Core
             Log.Ok($"{AppInfo.PsadtName} {psadtVersion}");
 
             Directory.CreateDirectory(outRoot);
-            string name = Names.Safe($"{s.AppName}_{s.AppVersion}");
+            string name = FolderName(s);
             using var reservation = PackageDirectory.Reserve(outRoot, name);
             string pkgRoot = reservation.Folder;
             string srcDir = Path.Combine(pkgRoot, PackageLayout.PackageDir);

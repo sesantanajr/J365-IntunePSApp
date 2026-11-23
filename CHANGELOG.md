@@ -2,6 +2,45 @@
 
 All notable changes to J365 IntunePSApp. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.7.0 - 2026-11-23
+
+Updates that work on company networks, faster and safer packages, and a review of the whole code (packaging, publishing, settings, installation and interface), driven by the logs of a real deployment.
+
+### Fixed
+
+- **"You have the latest version" while a newer one existed.** The check asked the GitHub API, which allows 60 requests an hour per public address without sign-in. Behind a company proxy everyone shares that address, so the limit was often reached, and copies up to 2.6.0 then reported "up to date" (2.6.1 already said that the check failed). The latest version is now read from the `SHA256SUMS.txt` of the latest release on github.com (`releases/latest/download/SHA256SUMS.txt`): it has no such limit and names the zip of the application. The API and the page of the latest release are the fallbacks; a reached limit says when it frees up; every check is logged with its source; the size of the update comes from the download server. The PSAppDeployToolkit check also falls back to the page of its latest release. **Copies of 2.6.0 or older still ask only the API: if one keeps saying "up to date", download this release once.**
+- **Apps of the Microsoft Store could not be published.** Intune's `winGetApp` ("Microsoft Store app (new)") exists only in the beta endpoint of Microsoft Graph, and the publication called v1.0. It now uses beta, like the rest of the publishing.
+- **No duplicates after a lost answer.** A request that creates something (a Store app, the app registration of the automatic setup) is no longer sent again after a timeout or a 5xx answer: the Store app of the same product id is looked for instead, and a setup run again reuses the registration. A consent or role assignment that was already applied counts as done; a waiting Store app is not reported as failed when one read of its state fails.
+- **The list of earlier versions could preselect an unrelated app.** Publishing "Git" offered to update "GitHub Desktop" first. Apps are matched by whole word ("Git 2.45" yes; "GitHub Desktop", or "Notepad++" for "Notepad", no), the app with exactly this name comes first and is the only one preselected (otherwise "Create a new app"), and "same version" is told by the version.
+- **Rebuilds failed in IntuneWinAppUtil on long paths.** A second build of the same package went to a folder with a 32-character GUID in its name; in a Documents folder moved into OneDrive the files of the toolkit passed 260 characters, and Microsoft's tool failed after compressing for minutes (100 s lost with Adobe Acrobat Reader). The folder now gets the date and time only (`App_1.0_20261123-080610`), long names are shortened, the longest path is checked before the tool runs (the built-in packager takes over at once), and the Windows Sandbox file has a short name.
+- **The built-in packager no longer compresses installers again**: an installer is compressed already, so it is stored as it is (seconds instead of about 100 s for 770 MB, for 0.6% more size). IntuneWinAppUtil blocked by App Control or an antivirus no longer fails the build.
+- **Two windows overwrote each other's settings.** Starting the application again opened a second window, and the last one closed wrote its copy of the settings over the other (the Intune connection, for example). A second start now brings the open window to the front.
+- **config.json could be lost.** It is flushed to the disk before it replaces the previous one (a power cut could leave a file of zeros), and a damaged file is kept aside (`config.json.bad-…`) instead of being silently replaced by the defaults.
+- **Batch:** a second click on Start while signing in started a second batch over the same items, and closing the window during the sign-in ran the batch without a window. Enter in a field no longer starts the batch; publishing states have their colors.
+- **Catalog:** a double-click on the scroll bar or on the tick of a row downloaded the selected application; after the database was updated the list kept the old versions (and downloaded them); packaging while another package was being generated downloaded the installer for nothing; the buttons of the details wrap instead of being cut at 1024-1366 px.
+- **Settings:** clicking the Intune card while on Settings reloaded the form and threw away what was typed; a refused save (a missing logo) still changed the settings in memory. Home shows its four indicators in two columns below 1150 px, where values like "Not connected" were cut.
+- **Kept versions and the detection:** a newer version is looked for with the name the detection uses, so the detection finds what the package kept (a broader name made Intune report a failure at every check). Keeping a newer version with a detection by product code is warned.
+- Exit codes above 2147483647 are refused when typed (PowerShell refused them when the package ran). Accented texts of the publishing script arrive intact (Windows PowerShell wrote them in the code page of the console). *Validate* says when it timed out instead of opening an empty window. A cancel interrupts the waits of the publishing script within a second.
+- **Uninstall > Remove everything** keeps the packages stored inside the data folder (the "Pacotes" folder of 1.x) and removes the certificate this computer used to connect to Intune.
+
+### Added
+
+- **Keep the same version already installed** (Uninstall step, on by default). A device that already has this exact version of the same product (the same MSI product code, or the same architecture), installed some other way, is not uninstalled and installed again: the package applies its post-install actions and records its mark. In a real deployment of Adobe Acrobat Reader 26.003.22110 the package had removed the identical version for 4 minutes and installed it again for 5, after asking the user to close it. Turn it off to reinstall (to repair a copy, or to apply the switches of the package). The post-install actions also apply to a newer version that is kept.
+- **A packages folder inside OneDrive is pointed out** in Settings > General > Folders: every package (the installer and its .intunewin, hundreds of MB for large apps) is uploaded to the cloud.
+- **Checks while the window stays open:** every 4 hours the checks of a new version and of the database run again when they are due.
+- **Diagnostics in the log:** the environment at start (installed or portable copy, Windows build, culture, proxy to GitHub), the full stack of background failures, and the result of every update check.
+- **The publishing script** explains the certificate and session errors (AADSTS700027, 700024, 7000112, 700082) and notes when the app it updates by name was not created by J365 IntunePSApp.
+- The application database only comes over HTTPS (it gives the installers and their SHA256); a copy that cannot be read is downloaded again at once. Esc closes the dialogs; the detection test shows that it is running.
+
+### Changed
+
+- pt-BR texts: references to buttons that no longer exist ("Configurar automaticamente"), the command line texts with their accents, "tenant" everywhere, Entra role names, "Aplicativo da Microsoft Store (novo)" and agreement fixes. Labels of the light theme have more contrast.
+- Release workflow: a version followed within minutes by a documentation-only push is still published, "Run workflow" on main publishes a skipped version, and the version is read with XPath. Catalog workflow: a 45-minute limit, and no publication of a database with more than 10% fewer applications than the one in use.
+
+### Documentation
+
+- SECURITY (certificate connection, Store catalog, update check), code signing policy, notices, contributing (application log, live tests), building (complete pt-BR), architecture (update check, kept versions), README in both languages and the issue template (application log).
+
 ## 2.6.2 - 2026-11-23
 
 ### Fixed

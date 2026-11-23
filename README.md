@@ -1,10 +1,10 @@
 <p align="center"><strong>English</strong> · <a href="README.pt-BR.md">Português (Brasil)</a></p>
 
-<p align="center"><img src="docs/assets/hero-en.svg" alt="J365 IntunePSApp 2.6.2 — from installer to Intune, with control at every step" width="100%"></p>
+<p align="center"><img src="docs/assets/hero-en.svg" alt="J365 IntunePSApp 2.7.0 — from installer to Intune, with control at every step" width="100%"></p>
 
 <p align="center"><b>Fewer repetitive tasks. More consistent deployment packages.</b><br>A visual workspace to prepare, customize, test and publish Windows applications.</p>
-<p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v2.6.2/J365-IntunePSApp-2.6.2-win-x64.zip"><img src="docs/assets/download-en.svg" alt="Download J365 IntunePSApp 2.6.2 — Windows x64" width="400"></a></p>
-<p align="center"><a href="#features">Explore the features</a> · <a href="#get-started">Get started</a> · <a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/tag/v2.6.2">Release notes</a></p>
+<p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v2.7.0/J365-IntunePSApp-2.7.0-win-x64.zip"><img src="docs/assets/download-en.svg" alt="Download J365 IntunePSApp 2.7.0 — Windows x64" width="400"></a></p>
+<p align="center"><a href="#features">Explore the features</a> · <a href="#get-started">Get started</a> · <a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/tag/v2.7.0">Release notes</a></p>
 <p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/actions/workflows/build.yml"><img alt="Build and tests" src="https://github.com/sesantanajr/J365-IntunePSApp/actions/workflows/build.yml/badge.svg"></a> <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-315CF5?style=flat-square"></a> <img alt="Windows x64" src="https://img.shields.io/badge/Windows-x64-0A5CA8?style=flat-square"></p>
 
 ## Your next deployment package starts here
@@ -15,14 +15,14 @@ Turn an MSI or EXE installer into an organized Microsoft Intune package. **J365 
 | --- | --- | --- |
 | A catalog of winget and the Microsoft Store, installer analysis, silent-switch suggestions and batch deploy. | Company logo, colors, messages, deferrals and reusable defaults. | Review before building, tests, logs and protection against stale package publishing. |
 
-<a href="docs/screenshots/en/application-dark.png"><img src="docs/screenshots/en/application-dark.png" alt="J365 IntunePSApp 2.6 visual application editor" width="100%"></a>
+<a href="docs/screenshots/en/application-dark.png"><img src="docs/screenshots/en/application-dark.png" alt="J365 IntunePSApp 2.7 visual application editor" width="100%"></a>
 
 **One complete workflow:** installer → application → experience → actions → uninstall → detection → branding → build → test → publish.
 
 <a id="features"></a>
 ## Explore the features
 
-Actual **2.6** captures with a demonstration project. Click images to enlarge. Connection and test states demonstrate the UI, not a live tenant deployment.
+Actual **2.7** captures with a demonstration project. Click images to enlarge. Connection and test states demonstrate the UI, not a live tenant deployment.
 
 ### 01 · Present applications clearly in Intune
 
@@ -91,19 +91,20 @@ Test locally or in **Windows Sandbox**, where available, with results and logs. 
 2. Open **`J365.IntunePSApp.exe`** and complete tool preparation. The runtime is included; no .NET SDK is required.
 3. Select an installer or a catalog application, configure the project and review before building — or tick several applications (winget or Microsoft Store) and deploy them together. Validate in a pilot group before distribution.
 
-## New in 2.6
+## New in 2.7
 
-- **Apps of the Microsoft Store:** the catalog also searches the Microsoft Store live, by name or product id (`9PM860492SZD` finds Microsoft PC Manager), and publishes them to Intune as **Microsoft Store app (new)**: Intune installs them from the Store and keeps them current, with no package and the official logo in the Company Portal. Alone or in a batch.
-- **Batch deploy:** tick several applications in the catalog and generate them all at once with the same settings (company name, owner, display mode, notifications and deferral). Each installer is downloaded from its official link, checked against its SHA256 and packaged as in the editor; optionally each package is published to Intune with the same assignment. An `.exe` without known silent switches, or a name that also matches other applications, is skipped with the reason, never guessed, and can be opened in the editor. Also from the command line: `--batch id1,id2 --mode Silent --publish`.
-- **Truly silent installations:** in **Silent** mode the package shows no dialog and blocks no application and, by default, the assignment created by the publication hides Intune's toast notifications (`hideAll`) and does not restart the device. Notifications can also be chosen per package and as a company default.
-- **Fewer repeated fields:** the switch that uninstalls earlier versions lives on the Uninstall step only; the detection name and version follow the Uninstall and Application steps until changed.
-- **Right icons:** generic installer icons (Inno Setup, WiX Burn and the NSIS stock icons) no longer reach the Company Portal; the icon of the installed program or the initials tile is used instead.
-- **Reliable updates:** "Check now" only says up to date when it reached GitHub, names the version found and, when the GitHub API is blocked, uses the releases page.
-- **Right switches:** switches the analysis finds in the installer itself (NSIS, InstallShield, Advanced Installer, Squirrel) are no longer discarded when the database has none; per-user Inno Setup installers get `/CURRENTUSER`, as winget does (432 applications); and the .NET Desktop Runtime 10 detection matches the name it registers again.
+- **Updates that work on company networks:** the latest version is read from the files of the latest release on github.com instead of the GitHub API, whose 60 requests an hour per address a company network shares. A failed check says why (and when the limit frees up), every check is in the log, and a window left open checks again every few hours. Copies up to 2.6.0 depend on the API: if one keeps saying "up to date", download this release once.
+- **The same version already installed is kept:** a device that already has this exact version of the same product is no longer uninstalled and installed again (9 minutes and a prompt to close Adobe Acrobat Reader in a real deployment): the package applies its post-install actions and records its mark. One switch on the Uninstall step.
+- **Faster, sturdier packages:** short folder names and a path check before IntuneWinAppUtil (long OneDrive paths made it fail), and a built-in packager that no longer recompresses installers (seconds instead of minutes). Settings point out a packages folder inside OneDrive.
+- **Publishing fixes:** apps of the Microsoft Store are published through Microsoft Graph beta (where `winGetApp` exists), a lost answer no longer creates duplicates, and the list of earlier versions never preselects an app with another name.
+- **One window at a time** and safely written settings: starting the application again brings the open window to the front instead of a second window that overwrote the settings of the first.
+- **Interface and texts:** a batch cannot start twice while signing in, the catalog refreshes after a database update and ignores double-clicks on its scroll bar, Settings keep what was typed, Esc closes dialogs, and the Portuguese texts were reviewed.
+
+2.6 brought apps of the Microsoft Store, batch deploy to Intune, truly silent installations, correct icons and switches. All changes: [CHANGELOG](CHANGELOG.md).
 
 ## Quality as the product evolves
 
-Every release passes **349 automated tests** on Windows (generated scripts parsed by Windows PowerShell 5.1, packaging, detection, publishing texts, the Microsoft Store parsing, batch planning, localization) plus interface checks that render the editor, settings, connection and batch windows in both languages and themes. The Microsoft Store search and the update check were also exercised against the live services. See the [quality review](docs/QUALITY.md).
+Every release passes **409 automated tests** on Windows (generated scripts parsed by Windows PowerShell 5.1, packaging, detection, publishing texts, the Microsoft Store parsing, batch planning, localization) plus interface checks that render the editor, settings, connection and batch windows in both languages and themes. The Microsoft Store search and the update check were also exercised against the live services. See the [quality review](docs/QUALITY.md).
 
 Existing projects remain readable. Updating the editor does not change existing tenant applications. New packages carry a revision record; regenerate legacy packages to create one.
 
@@ -115,7 +116,7 @@ Existing projects remain readable. Updating the editor does not change existing 
 
 [Changelog](CHANGELOG.md) · [Quality review](docs/QUALITY.md) · [Intune publishing](docs/INTUNE-PUBLISH.md) · [Building](docs/BUILDING.md) · [Architecture](docs/ARCHITECTURE.md)
 
-[Contribute](CONTRIBUTING.md) · [Report an issue](https://github.com/sesantanajr/J365-IntunePSApp/issues) · [Security](SECURITY.md) · [SHA256SUMS.txt](https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v2.6.2/SHA256SUMS.txt)
+[Contribute](CONTRIBUTING.md) · [Report an issue](https://github.com/sesantanajr/J365-IntunePSApp/issues) · [Security](SECURITY.md) · [SHA256SUMS.txt](https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v2.7.0/SHA256SUMS.txt)
 
 ---
 

@@ -157,7 +157,23 @@ namespace J365.IntunePSApp.Core
 
             var folders = new List<string>();
             if (IsOwnFolder(AppPaths.InstallDir, "J365 IntunePSApp")) folders.Add(AppPaths.InstallDir);
-            if (removeData && IsOwnFolder(AppPaths.UserDataDir, "IntunePSApp")) folders.Add(AppPaths.UserDataDir);
+            if (removeData && IsOwnFolder(AppPaths.UserDataDir, "IntunePSApp"))
+            {
+                RemoveConnectionCertificate();
+                // Packages are never removed: an output folder inside the data folder ("Pacotes" of 1.x, or one the user
+                // chose there) stays, and only the rest of the data folder goes.
+                var keep = PackageFoldersIn(AppPaths.UserDataDir);
+                if (keep.Count == 0) folders.Add(AppPaths.UserDataDir);
+                else
+                {
+                    foreach (var entry in Directory.EnumerateFileSystemEntries(AppPaths.UserDataDir))
+                    {
+                        if (keep.Any(k => k.Equals(entry.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))) continue;
+                        if (Directory.Exists(entry)) folders.Add(entry);
+                        else TryDelete(entry);
+                    }
+                }
+            }
 
             bool runningInstalledCopy = AppPaths.IsInstalledCopy;
             foreach (var f in folders.ToList())
@@ -177,6 +193,53 @@ namespace J365.IntunePSApp.Core
                     WorkingDirectory = Path.GetTempPath()
                 });
             }
+        }
+
+        /// <summary>
+        /// Top-level folders of <paramref name="dataDir"/> that hold packages: the output folder of its settings when it is
+        /// inside, and "Pacotes" (the default of 1.x). Only folders with something in them are kept.
+        /// </summary>
+        internal static List<string> PackageFoldersIn(string dataDir)
+        {
+            var keep = new List<string>();
+            string root = Path.GetFullPath(dataDir).TrimEnd('\\');
+            var candidates = new List<string> { Path.Combine(root, "Pacotes"), Path.Combine(root, "Packages") };
+            try
+            {
+                string output = Json.Load<AppConfig>(Path.Combine(root, "config.json")).OutputFolder;
+                if (!string.IsNullOrWhiteSpace(output)) candidates.Add(Path.GetFullPath(output));
+            }
+            catch { }
+            foreach (var c in candidates)
+            {
+                string full = c.TrimEnd('\\');
+                if (!full.StartsWith(root + "\\", StringComparison.OrdinalIgnoreCase)) continue;
+                // The top-level folder of the data folder that contains it.
+                string top = Path.Combine(root, full.Substring(root.Length + 1).Split('\\')[0]);
+                try
+                {
+                    if (Directory.Exists(full) && Directory.EnumerateFileSystemEntries(full).Any() && !keep.Contains(top, StringComparer.OrdinalIgnoreCase)) keep.Add(top);
+                }
+                catch { }
+            }
+            return keep;
+        }
+
+        /// <summary>
+        /// "Remove everything" also removes the certificate this computer used to connect to Intune (its key gives access
+        /// to the apps of the tenant until it expires). Not when the copy running this has the same certificate in use.
+        /// </summary>
+        private static void RemoveConnectionCertificate()
+        {
+            try
+            {
+                string installed = AppCertificate.Normalize(Json.Load<AppConfig>(Path.Combine(AppPaths.UserDataDir, "config.json")).IntuneCertificateThumbprint);
+                if (string.IsNullOrEmpty(installed)) return;
+                bool sameData = string.Equals(Path.GetFullPath(AppPaths.Data).TrimEnd('\\'), Path.GetFullPath(AppPaths.UserDataDir).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
+                if (!sameData && AppCertificate.Normalize(ConfigStore.Current.IntuneCertificateThumbprint) == installed) return;
+                AppCertificate.Delete(installed);
+            }
+            catch (Exception ex) { Log.Warn(T("Cert_ErrDelete", ex.Message)); }
         }
 
         /// <summary>Safety net before deleting: the folder must be the expected one, under %LOCALAPPDATA%.</summary>

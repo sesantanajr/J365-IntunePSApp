@@ -98,9 +98,12 @@ namespace J365.IntunePSApp.Tests
             s.DetectionVersion = package;
             string script = ScriptGenerator.DeployScript(Fakes.Template, s, "setup.exe");
             int start = script.IndexOf("    function Test-J365NewerVersion", StringComparison.Ordinal);
-            int end = script.IndexOf("    $newerApps", start, StringComparison.Ordinal);
+            int end = script.IndexOf("    $installedApps", start, StringComparison.Ordinal);
             string function = script.Substring(start, end - start);
             Assert.Equal(newer ? "True" : "False", RunPowerShell(function + $"\r\nTest-J365NewerVersion -Installed '{installed}' -Package '{package}'"));
+            // -OrSame also counts the same version (and still never an older one).
+            bool same = !newer && installed.Length > 0 && Names.TrimVersionZeros(installed) == Names.TrimVersionZeros(package);
+            Assert.Equal(newer || same ? "True" : "False", RunPowerShell(function + $"\r\nTest-J365NewerVersion -Installed '{installed}' -Package '{package}' -OrSame"));
         }
 
         [Fact]

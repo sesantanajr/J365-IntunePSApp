@@ -359,7 +359,7 @@ namespace J365.IntunePSApp.Core
                     step?.Invoke(T("Publish_StepUpdating"));
                     var update = AppBody(app, owner, icon, iconType);
                     foreach (var fixedOnce in new[] { "packageIdentifier", "installExperience" }) update.Remove(fixedOnce);
-                    await g.SendAsync(new HttpMethod("PATCH"), "/v1.0/deviceAppManagement/mobileApps/" + existing, update, ct);
+                    await g.SendAsync(new HttpMethod("PATCH"), "/beta/deviceAppManagement/mobileApps/" + existing, update, ct);
                     IntuneConnection.NoteIntune(refused: false);
                     result.Status = "published";
                     result.Action = "updated";
@@ -367,9 +367,20 @@ namespace J365.IntunePSApp.Core
                 }
 
                 step?.Invoke(T("Publish_StepCreating"));
-                var created = await g.SendAsync(HttpMethod.Post, "/v1.0/deviceAppManagement/mobileApps", AppBody(app, owner, icon, iconType), ct);
+                string id;
+                try
+                {
+                    // Never sent twice: a second POST after a lost answer made a duplicate app (the script does the same).
+                    var created = await g.SendAsync(HttpMethod.Post, "/beta/deviceAppManagement/mobileApps", AppBody(app, owner, icon, iconType), ct, repeatable: false);
+                    id = created?["id"]?.GetValue<string>() ?? throw new InvalidDataException(T("Batch_PublishNoResult"));
+                }
+                catch (Exception ex) when (!ct.IsCancellationRequested && (ex is HttpRequestException || (ex is GraphException ge && ge.Status >= 500)))
+                {
+                    // Intune may have created it before the answer was lost: the app of this product id is looked for.
+                    id = await FindAsync(g, app.Id, ct);
+                    if (id == null) throw;
+                }
                 IntuneConnection.NoteIntune(refused: false);
-                string id = created?["id"]?.GetValue<string>() ?? throw new InvalidDataException(T("Batch_PublishNoResult"));
                 result.AppId = id;
                 result.PortalUrl = PortalUrl(id);
                 result.Status = "published";
@@ -381,14 +392,18 @@ namespace J365.IntunePSApp.Core
                     // Intune assigns an app once it has read it from the Store (publishingState "published").
                     for (int i = 0; i < 40; i++)
                     {
-                        string state = (await g.GetAsync($"/v1.0/deviceAppManagement/mobileApps/{id}?$select=publishingState", ct))?["publishingState"]?.GetValue<string>() ?? "";
+                        // The app exists already: a failed read (a 404 right after the creation, a timeout) only ends the
+                        // wait, it does not turn a created app into a failure (the script waits the same way).
+                        string state;
+                        try { state = (await g.GetAsync($"/beta/deviceAppManagement/mobileApps/{id}?$select=publishingState", ct))?["publishingState"]?.GetValue<string>() ?? ""; }
+                        catch (Exception ex) when (!ct.IsCancellationRequested && (ex is GraphException || ex is HttpRequestException)) { break; }
                         if (state.Length == 0 || state == "published") break;
                         await Task.Delay(TimeSpan.FromSeconds(3), ct);
                     }
                     string label = po.AssignIntent + " for " + po.AssignTo + (po.AssignTo == "Group" ? " " + po.GroupId : "");
                     try
                     {
-                        await g.SendAsync(HttpMethod.Post, $"/v1.0/deviceAppManagement/mobileApps/{id}/assign", AssignmentBody(po, notifications), ct);
+                        await g.SendAsync(HttpMethod.Post, $"/beta/deviceAppManagement/mobileApps/{id}/assign", AssignmentBody(po, notifications), ct);
                         result.Assignment = label;
                     }
                     catch (GraphException ex)
@@ -416,7 +431,7 @@ namespace J365.IntunePSApp.Core
         /// <summary>The id of a Store app of Intune with this product id, or null.</summary>
         private static async Task<string> FindAsync(Graph g, string packageIdentifier, CancellationToken ct)
         {
-            string path = "/v1.0/deviceAppManagement/mobileApps?$filter=" + Uri.EscapeDataString("isof('microsoft.graph.winGetApp')") + "&$top=999";
+            string path = "/beta/deviceAppManagement/mobileApps?$filter=" + Uri.EscapeDataString("isof('microsoft.graph.winGetApp')") + "&$top=999";
             for (int page = 0; path != null && page < 20; page++)
             {
                 var data = await g.GetAsync(path, ct);

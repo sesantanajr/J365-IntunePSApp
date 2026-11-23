@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 using J365.IntunePSApp.Core;
 using J365.IntunePSApp.Localization;
@@ -127,9 +128,14 @@ namespace J365.IntunePSApp.Views
             Subtitle.Text = loaded
                 ? T("Catalog_Subtitle", c.Apps.Count.ToString("N0", culture), c.Generated?.ToLocalTime().ToString("g", culture) ?? "?")
                 : T("Catalog_SubtitleEmpty");
-            if (loaded && Results.Items.Count == 0) _ = RunSearchAsync();
+            // A new copy of the database replaces every application object: the list is searched again, or it would keep
+            // showing (and downloading) the versions of the old copy.
+            if (loaded && (Results.Items.Count == 0 || !ReferenceEquals(_searchedApps, c.Apps))) _ = RunSearchAsync();
             SyncQueue();
         }
+
+        /// <summary>The applications of the database the list was searched in (a newer copy has other objects).</summary>
+        private object _searchedApps;
 
         public void OnLanguageChanged()
         {
@@ -165,6 +171,7 @@ namespace J365.IntunePSApp.Views
         {
             if (!CatalogService.Instance.IsLoaded) return;
             int v = ++_searchVersion;
+            _searchedApps = CatalogService.Instance.Apps;
             string q = Search.Text;
             bool only = OnlySupported.IsChecked == true;
             var (list, hidden) = await Task.Run(() =>
@@ -234,6 +241,12 @@ namespace J365.IntunePSApp.Views
 
         private void Results_MouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
+            // Only a double-click on a row itself: not on the scroll bar, and not on the tick of the batch (two quick
+            // clicks on it started a download of the selected application).
+            var source = e.OriginalSource as DependencyObject;
+            if (source == null || ItemsControl.ContainerFromElement(Results, source) is not ListBoxItem row) return;
+            for (var d = source; d != null && d != row; d = d is Visual or System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(d) : LogicalTreeHelper.GetParent(d))
+                if (d is CheckBox || d is System.Windows.Controls.Primitives.ButtonBase) return;
             if (Results.SelectedItem is CatalogApp) Package_Click(sender, e);
         }
 
@@ -394,6 +407,8 @@ namespace J365.IntunePSApp.Views
             var inst = DInstallers.SelectedItem as CatalogInstaller ?? CatalogService.PickInstaller(app);
             var main = MainWindow.Current;
             if (app == null || inst == null || !inst.IsSupported) { main.Toast(T("Catalog_PickSupported"), "warn"); return; }
+            // While a package is generated the editor cannot take another one: nothing is downloaded for nothing.
+            if (main.Editor?.IsBuilding == true) { main.Toast(T("Ed_BusyBuilding"), "warn"); return; }
             string dest = await DownloadWithBusyAsync(app, inst);
             if (dest == null) return;
             main.Navigate("editor");

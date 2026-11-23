@@ -28,6 +28,8 @@ namespace J365.IntunePSApp.Core
 
         public static string RepoUrl => "https://github.com/" + GitHubRepo;
         public static string ReleasesUrl => RepoUrl + "/releases/latest";
+        /// <summary>SHA256SUMS.txt of the latest release: github.com redirects to the file of that release (no API, no rate limit).</summary>
+        public static string LatestSumsUrl => RepoUrl + "/releases/latest/download/SHA256SUMS.txt";
         public static string LatestReleaseApi => "https://api.github.com/repos/" + GitHubRepo + "/releases/latest";
         public static string DefaultCatalogUrl => RepoUrl + "/releases/download/catalog/catalog.json.gz";
         public static string PublishDocsUrl => RepoUrl + "/blob/main/docs/INTUNE-PUBLISH.md";
@@ -121,6 +123,14 @@ namespace J365.IntunePSApp.Core
         public bool DetectionRequireMark { get; set; } = true;
         /// <summary>A newer version already installed is kept (the package does not downgrade it; it only writes its mark).</summary>
         public bool KeepNewerVersion { get; set; } = true;
+        /// <summary>
+        /// With <see cref="KeepNewerVersion"/>: the same version already installed (the same MSI product code, or the same
+        /// architecture) is kept too, instead of being removed and installed again. Null = yes (the default); false = install
+        /// it again (to repair it). Left out of project.json while null, so packages generated before 2.7 still match their
+        /// revision record.
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public bool? KeepSameVersion { get; set; }
         // Output
         public string OutputRoot { get; set; } = "";
 

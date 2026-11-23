@@ -48,10 +48,19 @@ namespace J365.IntunePSApp.Core
 
         public bool NeedsUpdateCheck(AppConfig cfg)
         {
-            if (!File.Exists(CachePath)) return true;
+            // A copy that could not be read (damaged, cut short) is downloaded again at once instead of leaving the
+            // catalog empty until the next scheduled check.
+            if (!File.Exists(CachePath) || !IsLoaded) return true;
             var last = cfg.LastCatalogCheck ?? File.GetLastWriteTime(CachePath);
             return (DateTime.Now - last).TotalDays >= Math.Max(1, cfg.CatalogUpdateDays);
         }
+
+        /// <summary>
+        /// The database gives the installer addresses and the SHA256 they are checked against, so it only comes over
+        /// HTTPS (or from this computer, for tests and a local mirror): over plain HTTP anyone on the way could swap both.
+        /// </summary>
+        public static bool IsAllowedUrl(string url)
+            => Uri.TryCreate((url ?? "").Trim(), UriKind.Absolute, out var u) && (u.Scheme == Uri.UriSchemeHttps || (u.Scheme == Uri.UriSchemeHttp && u.IsLoopback));
 
         /// <summary>
         /// Downloads the latest database. Unless forced, the tiny metadata file is checked first so the 3.5 MB
@@ -59,6 +68,7 @@ namespace J365.IntunePSApp.Core
         /// </summary>
         public async Task<bool> UpdateAsync(string url, IProgress<(long, long?)> progress, CancellationToken ct, bool force = false)
         {
+            if (!IsAllowedUrl(url)) throw new InvalidDataException(T("Err_CatalogUrlHttps", url));
             if (!force && IsLoaded && Generated.HasValue)
             {
                 var remote = await RemoteGeneratedAsync(url, ct);

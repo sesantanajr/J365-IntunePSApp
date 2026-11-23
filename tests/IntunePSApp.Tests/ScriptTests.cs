@@ -200,7 +200,10 @@ namespace J365.IntunePSApp.Tests
             // mark is the one written when a newer version is already installed and kept (nothing is installed then).
             Assert.True(install.LastIndexOf(create) > install.IndexOf("Start-Sleep -Seconds 1"));
             Assert.True(install.IndexOf(create) < install.IndexOf("Test-J365NewerVersion -Installed") + 2000 && install.IndexOf(create) > install.IndexOf("Test-J365NewerVersion -Installed"));
-            Assert.True(install.IndexOf("Start-Sleep -Seconds 1") > install.IndexOf("Start-ADTMsiProcess -Action 'Install'"));
+            // The post-install actions run after the installer; since 2.7 also in the branch that keeps a newer or the
+            // same version (before its mark), so the last copy is the one of the Post-Install phase.
+            Assert.True(install.LastIndexOf("Start-Sleep -Seconds 1") > install.IndexOf("Start-ADTMsiProcess -Action 'Install'"));
+            Assert.True(install.IndexOf("Start-Sleep -Seconds 1") < install.IndexOf(create), "The kept branch applies the post-install actions before its mark.");
             Assert.Contains("$markKey.SetValue('Version', '1.2.3')", install);
             Assert.Contains(create, repair);
             Assert.True(uninstall.IndexOf("DeleteSubKeyTree('SOFTWARE\\J365\\IntunePSApp\\Apps\\Contoso App', $false)") > uninstall.IndexOf("-ApplicationType 'EXE'"));

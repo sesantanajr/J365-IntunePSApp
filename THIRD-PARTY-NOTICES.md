@@ -21,6 +21,11 @@ J365 IntunePSApp is distributed under the MIT License. It uses the components be
 - Licence: MIT
 - Use: the application database (`catalog.json.gz`) is derived from the public manifests of this repository (name, publisher, version, official URLs, SHA256, silent switches, product codes, *Installed apps* entries and package dependencies).
 
+## Microsoft Store catalog
+
+- Service: the public catalog of the Microsoft Store (`storeedgefd.dsx.mp.microsoft.com`, `displaycatalog.mp.microsoft.com`)
+- Use: only when the user searches the Store or publishes a Store app, to read the product id, name, publisher, description and logo. Store apps are **published by reference**: Intune installs and updates them from the Store, and nothing of the Store is downloaded into a package or redistributed.
+
 ## YamlDotNet
 
 - Project: https://github.com/aaubry/YamlDotNet

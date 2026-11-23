@@ -207,9 +207,15 @@ namespace J365.IntunePSApp.Core
                 if (!cfg.CheckForUpdates) return;
                 if (cfg.LastUpdateCheck.HasValue && (DateTime.Now - cfg.LastUpdateCheck.Value).TotalHours < 20) return;
             }
-            // The API of GitHub, then the page of the latest release (AppUpdater.GetLatestAsync): the same answer the update uses.
+            // The files of the latest release, the API of GitHub, then its page (AppUpdater.GetLatestAsync): the same answer
+            // the update uses. Every check is logged, so "it says up to date" can be explained from the log.
             string latest = null, error = null;
-            try { latest = (await AppUpdater.GetLatestAsync(ct)).Version; }
+            try
+            {
+                var release = await AppUpdater.GetLatestAsync(ct);
+                latest = release.Version;
+                Log.Info(T("Log_UpdateChecked", latest, AppInfo.Version, release.Source));
+            }
             catch (Exception ex) when (!ct.IsCancellationRequested) { error = ex.Message; }
             if (!string.IsNullOrEmpty(latest)) cfg.LatestAppVersion = latest;
             LastError = string.IsNullOrEmpty(latest) ? error ?? T("Update_ErrNoInfo") : null;

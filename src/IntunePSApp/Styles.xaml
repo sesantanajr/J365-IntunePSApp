@@ -67,7 +67,8 @@
   <Style x:Key="Overline" TargetType="TextBlock">
     <Setter Property="FontSize" Value="11"/>
     <Setter Property="FontWeight" Value="Bold"/>
-    <Setter Property="Foreground" Value="{DynamicResource Faint}"/>
+    <!-- Muted, not Faint: 11 px labels need the contrast (Faint on white is 2.8:1, Muted 5.3:1). -->
+    <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
   </Style>
   <Style x:Key="Icon" TargetType="TextBlock">
     <Setter Property="FontFamily" Value="{StaticResource IconFont}"/>

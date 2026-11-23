@@ -9,7 +9,16 @@ out/
 .vs/
 .vscode/
 *.DotSettings.user
+*.binlog
+.idea/
 TestResults/
+
+## Outputs of the release workflow when its steps are run locally
+visual-checks/
+signed/
+signed-scripts/
+release-notes.md
+version.txt
 
 ## Local application data (portable mode)
 IntunePSApp-Data/

@@ -45,6 +45,11 @@ To use a database you built yourself: *Settings > Application database > Import 
 - **Smart App Control.** On computers with Smart App Control turned on, Windows may block freshly built, unsigned executables. That protection cannot be configured per application; build and test on a computer (or virtual machine) where it is off.
 - **Development switches.** `--snapshot <folder>` renders every page to PNG files (it is how the screenshots of this repository are made); see `SnapshotRunner.cs`. `--snapshot-size 900x580` renders them at another window size (the window cannot be larger than the screen), and steps taller than the window get a second file ending in `-end`. The data folder can be redirected with the environment variable `J365_INTUNEPSAPP_DATA`: point it to a folder with a neutral path, because the output folder appears in the screenshots.
 - **Release.** Pushing to `main` with a new `<Version>` in `src/IntunePSApp/IntunePSApp.csproj` (and the text of `.github/RELEASE_NOTES.md`), or pushing a tag `vX.Y.Z`, makes GitHub Actions run the tests and the interface checks, build the executable and publish the release with checksums, the source package and the provenance attestation. A version that already has a release is left unchanged; changes to documentation only (`*.md`, `docs/`) do not start a build. The applications in use offer the new release in *Settings > General > Check now*.
+- **Live checks.** The tests use local mocks instead of online services. `J365_LIVE_TESTS=1` adds the few checks that ask the real GitHub (the latest release found through its files, without the API; the latest PSAppDeployToolkit).
+
+## Documentation captures
+
+Every build renders the current application with an isolated demonstration project in English and Portuguese, light and dark themes, including the batch window with sample applications in every state. It also exercises edit/save/reopen and empty-filter recovery; a missing capture fails the build. The `interface-captures` artifact contains PNGs and state-check results. Screenshot provenance and filename mapping are documented in [screenshots/README.md](screenshots/README.md). These captures do not perform a tenant deployment.
 
 ---
 
@@ -76,12 +81,25 @@ dotnet run --project tools/CatalogBuilder -c Release -- --out out --curated cata
 
 Para usar um banco de dados gerado por você: *Configurações > Banco de dados de aplicativos > Importar arquivo* e escolha `out/catalog.json.gz`, ou hospede o arquivo e altere o *Endereço de atualização*.
 
+## Estrutura do repositório
+
+| Caminho | Conteúdo |
+|---|---|
+| `src/IntunePSApp` | O aplicativo (WPF, .NET 10). `Core` não tem código de interface; `Views` são as páginas; `Resources` guarda os dois arquivos de idioma e os scripts copiados para cada pacote. |
+| `tests/IntunePSApp.Tests` | Testes xUnit. |
+| `tools/CatalogBuilder` | Ferramenta de console que gera o banco de dados a partir do winget-pkgs. |
+| `catalog/curated.json` | Curadoria mesclada ao banco de dados (e embutida no executável). |
+| `.github/workflows` | `build.yml` (testes, release, pacote de código-fonte, atestado) e `catalog.yml` (banco de dados diário). |
+| `docs` | Documentação, capa e capturas de tela. |
+
 ## Observações
 
 - **Caminhos longos.** O Windows não inicia um executável cujo caminho completo passe de 260 caracteres. Se `dotnet run` ou `dotnet test` falhar com erro de nome de arquivo muito longo, clone o repositório em uma pasta mais curta.
 - **Controle Inteligente de Aplicativos (Smart App Control).** Em computadores com essa proteção ativada, o Windows pode bloquear executáveis recém-compilados e sem assinatura. Ela não pode ser configurada por aplicativo; compile e teste em um computador (ou máquina virtual) em que esteja desativada.
+- **Opções de desenvolvimento.** `--snapshot <pasta>` renderiza todas as páginas em arquivos PNG (é assim que as capturas deste repositório são feitas); veja o `SnapshotRunner.cs`. `--snapshot-size 900x580` as renderiza em outro tamanho de janela (a janela não pode ser maior que a tela), e etapas mais altas que a janela ganham um segundo arquivo terminado em `-end`. A pasta de dados pode ser redirecionada com a variável de ambiente `J365_INTUNEPSAPP_DATA`: aponte para uma pasta de caminho neutro, porque a pasta de saída aparece nas capturas.
 - **Versão.** Um push no `main` com nova `<Version>` em `src/IntunePSApp/IntunePSApp.csproj` (e o texto de `.github/RELEASE_NOTES.md`), ou uma tag `vX.Y.Z`, faz o GitHub Actions rodar os testes e as verificações de interface, compilar o executável e publicar a versão com checksums, pacote de código-fonte e atestado de procedência. Uma versão que já tem release não é alterada; mudanças só de documentação (`*.md`, `docs/`) não iniciam compilação. Os aplicativos em uso oferecem a nova versão em *Configurações > Geral > Verificar agora*.
+- **Verificações ao vivo.** Os testes usam simulações locais no lugar dos serviços online. `J365_LIVE_TESTS=1` inclui as poucas verificações que consultam o GitHub de verdade (a última versão encontrada pelos arquivos da release, sem a API; o último PSAppDeployToolkit).
 
-## Documentation captures
+## Capturas da documentação
 
-Every build renders the current application with an isolated demonstration project in English and Portuguese, light and dark themes, including the batch window with sample applications in every state. It also exercises edit/save/reopen and empty-filter recovery; a missing capture fails the build. The `interface-captures` artifact contains PNGs and state-check results. Screenshot provenance and filename mapping are documented in [screenshots/README.md](screenshots/README.md). These captures do not perform a tenant deployment.
+Cada compilação renderiza o aplicativo atual com um projeto demonstrativo isolado, em inglês e português, nos temas claro e escuro, incluindo a janela de lote com aplicativos de exemplo em todos os estados. Ela também exercita editar/salvar/reabrir e a recuperação de um filtro sem resultados; uma captura que falta faz a compilação falhar. O artefato `interface-captures` traz os PNGs e o resultado das verificações de estado. A origem das capturas e o mapa de nomes de arquivo estão em [screenshots/README.md](screenshots/README.md). Essas capturas não fazem nenhuma implantação em tenant.

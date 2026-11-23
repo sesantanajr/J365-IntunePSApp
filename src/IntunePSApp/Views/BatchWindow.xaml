@@ -18,6 +18,9 @@
         <DataTrigger Binding="{Binding State}" Value="Warning"><Setter Property="Foreground" Value="{DynamicResource Warning}"/></DataTrigger>
         <DataTrigger Binding="{Binding State}" Value="Skipped"><Setter Property="Foreground" Value="{DynamicResource Warning}"/></DataTrigger>
         <DataTrigger Binding="{Binding State}" Value="Failed"><Setter Property="Foreground" Value="{DynamicResource Danger}"/></DataTrigger>
+        <DataTrigger Binding="{Binding State}" Value="Publishing"><Setter Property="Foreground" Value="{DynamicResource Brand}"/></DataTrigger>
+        <DataTrigger Binding="{Binding State}" Value="Published"><Setter Property="Foreground" Value="{DynamicResource Success}"/></DataTrigger>
+        <DataTrigger Binding="{Binding State}" Value="PublishFailed"><Setter Property="Foreground" Value="{DynamicResource Danger}"/></DataTrigger>
       </Style.Triggers>
     </Style>
   </v:DialogWindow.Resources>
@@ -187,7 +190,7 @@
       <Button x:Name="BtnOpenFolder" DockPanel.Dock="Left" Style="{StaticResource GhostButton}" Content="{l:T Batch_OpenPackages}" Click="OpenPackages_Click" Visibility="Collapsed" Margin="-8,0,0,0"/>
       <Button x:Name="BtnReport" DockPanel.Dock="Left" Style="{StaticResource GhostButton}" Content="{l:T Batch_CopyReport}" Click="CopyReport_Click" Visibility="Collapsed"/>
       <TextBlock x:Name="Summary" DockPanel.Dock="Left" Style="{StaticResource MutedText}" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="420" Margin="8,0,0,0"/>
-      <Button x:Name="BtnStart" DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Click="Start_Click" MinWidth="150" Margin="8,0,0,0" IsDefault="True"/>
+      <Button x:Name="BtnStart" DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Click="Start_Click" MinWidth="150" Margin="8,0,0,0"/>
       <Button x:Name="BtnClose" DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Click="Close_Click" MinWidth="96"/>
     </DockPanel>
   </Grid>

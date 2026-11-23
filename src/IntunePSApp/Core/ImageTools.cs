@@ -21,7 +21,9 @@ namespace J365.IntunePSApp.Core
             }
             var bytes = File.ReadAllBytes(path);
             using var ms = new MemoryStream(bytes);
-            return new Bitmap(Image.FromStream(ms));
+            // The decoded image is copied and then released (it holds a GDI+ handle and the stream).
+            using var decoded = Image.FromStream(ms);
+            return new Bitmap(decoded);
         }
 
         public static void SaveLogoPng(string source, string destination, int size = 256)

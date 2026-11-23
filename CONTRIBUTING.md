@@ -37,11 +37,12 @@ The key is the **winget ID** (`winget search <name>`). Before opening the pull r
 2. Keep `Core` free of UI code. Code, comments and generated scripts are in English.
 3. Every text shown to the user goes into **both** `Resources/Strings.en.json` and `Strings.pt-BR.json` (the tests fail otherwise). Values saved in projects must be language-neutral codes.
 4. Anything written into a generated PowerShell script must go through `ScriptGenerator.Lit` and be covered by a test that parses the result.
-5. Run `dotnet test` before opening the pull request and describe how you tested (application, installer type, System or User context).
+5. Run `dotnet test` before opening the pull request and describe how you tested (application, installer type, System or User context). The tests never touch the network; `J365_LIVE_TESTS=1` adds the few checks that ask the real GitHub (latest release, latest PSAppDeployToolkit).
+6. Interface changes: render every page off-screen with `J365.IntunePSApp.exe --snapshot <folder>` (see [docs/BUILDING.md](docs/BUILDING.md)) in both themes and languages, and look at the PNG files before opening the pull request.
 
 ## Reporting problems
 
-Use the issue templates. For a package that failed on a device, attach `build.log` and the PSAppDeployToolkit log (`C:\ProgramData\Microsoft\IntuneManagementExtension\Logs` or `C:\Windows\Logs\Software`) after removing sensitive data. Security problems: see [SECURITY.md](SECURITY.md).
+Use the issue templates. Attach the application log (Settings > General > **Logs**, or `%LOCALAPPDATA%\J365\IntunePSApp\logs\app-YYYYMMDD.log`; a portable copy keeps it in `IntunePSApp-Data\logs` next to the executable). For a package that failed on a device, also attach `build.log` and the PSAppDeployToolkit log (`C:\ProgramData\Microsoft\IntuneManagementExtension\Logs` or `C:\Windows\Logs\Software`). Remove sensitive data first. Security problems: see [SECURITY.md](SECURITY.md).
 
 By contributing you agree that your contribution is licensed under the [MIT License](LICENSE).
 
@@ -63,10 +64,11 @@ A chave é o **ID do winget** (`winget search <nome>`). Antes de abrir o pull re
 2. Mantenha o `Core` sem código de interface. Código, comentários e scripts gerados ficam em inglês.
 3. Todo texto exibido ao usuário entra nos **dois** arquivos, `Resources/Strings.en.json` e `Strings.pt-BR.json` (os testes falham se faltar). Valores salvos nos projetos devem ser códigos independentes de idioma.
 4. Tudo o que for escrito em um script PowerShell gerado deve passar por `ScriptGenerator.Lit` e ter um teste que analisa o resultado.
-5. Rode `dotnet test` antes de abrir o pull request e descreva como testou (aplicativo, tipo de instalador, contexto Sistema ou Usuário).
+5. Rode `dotnet test` antes de abrir o pull request e descreva como testou (aplicativo, tipo de instalador, contexto Sistema ou Usuário). Os testes nunca usam a rede; `J365_LIVE_TESTS=1` inclui as poucas verificações que consultam o GitHub de verdade (última versão, último PSAppDeployToolkit).
+6. Mudanças de interface: gere todas as telas fora da tela com `J365.IntunePSApp.exe --snapshot <pasta>` (veja o [docs/BUILDING.md](docs/BUILDING.md)) nos dois temas e idiomas e confira os PNGs antes de abrir o pull request.
 
 ## Relatando problemas
 
-Use os modelos de issue. Para um pacote que falhou em um dispositivo, anexe o `build.log` e o log do PSAppDeployToolkit depois de remover dados sensíveis. Problemas de segurança: veja o [SECURITY.md](SECURITY.md).
+Use os modelos de issue. Anexe o log do aplicativo (Configurações > Geral > **Logs**, ou `%LOCALAPPDATA%\J365\IntunePSApp\logs\app-AAAAMMDD.log`; uma cópia portátil o guarda em `IntunePSApp-Data\logs`, ao lado do executável). Para um pacote que falhou em um dispositivo, anexe também o `build.log` e o log do PSAppDeployToolkit (`C:\ProgramData\Microsoft\IntuneManagementExtension\Logs` ou `C:\Windows\Logs\Software`). Remova dados sensíveis antes. Problemas de segurança: veja o [SECURITY.md](SECURITY.md).
 
 Ao contribuir, você concorda que a sua contribuição é licenciada sob a [licença MIT](LICENSE).

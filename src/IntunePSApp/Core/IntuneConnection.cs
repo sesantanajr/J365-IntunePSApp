@@ -911,7 +911,9 @@ namespace J365.IntunePSApp.Core
             }
             else
             {
-                var created = await g.SendAsync(HttpMethod.Post, "/v1.0/applications", body, ct);
+                // Not sent twice: a timeout or a 5xx may come after the registration was created, and a second one would be
+                // a duplicate. The setup can simply be run again: it finds the registration by its tag and reuses it.
+                var created = await g.SendAsync(HttpMethod.Post, "/v1.0/applications", body, ct, repeatable: false);
                 appId = created?["appId"]?.GetValue<string>() ?? throw new InvalidDataException(T("Connect_ErrCreate"));
                 objectId = created?["id"]?.GetValue<string>() ?? throw new InvalidDataException(T("Connect_ErrCreate"));
             }
@@ -925,9 +927,10 @@ namespace J365.IntunePSApp.Core
                 spId = sps?.FirstOrDefault()?["id"]?.GetValue<string>();
                 if (spId != null) break;
                 try { spId = (await g.SendAsync(HttpMethod.Post, "/v1.0/servicePrincipals", new JsonObject { ["appId"] = appId }, ct))?["id"]?.GetValue<string>(); }
-                catch (GraphException ex) when (attempt < 8 && ex.Status is 400 or 404)
+                catch (GraphException ex) when (attempt < 8 && ex.Status is 400 or 404 or 409)
                 {
-                    // A new application takes a few seconds to reach every replica of the directory.
+                    // A new application takes a few seconds to reach every replica of the directory; 409: a retried
+                    // request already created it. The next turn reads it.
                     await Task.Delay(TimeSpan.FromSeconds(Math.Min(10, 2 * attempt)), ct);
                 }
             }
@@ -938,10 +941,17 @@ namespace J365.IntunePSApp.Core
                 var grants = (await g.GetAsync($"/v1.0/oauth2PermissionGrants?$filter={Uri.EscapeDataString($"clientId eq '{spId}' and consentType eq 'AllPrincipals'")}", ct))?["value"]?.AsArray();
                 var grant = grants?.FirstOrDefault(x => x?["resourceId"]?.GetValue<string>() == graphSpId);
                 if (grant == null)
-                    await g.SendAsync(HttpMethod.Post, "/v1.0/oauth2PermissionGrants", new JsonObject
+                {
+                    try
                     {
-                        ["clientId"] = spId, ["consentType"] = "AllPrincipals", ["resourceId"] = graphSpId, ["scope"] = IntunePermission
-                    }, ct);
+                        await g.SendAsync(HttpMethod.Post, "/v1.0/oauth2PermissionGrants", new JsonObject
+                        {
+                            ["clientId"] = spId, ["consentType"] = "AllPrincipals", ["resourceId"] = graphSpId, ["scope"] = IntunePermission
+                        }, ct);
+                    }
+                    // A retried request that had already been applied ("Permission entry already exists"): the consent is there.
+                    catch (GraphException ex) when (ex.Status == 409) { }
+                }
                 else if (!(grant["scope"]?.GetValue<string>() ?? "").Split(' ').Contains(IntunePermission))
                     await g.SendAsync(HttpMethod.Patch, $"/v1.0/oauth2PermissionGrants/{grant["id"]!.GetValue<string>()}", new JsonObject
                     {
@@ -964,10 +974,17 @@ namespace J365.IntunePSApp.Core
                     // enterprise application (what "Grant admin consent" does for an application permission).
                     var assigned = (await g.GetAsync($"/v1.0/servicePrincipals/{spId}/appRoleAssignments", ct))?["value"]?.AsArray();
                     if (assigned?.Any(a => a?["appRoleId"]?.GetValue<string>() == roleId && a?["resourceId"]?.GetValue<string>() == graphSpId) != true)
-                        await g.SendAsync(HttpMethod.Post, $"/v1.0/servicePrincipals/{spId}/appRoleAssignments", new JsonObject
+                    {
+                        try
                         {
-                            ["principalId"] = spId, ["resourceId"] = graphSpId, ["appRoleId"] = roleId
-                        }, ct);
+                            await g.SendAsync(HttpMethod.Post, $"/v1.0/servicePrincipals/{spId}/appRoleAssignments", new JsonObject
+                            {
+                                ["principalId"] = spId, ["resourceId"] = graphSpId, ["appRoleId"] = roleId
+                            }, ct);
+                        }
+                        // A retried request that had already been applied ("Permission being assigned already exists").
+                        catch (GraphException ex) when (ex.Status is 400 or 409 && ex.Message.Contains("already exists", StringComparison.OrdinalIgnoreCase)) { }
+                    }
                     result.RoleGranted = true;
                 }
                 catch (GraphException ex) when (ex.Status is 401 or 403)
@@ -1114,13 +1131,31 @@ namespace J365.IntunePSApp.Core
                 foreach (var a in data?["value"]?.AsArray() ?? new JsonArray())
                 {
                     string dn = a?["displayName"]?.GetValue<string>() ?? "";
-                    if (dn.StartsWith(name, StringComparison.OrdinalIgnoreCase))
+                    if (IsRelatedName(dn, name))
                         result.Add((a?["id"]?.GetValue<string>() ?? "", dn, a?["displayVersion"]?.GetValue<string>() ?? ""));
                 }
                 string next = data?["@odata.nextLink"]?.GetValue<string>();
                 path = next != null && next.StartsWith(EntraAuth.GraphUrl, StringComparison.OrdinalIgnoreCase) ? next.Substring(EntraAuth.GraphUrl.Length) : null;
             }
-            return result.OrderByDescending(r => r.Version, Comparer<string>.Create(VersionUtil.Compare)).ToList();
+            // The app with exactly this name first (the one a new version updates), then the newest.
+            return result
+                .OrderByDescending(r => r.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+                .ThenByDescending(r => r.Version, Comparer<string>.Create(VersionUtil.Compare))
+                .ToList();
+        }
+
+        /// <summary>
+        /// An app of the tenant named like the application, as a whole word: "Git" finds "Git" and "Git 2.45", not "GitHub
+        /// Desktop" (whose content the dialog would otherwise offer to replace).
+        /// </summary>
+        internal static bool IsRelatedName(string displayName, string appName)
+        {
+            string dn = (displayName ?? "").Trim(), name = (appName ?? "").Trim();
+            if (name.Length == 0 || !dn.StartsWith(name, StringComparison.OrdinalIgnoreCase)) return false;
+            if (dn.Length == name.Length) return true;
+            // "+" and "#" belong to names ("Notepad++" is not "Notepad", "C#" not "C").
+            char next = dn[name.Length];
+            return !char.IsLetterOrDigit(next) && next != '+' && next != '#';
         }
 
         // ------------------------------------------------------------------ DPAPI (current Windows user)
@@ -1211,7 +1246,12 @@ namespace J365.IntunePSApp.Core
 
         public Task<JsonNode> GetAsync(string path, CancellationToken ct) => SendAsync(HttpMethod.Get, path, null, ct);
 
-        public async Task<JsonNode> SendAsync(HttpMethod method, string path, JsonNode body, CancellationToken ct)
+        /// <summary>
+        /// Sends a request; throttling (429) is always retried. <paramref name="repeatable"/> false is for a request that
+        /// creates something (POST of an app or of a registration): after a timeout or a 5xx answer the object may already
+        /// exist, so it is not sent again (that made duplicates) and the caller looks for it instead.
+        /// </summary>
+        public async Task<JsonNode> SendAsync(HttpMethod method, string path, JsonNode body, CancellationToken ct, bool repeatable = true)
         {
             for (int attempt = 1; ; attempt++)
             {
@@ -1222,15 +1262,19 @@ namespace J365.IntunePSApp.Core
                 cts.CancelAfter(TimeSpan.FromSeconds(100));
                 HttpResponseMessage resp;
                 try { resp = await Http.Client.SendAsync(req, cts.Token); }
-                catch (Exception ex) when (attempt < 4 && !ct.IsCancellationRequested && (ex is HttpRequestException || ex is OperationCanceledException))
+                catch (Exception ex) when (repeatable && attempt < 4 && !ct.IsCancellationRequested && (ex is HttpRequestException || ex is OperationCanceledException))
                 {
                     await Task.Delay(TimeSpan.FromSeconds(2 * attempt), ct);
                     continue;
                 }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    throw new GraphException(504, $"{method} {path.Split('?')[0]}: timeout", "timeout");
+                }
                 using var response = resp;
                 string text = await resp.Content.ReadAsStringAsync(ct);
                 int status = (int)resp.StatusCode;
-                if ((status == 429 || status >= 500) && attempt < 5)
+                if ((status == 429 || (repeatable && status >= 500)) && attempt < 5)
                 {
                     var wait = resp.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(2 * attempt);
                     await Task.Delay(wait > TimeSpan.FromSeconds(30) ? TimeSpan.FromSeconds(30) : wait, ct);

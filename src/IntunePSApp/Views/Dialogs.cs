@@ -124,6 +124,29 @@ namespace J365.IntunePSApp.Views
 
         protected Style S(string key) => Ui.Style(key);
 
+        private Button _escapeButton;
+
+        /// <summary>
+        /// The button Esc presses (Cancel, Close): every dialog closes with Esc, as Windows dialogs do. The button's own
+        /// click runs (it may cancel work first), instead of IsCancel, which would also set DialogResult a second time.
+        /// </summary>
+        protected Button Cancel(Button button)
+        {
+            if (_escapeButton == null)
+            {
+                PreviewKeyDown += (s, e) =>
+                {
+                    if (e.Key != System.Windows.Input.Key.Escape || _escapeButton == null || !_escapeButton.IsEnabled || !_escapeButton.IsVisible) return;
+                    // Esc in an open list closes the list, not the dialog.
+                    if (System.Windows.Input.Keyboard.FocusedElement is ComboBox combo && combo.IsDropDownOpen) return;
+                    e.Handled = true;
+                    _escapeButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent, _escapeButton));
+                };
+            }
+            _escapeButton = button;
+            return button;
+        }
+
         protected Button MakeButton(string text, string style, RoutedEventHandler click, double left = 8)
         {
             var b = new Button { Content = text, Style = S(style), Margin = new Thickness(left, 0, 0, 0), MinWidth = 96 };
@@ -189,7 +212,7 @@ namespace J365.IntunePSApp.Views
             var bar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0) };
             DockPanel.SetDock(bar, Dock.Bottom);
             bar.Children.Add(MakeButton(T("Dlg_CopyAll"), "SecondaryButton", (s, e) => Ui.CopyText(text)));
-            bar.Children.Add(MakeButton(T("Common_Close"), "PrimaryButton", (s, e) => Close()));
+            bar.Children.Add(Cancel(MakeButton(T("Common_Close"), "PrimaryButton", (s, e) => Close())));
             var tb = new TextBox
             {
                 Text = text, IsReadOnly = true, FontFamily = Ui.Font("MonoFont"), FontSize = 12.5,
@@ -218,7 +241,7 @@ namespace J365.IntunePSApp.Views
             head.Children.Add(new TextBlock { Text = T("Proc_Hint"), Style = S("MutedText"), Margin = new Thickness(0, 4, 0, 12) });
             var bar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0) };
             DockPanel.SetDock(bar, Dock.Bottom);
-            bar.Children.Add(MakeButton(T("Common_Cancel"), "SecondaryButton", (s, e) => { DialogResult = false; }));
+            bar.Children.Add(Cancel(MakeButton(T("Common_Cancel"), "SecondaryButton", (s, e) => { DialogResult = false; })));
             bar.Children.Add(MakeButton(T("Proc_AddSelected"), "PrimaryButton", (s, e) =>
             {
                 Selected.AddRange(_list.SelectedItems.Cast<ListBoxItem>().Select(i => (string)i.Tag));
@@ -313,7 +336,7 @@ namespace J365.IntunePSApp.Views
 
             var bar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 14, 0, 0) };
             Grid.SetRow(bar, 1); Grid.SetColumnSpan(bar, 3);
-            bar.Children.Add(MakeButton(T("Common_Cancel"), "SecondaryButton", (s, e) => DialogResult = false));
+            bar.Children.Add(Cancel(MakeButton(T("Common_Cancel"), "SecondaryButton", (s, e) => DialogResult = false)));
             bar.Children.Add(MakeButton(existing == null ? T("Common_Add") : T("Common_Save"), "PrimaryButton", (s, e) => Save()));
             root.Children.Add(bar);
             Content = root;
@@ -435,7 +458,7 @@ namespace J365.IntunePSApp.Views
         private readonly StackPanel _groupPanel, _connection, _advanced, _matches;
         private readonly TextBlock _status, _existsNote;
         private readonly Button _publish, _toggleAdvanced;
-        private readonly string _script, _displayName, _appName;
+        private readonly string _script, _displayName, _appName, _appVersion;
         private CancellationTokenSource _cts;
         private bool _busy;
         /// <summary>Intune refused the lookup of this dialog: the publication would stop at its first request too.</summary>
@@ -447,11 +470,12 @@ namespace J365.IntunePSApp.Views
         /// <summary>The options of a publication inside the application (the session is open).</summary>
         public PublishOptions InAppOptions { get; private set; }
 
-        public PublishDialog(string publishScript, string appTitle, string displayName, string appName)
+        public PublishDialog(string publishScript, string appTitle, string displayName, string appName, string appVersion = null)
         {
             _script = publishScript;
             _displayName = string.IsNullOrWhiteSpace(displayName) ? appTitle : displayName;
             _appName = string.IsNullOrWhiteSpace(appName) ? _displayName : appName;
+            _appVersion = (appVersion ?? "").Trim();
             Title = T("Publish_Title");
             Width = 720;
             SizeToContent = SizeToContent.Height;
@@ -521,7 +545,7 @@ namespace J365.IntunePSApp.Views
             _publish = MakeButton(T("Publish_PublishNow"), "PrimaryButton", async (s, e) => await PublishAsync());
             DockPanel.SetDock(_publish, Dock.Right);
             bar.Children.Add(_publish);
-            var cancel = MakeButton(T("Common_Cancel"), "SecondaryButton", (s, e) => { _cts?.Cancel(); DialogResult = false; });
+            var cancel = Cancel(MakeButton(T("Common_Cancel"), "SecondaryButton", (s, e) => { _cts?.Cancel(); DialogResult = false; }));
             DockPanel.SetDock(cancel, Dock.Right);
             bar.Children.Add(cancel);
             root.Children.Add(bar);
@@ -775,18 +799,22 @@ namespace J365.IntunePSApp.Views
                         _existsNote.Text = T("Publish_RelatedFound", _appName, found.Count);
                         _existsNote.Visibility = Visibility.Visible;
                         _matches.Children.Clear();
-                        bool any = false;
+                        // Only an app with exactly this name is chosen for the user (the list starts with it); otherwise
+                        // "create a new app" is, so a click never replaces the content of an app with another name.
+                        bool preselected = false;
                         foreach (var (id, name, version) in found.Take(8))
                         {
-                            bool same = string.Equals(name, _displayName, StringComparison.OrdinalIgnoreCase);
+                            bool exact = string.Equals(name, _displayName, StringComparison.OrdinalIgnoreCase);
+                            // Since 2.5 the name in Intune carries no version: "the same version" is told by the version itself.
+                            bool sameVersion = _appVersion.Length > 0 && version.Length > 0 && VersionUtil.Compare(version, _appVersion) == 0;
                             _matches.Children.Add(new RadioButton
                             {
-                                GroupName = "intuneApp", Tag = id, Margin = new Thickness(0, 4, 0, 0), IsChecked = !any,
-                                Content = same ? T("Publish_UpdateSame", name) : T("Publish_UpdateOlder", name, string.IsNullOrEmpty(version) ? "?" : version)
+                                GroupName = "intuneApp", Tag = id, Margin = new Thickness(0, 4, 0, 0), IsChecked = exact && !preselected,
+                                Content = sameVersion ? T("Publish_UpdateSame", name) : T("Publish_UpdateOlder", name, string.IsNullOrEmpty(version) ? "?" : version)
                             });
-                            any = true;
+                            preselected |= exact;
                         }
-                        _matches.Children.Add(new RadioButton { GroupName = "intuneApp", Tag = "new", Margin = new Thickness(0, 4, 0, 0), Content = T("Publish_CreateNewApp", _displayName) });
+                        _matches.Children.Add(new RadioButton { GroupName = "intuneApp", Tag = "new", Margin = new Thickness(0, 4, 0, 0), IsChecked = !preselected, Content = T("Publish_CreateNewApp", _displayName) });
                         _matches.Visibility = Visibility.Visible;
                         return;
                     }

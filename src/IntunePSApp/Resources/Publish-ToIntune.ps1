@@ -119,6 +119,9 @@ param
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
+# Read by J365 IntunePSApp (output redirected): UTF-8, so accented names and texts arrive intact. Windows PowerShell 5.1
+# would write the OEM code page of the console instead ("Acao" arrived as "A??o").
+if ([Console]::IsOutputRedirected) { try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false) } catch { } }
 # Proxies that ask for the Windows sign-in (NTLM or Kerberos) get it, as browsers do.
 try { [System.Net.WebRequest]::DefaultWebProxy.Credentials = [System.Net.CredentialCache]::DefaultNetworkCredentials } catch { }
 $CancelledMessage = 'Cancelled by the user.'
@@ -154,6 +157,14 @@ function Save-Result([string]$Status, [string]$ErrorText)
 function Assert-NotCancelled
 {
     if ($CancelFile -and (Test-Path -LiteralPath $CancelFile)) { throw $CancelledMessage }
+}
+
+# Waits one second at a time, so a cancel asked during a long wait (Retry-After of up to 2 minutes) stops it at once
+# and the clean-up still runs before J365 IntunePSApp gives up on the process.
+function Wait-Seconds([int]$Seconds)
+{
+    for ($i = 0; $i -lt $Seconds; $i++) { Assert-NotCancelled; Start-Sleep -Seconds 1 }
+    Assert-NotCancelled
 }
 
 function Stop-Script([int]$Code)
@@ -232,6 +243,11 @@ function Get-SignInHelp([string]$Description)
         'AADSTS53003'   = 'Conditional Access blocked the sign-in. If you used -DeviceCode, use the browser sign-in instead.'
         'AADSTS50076'   = 'Multi-factor authentication is required: use the browser sign-in.'
         'AADSTS50020'   = 'The account does not belong to this tenant.'
+        'AADSTS700027'  = 'The certificate of this computer is not (or no longer) in the app registration, or it was added a moment ago. In J365 IntunePSApp: Settings > Microsoft Intune > renew the certificate or connect again.'
+        'AADSTS700024'  = 'The clock of this computer is wrong: the signed request is outside its validity. Synchronize the date and time of Windows.'
+        'AADSTS7000112' = 'The application is disabled in this tenant (Enterprise applications > Properties > Enabled for users to sign-in).'
+        'AADSTS700082'  = 'The session expired. Sign in again in J365 IntunePSApp (Settings > Microsoft Intune).'
+        'AADSTS70008'   = 'The session expired. Sign in again in J365 IntunePSApp (Settings > Microsoft Intune).'
     }
     foreach ($code in $help.Keys) { if ($Description -like ('*' + $code + '*')) { return $help[$code] } }
     return ''
@@ -429,8 +445,7 @@ function Invoke-Graph
             # No answer at all (network, proxy, time-out): a read is safe to ask again.
             if ($Method -ne 'GET' -or $attempt -ge 6) { throw }
             Write-Note ($_.Exception.Message + ' - trying again in ' + (5 * $attempt) + ' s...')
-            Assert-NotCancelled
-            Start-Sleep -Seconds (5 * $attempt)
+            Wait-Seconds (5 * $attempt)
             continue
         }
         if ($answer.Status -ge 200 -and $answer.Status -lt 300)
@@ -445,8 +460,7 @@ function Invoke-Graph
             $wait = $answer.RetryAfter
             if ($wait -le 0) { $wait = 5 * $attempt }
             Write-Note ('Microsoft Graph asked to wait ' + $wait + ' s (HTTP ' + $answer.Status + ')...')
-            Assert-NotCancelled
-            Start-Sleep -Seconds ([Math]::Min($wait, 120))
+            Wait-Seconds ([Math]::Min($wait, 120))
             continue
         }
         $message = ''
@@ -537,7 +551,7 @@ function Invoke-Storage([string]$Query, [byte[]]$Data, [string]$ContentType, [ha
         if ($final -or $attempt -ge 8) { throw ($What + ' failed after ' + $attempt + ' attempt(s): ' + $failure) }
         if ($wait -le 0) { $wait = Get-Random -Minimum 5 -Maximum 31 }
         Write-Note ($What + ': ' + $failure + ' - trying again in ' + $wait + ' s...')
-        Start-Sleep -Seconds ([Math]::Min($wait, 60))
+        Wait-Seconds ([Math]::Min($wait, 60))
         try { Update-UploadAddress -Force:$refused }
         catch { Write-Note ('The upload address could not be renewed: ' + $_.Exception.Message) }
     }
@@ -739,6 +753,9 @@ try
         {
             if ($existing.Count -gt 1) { throw 'More than one app has this name: update the right one in the Intune admin center, or use -IfExists CreateNew.' }
             $targetId = [string]$existing[0].id
+            # An app of the same name made some other way (by hand, by another tool): updating it replaces its commands,
+            # detection and return codes with those of this package, and its assignments then install this package.
+            if (-not ([string]$existing[0].notes).StartsWith('Packaged with')) { Write-Note 'This app was not created by J365 IntunePSApp: its install and uninstall commands, detection rule and return codes are replaced by those of this package, and its assignments are kept.' }
         }
     }
     else { Write-Ok 'No app with this name yet.' }

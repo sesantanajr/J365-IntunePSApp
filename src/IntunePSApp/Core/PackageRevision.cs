@@ -54,16 +54,17 @@ namespace J365.IntunePSApp.Core
         {
             Directory.CreateDirectory(root);
             name = Names.Safe(name);
+            UnauthorizedAccessException denied = null;
             for (int attempt = 0; attempt < 100; attempt++)
             {
-                string folder = Path.Combine(root, attempt == 0 ? name : $"{name}_{DateTime.Now:yyyyMMdd-HHmmss}_{Guid.NewGuid():N}");
+                string folder = Path.Combine(root, UniqueName(name, attempt, DateTime.Now));
                 if (Directory.Exists(folder) || File.Exists(folder)) continue;
                 FileStream reservation;
                 try { reservation = new FileStream(folder + ".build-lock", FileMode.CreateNew, FileAccess.Write, FileShare.None, 1, FileOptions.DeleteOnClose); }
                 catch (IOException ex) when ((ex.HResult & 0xffff) is 32 or 80 or 183) { continue; }
-                // Windows can report access denied while a competing DeleteOnClose handle is closing.
-                // Retry with a unique name once; a real directory permission error then propagates.
-                catch (UnauthorizedAccessException) when (attempt == 0) { continue; }
+                // Windows reports access denied while a competing DeleteOnClose handle of the same name is closing: the
+                // next name is tried. A real permission problem of the folder fails every attempt and is thrown below.
+                catch (UnauthorizedAccessException ex) { denied = ex; continue; }
                 try
                 {
                     if (Directory.Exists(folder) || File.Exists(folder)) { reservation.Dispose(); continue; }
@@ -72,7 +73,21 @@ namespace J365.IntunePSApp.Core
                 }
                 catch { reservation.Dispose(); throw; }
             }
+            if (denied != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(denied).Throw();
             throw new IOException("Could not reserve a unique package directory.");
+        }
+
+        /// <summary>
+        /// The name of the folder for an attempt: the name itself, then the name with the date and time of the build, then
+        /// with a counter ("7-Zip_26.06", "7-Zip_26.06_20261123-080610", "7-Zip_26.06_20261123-080610-2"). Until 2.6 the
+        /// second one also carried a GUID of 32 characters, which took the paths inside a package in a OneDrive folder past
+        /// the 260 characters IntuneWinAppUtil.exe accepts. The reservation file still arbitrates between processes.
+        /// </summary>
+        internal static string UniqueName(string name, int attempt, DateTime now)
+        {
+            if (attempt == 0) return name;
+            string stamp = now.ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture);
+            return attempt == 1 ? $"{name}_{stamp}" : $"{name}_{stamp}-{attempt}";
         }
 
         public void Dispose() => _reservation.Dispose();
