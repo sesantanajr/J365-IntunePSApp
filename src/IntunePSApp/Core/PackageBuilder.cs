@@ -667,7 +667,8 @@ namespace J365.IntunePSApp.Core
                         IntuneWin = PackageLayout.FindIntuneWin(dir),
                         SummaryHtml = PackageLayout.FindInstructions(dir),
                         Icon = PackageLayout.FindIcon(dir),
-                        LatestVersion = NewerCatalogVersion(s)
+                        LatestVersion = NewerCatalogVersion(s),
+                        Publication = IntunePublisher.ReadResult(Path.Combine(dir, PackageLayout.IntuneDir)) is { IsPublished: true } published ? published : null
                     });
                 }
                 catch { }

@@ -109,6 +109,13 @@ namespace J365.IntunePSApp.Views
             if (i != null) await MainWindow.Current.Editor.UpdateProjectAsync(i.ProjectFile);
         }
 
+        /// <summary>A package published to Intune: how its installation goes on the devices.</summary>
+        private void Status_Click(object sender, RoutedEventArgs e)
+        {
+            var i = Item(sender);
+            if (i?.IsPublished == true) AppStatusWindow.Open(Window.GetWindow(this), i.Publication, i.Title);
+        }
+
         private void Instructions_Click(object sender, RoutedEventArgs e)
         {
             var i = Item(sender);

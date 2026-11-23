@@ -44,6 +44,7 @@ Everything a package needs is in `PackageSettings`, saved as `project.json` next
 | `Integrations.cs` | Windows Sandbox: state of the Windows feature (ready, open, turned off, not in this edition), enabling it with DISM, the `.wsb` configuration and the result of the test. Launcher of the publishing script. |
 | `Native.cs`, `ImageTools.cs` | P/Invoke (MSI, WinVerifyTrust, icons) and image work: the icon of an installer, of the program an `.msi` installs (read from its cabinet with `expand.exe`) or of the copy installed on the computer. Generic setup icons (Inno Setup, WiX Burn, NSIS stock icons; `Resources/GenericSetupIcons.txt`) are recognised by a 16x16 thumbnail and never used. |
 | `BatchPackager.cs` | Batch packaging of several applications of the database with shared settings. |
+| `IntuneAppStatus.cs` | The install status of a published app (2.8): the app, its assignments and supersedence, and the device install report, read page by page from the report functions of Intune, or exported (`DeviceInstallStatusByApp`) when no function answers. |
 
 ## How a package is generated
 
@@ -86,6 +87,10 @@ The database is built from winget-pkgs, which does not contain the msstore sourc
 ## Intune notifications and restarts
 
 `PackageBuilder.IntuneNotifications` gives the toasts of the assignment (`showAll`, `showReboot`, `hideAll`): the choice of the package, or `hideAll` for a silent package and `showAll` otherwise. `PackageBuilder.RestartBehavior` is `suppress` for a silent package and `basedOnReturnCode` otherwise. Both go to `intune-app.json` (`notifications`, `restartBehavior`), which `Publish-ToIntune.ps1` reads when it creates the app and its assignment.
+
+## Supersedence and the install status (2.8)
+
+`Publish-ToIntune.ps1 -IfExists Supersede` creates the new version as a new app and, once its content is active and before its assignment, posts its relationships (`updateRelationships` with one `mobileAppSupersedence`: the earlier app, `update` or `replace`), as the Intune admin center does. The earlier app is the one given with `-AppId` (the application passes the version chosen in the publishing dialog) or the newest app of the same name by version. A refused link does not undo the publication: `publish-result.json` records it (`supersedence`), with the superseded app and the type; the application reads it into `PublishResult`. `IntuneAppStatus` reads the status of a published app for the status window (`Views/AppStatusWindow.cs`), with the same permission; the report functions of Intune are not documented and were renamed once, so it tries them newest first and falls back to the documented export job.
 
 ## Updating the application
 

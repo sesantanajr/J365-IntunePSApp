@@ -1,10 +1,10 @@
 <p align="center"><strong>English</strong> · <a href="README.pt-BR.md">Português (Brasil)</a></p>
 
-<p align="center"><img src="docs/assets/hero-en.svg" alt="J365 IntunePSApp 2.7.0 — from installer to Intune, with control at every step" width="100%"></p>
+<p align="center"><img src="docs/assets/hero-en.svg" alt="J365 IntunePSApp 2.8.0 — from installer to Intune, with control at every step" width="100%"></p>
 
 <p align="center"><b>Fewer repetitive tasks. More consistent deployment packages.</b><br>A visual workspace to prepare, customize, test and publish Windows applications.</p>
-<p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v2.7.0/J365-IntunePSApp-2.7.0-win-x64.zip"><img src="docs/assets/download-en.svg" alt="Download J365 IntunePSApp 2.7.0 — Windows x64" width="400"></a></p>
-<p align="center"><a href="#features">Explore the features</a> · <a href="#get-started">Get started</a> · <a href="docs/USER-GUIDE.md">User guide</a> · <a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/tag/v2.7.0">Release notes</a></p>
+<p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v2.8.0/J365-IntunePSApp-2.8.0-win-x64.zip"><img src="docs/assets/download-en.svg" alt="Download J365 IntunePSApp 2.8.0 — Windows x64" width="400"></a></p>
+<p align="center"><a href="#features">Explore the features</a> · <a href="#get-started">Get started</a> · <a href="docs/USER-GUIDE.md">User guide</a> · <a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/tag/v2.8.0">Release notes</a></p>
 <p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/actions/workflows/build.yml"><img alt="Build and tests" src="https://github.com/sesantanajr/J365-IntunePSApp/actions/workflows/build.yml/badge.svg"></a> <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-315CF5?style=flat-square"></a> <img alt="Windows x64" src="https://img.shields.io/badge/Windows-x64-0A5CA8?style=flat-square"></p>
 
 ## Your next deployment package starts here
@@ -15,14 +15,14 @@ Turn an MSI or EXE installer — or any application of the winget catalog and th
 | --- | --- | --- |
 | A catalog of winget and the Microsoft Store, installer analysis, silent-switch suggestions and batch deploy. | Company logo, colors, messages, deferrals and reusable defaults. | Review before building, tests, logs and protection against stale package publishing. |
 
-<a href="docs/screenshots/en/home-dark.png"><img src="docs/screenshots/en/home-dark.png" alt="J365 IntunePSApp 2.7: database, packages, toolkit and Intune connection at a glance" width="100%"></a>
+<a href="docs/screenshots/en/home-dark.png"><img src="docs/screenshots/en/home-dark.png" alt="J365 IntunePSApp 2.8: database, packages, toolkit and Intune connection at a glance" width="100%"></a>
 
 **One complete workflow:** catalog or installer → application → experience → actions → uninstall → detection → branding → build → test → publish. Every screen is explained in the **[user guide](docs/USER-GUIDE.md)**.
 
 <a id="features"></a>
 ## Explore the features
 
-Actual **2.7** captures with a demonstration company (Contoso) and the 7-Zip MSI, packaged for real. Click images to enlarge. The Intune connection is a sample: nothing was published to a tenant.
+Actual **2.8** captures with a demonstration company (Contoso) and the 7-Zip MSI, packaged for real. Click images to enlarge. The Intune connection is a sample: nothing was published to a tenant.
 
 ### 01 · Find any application
 
@@ -60,11 +60,11 @@ One click builds the PSAppDeployToolkit package, the detection script and the `.
 
 <table><tr><td width="50%"><b>Package ready for Intune</b><br><a href="docs/screenshots/en/generated.png"><img src="docs/screenshots/en/generated.png" alt="Package ready for Intune" width="100%"></a></td><td width="50%"><b>Outdated package: generate again</b><br><a href="docs/screenshots/en/needs-rebuild.png"><img src="docs/screenshots/en/needs-rebuild.png" alt="Outdated package warning" width="100%"></a></td></tr></table>
 
-### 07 · Connect and publish
+### 07 · Connect, publish and follow the installation
 
-Connect with your account, an app certificate kept in the TPM, an existing registration or Azure Cloud Shell. Create or update the app in Intune with upload progress, the icon, detection, requirements and an optional assignment. [Publishing guide](docs/INTUNE-PUBLISH.md).
+Connect with your account, an app certificate kept in the TPM, an existing registration or Azure Cloud Shell. Create or update the app in Intune with upload progress, the icon, detection, requirements and an optional assignment — or, new in 2.8, publish the new version as a new app that **supersedes** the earlier one and roll it out group by group. **Status in Intune** then shows the devices installed, failed and pending, with every error code explained. [Publishing guide](docs/INTUNE-PUBLISH.md).
 
-<table><tr><td width="50%"><b>Ways to connect</b><br><a href="docs/screenshots/en/connection.png"><img src="docs/screenshots/en/connection.png" alt="Microsoft Intune connection options" width="100%"></a></td><td width="50%"><b>Publish to Intune</b><br><a href="docs/screenshots/en/publish.png"><img src="docs/screenshots/en/publish.png" alt="Publishing dialog" width="100%"></a></td></tr></table>
+<table><tr><td width="50%"><b>Ways to connect</b><br><a href="docs/screenshots/en/connection.png"><img src="docs/screenshots/en/connection.png" alt="Microsoft Intune connection options" width="100%"></a></td><td width="50%"><b>Publish to Intune</b><br><a href="docs/screenshots/en/publish.png"><img src="docs/screenshots/en/publish.png" alt="Publishing dialog" width="100%"></a></td></tr><tr><td width="50%"><b>A new version that supersedes the earlier one</b><br><a href="docs/screenshots/en/publish-supersede.png"><img src="docs/screenshots/en/publish-supersede.png" alt="Update an earlier version, supersede it, or create another app" width="100%"></a></td><td width="50%"><b>Status in Intune</b><br><a href="docs/screenshots/en/status.png"><img src="docs/screenshots/en/status.png" alt="Devices installed, failed and pending, with the error codes explained" width="100%"></a></td></tr></table>
 
 ### 08 · Deploy many applications at once
 
@@ -103,20 +103,18 @@ Test locally or in **Windows Sandbox**, where available, with results and logs. 
 2. Open **`J365.IntunePSApp.exe`** and complete tool preparation. The runtime is included; no .NET SDK is required.
 3. Select an installer or a catalog application, configure the project and review before building — or tick several applications (winget or Microsoft Store) and deploy them together. Validate in a pilot group before distribution. The [user guide](docs/USER-GUIDE.md) walks through every screen.
 
-## New in 2.7
+## New in 2.8
 
-- **Updates that work on company networks:** the latest version is read from the files of the latest release on github.com instead of the GitHub API, whose 60 requests an hour per address a company network shares. A failed check says why (and when the limit frees up), every check is in the log, and a window left open checks again every few hours. Copies up to 2.6.0 depend on the API: if one keeps saying "up to date", download this release once.
-- **The same version already installed is kept:** a device that already has this exact version of the same product is no longer uninstalled and installed again (9 minutes and a prompt to close Adobe Acrobat Reader in a real deployment): the package applies its post-install actions and records its mark. One switch on the Uninstall step.
-- **Faster, sturdier packages:** short folder names and a path check before IntuneWinAppUtil (long OneDrive paths made it fail), and a built-in packager that no longer recompresses installers (seconds instead of minutes). Settings point out a packages folder inside OneDrive.
-- **Publishing fixes:** apps of the Microsoft Store are published through Microsoft Graph beta (where `winGetApp` exists), a lost answer no longer creates duplicates, and the list of earlier versions never preselects an app with another name.
-- **One window at a time** and safely written settings: starting the application again brings the open window to the front instead of a second window that overwrote the settings of the first.
-- **Interface and texts:** a batch cannot start twice while signing in, the catalog refreshes after a database update and ignores double-clicks on its scroll bar, Settings keep what was typed, Esc closes dialogs, and the Portuguese texts were reviewed.
+- **A new version, group by group (supersedence):** publish the new version as a new Intune app that supersedes the earlier one. Intune moves to it only the devices where it is assigned — a pilot group first, then wider — and the earlier app stays for a rollback. *Update* installs over the earlier version (default); *Uninstall first* makes Intune remove it before. In the publishing dialog, the batch window and the command line (`--if-exists Supersede`).
+- **Status in Intune:** how many devices have the app installed, failed, pending, not installed or not applicable; its assignments and supersedence; and every device, problems first, with its error code explained (`0x87D1041C`: not detected after installing). From the result card of a published package and from *My packages*, with the permission the connection already has. Nothing is changed in the tenant.
+- **The publication tested end to end:** the publishing script now runs in the tests against a local stand-in of Microsoft Graph — creation, upload, commit, supersedence and assignment — in Windows PowerShell 5.1.
+- **Fixes:** the Portuguese summary of a batch agrees with any number ("Gerados: 4 de 6 · pulados: 1"), and an unknown choice on the command line is refused instead of becoming an update.
 
-2.6 brought apps of the Microsoft Store, batch deploy to Intune, truly silent installations, correct icons and switches. All changes: [CHANGELOG](CHANGELOG.md).
+2.7 brought update checks that work on company networks, the same version kept instead of reinstalled, faster packages and the [user guide](docs/USER-GUIDE.md). All changes: [CHANGELOG](CHANGELOG.md).
 
 ## Quality as the product evolves
 
-Every release passes **409 automated tests** on Windows (generated scripts parsed by Windows PowerShell 5.1, packaging, detection, publishing texts, the Microsoft Store parsing, batch planning, localization) plus interface checks that render the editor, settings, connection and batch windows in both languages and themes. The Microsoft Store search and the update check were also exercised against the live services. See the [quality review](docs/QUALITY.md).
+Every release passes **437 automated tests** on Windows (generated scripts parsed by Windows PowerShell 5.1, packaging, detection, the publication end to end against a local stand-in of Microsoft Graph, the install status, the Microsoft Store parsing, batch planning, localization) plus interface checks that render the editor, settings, connection, publishing, status and batch windows in both languages and themes. The Microsoft Store search and the update check were also exercised against the live services. See the [quality review](docs/QUALITY.md).
 
 Existing projects remain readable. Updating the editor does not change existing tenant applications. New packages carry a revision record; regenerate legacy packages to create one.
 
@@ -128,7 +126,7 @@ Existing projects remain readable. Updating the editor does not change existing 
 
 [User guide](docs/USER-GUIDE.md) · [Changelog](CHANGELOG.md) · [Quality review](docs/QUALITY.md) · [Intune publishing](docs/INTUNE-PUBLISH.md) · [Building](docs/BUILDING.md) · [Architecture](docs/ARCHITECTURE.md)
 
-[Contribute](CONTRIBUTING.md) · [Report an issue](https://github.com/sesantanajr/J365-IntunePSApp/issues) · [Security](SECURITY.md) · [SHA256SUMS.txt](https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v2.7.0/SHA256SUMS.txt)
+[Contribute](CONTRIBUTING.md) · [Report an issue](https://github.com/sesantanajr/J365-IntunePSApp/issues) · [Security](SECURITY.md) · [SHA256SUMS.txt](https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v2.8.0/SHA256SUMS.txt)
 
 ---
 

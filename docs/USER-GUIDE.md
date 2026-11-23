@@ -2,7 +2,7 @@
 
 # J365 IntunePSApp — User guide
 
-From an installer (`.msi` or `.exe`) or an application of the catalog to a Win32 app in Microsoft Intune: this guide walks through every screen of **J365 IntunePSApp 2.7** with real captures. The examples use a fictitious company, *Contoso*, and the 7-Zip MSI.
+From an installer (`.msi` or `.exe`) or an application of the catalog to a Win32 app in Microsoft Intune: this guide walks through every screen of **J365 IntunePSApp 2.8** with real captures. The examples use a fictitious company, *Contoso*, and the 7-Zip MSI.
 
 | You want to… | Go to |
 | --- | --- |
@@ -11,6 +11,7 @@ From an installer (`.msi` or `.exe`) or an application of the catalog to a Win32
 | Build a package step by step | [4. Create a package](#4-create-a-package-step-by-step) |
 | Check a package before it reaches devices | [5. Test before publishing](#5-test-before-publishing) |
 | Send it to Intune | [6. Connect to Intune](#6-connect-to-intune) · [7. Publish](#7-publish-to-intune) |
+| Roll a new version out gradually and follow the installation | [Supersedence](#a-new-version-group-by-group-supersedence) · [Status in Intune](#follow-the-installation) |
 | Package (and publish) many applications at once | [8. Batch deploy](#8-batch-deploy) |
 | Reopen, update or find a package | [9. My packages](#9-my-packages) |
 | Adjust defaults, branding and the connection | [10. Settings](#10-settings) |
@@ -176,12 +177,35 @@ When something fails, the window says why and what to do (role not active in PIM
 
 ![Publishing dialog: connection, app of the same name and assignment](screenshots/en/publish.png)
 
-- **If an app with this name already exists**: *Ask* lists the apps of the tenant named like this one — updating one keeps its assignments and sends the new content; or create a new app. Only an app with exactly this name is preselected.
+- **If an app with this name already exists**: *Ask* lists the apps of the tenant named like this one. Choose to **update** one of them (it keeps its assignments and gets the new content at once), to publish a **new app that supersedes** the earlier version (new in 2.8), or to create another app. Only an app with exactly this name is preselected.
 - **Assignment**: none (assign it later in Intune — recommended), *available* or *required*, for a group, all users or all devices. A broad *required* assignment asks for confirmation.
 - **Advanced options**: **Run in a PowerShell window**, or **Copy command** to run `Publish-ToIntune.ps1` yourself (it works without the application too).
 - **Validate package** checks everything without connecting.
 
-The upload shows its progress. Intune receives the app, its icon, the install/uninstall commands, the detection script, the requirements (architecture, minimum Windows), return codes, notifications and restart behavior. An incomplete app is removed if anything fails or you cancel. The result card then links to **Open in Intune**. See [INTUNE-PUBLISH.md](INTUNE-PUBLISH.md) for the details and the command line.
+The upload shows its progress. Intune receives the app, its icon, the install/uninstall commands, the detection script, the requirements (architecture, minimum Windows), return codes, notifications and restart behavior. An incomplete app is removed if anything fails or you cancel. The result card then links to **Open in Intune** and **Status in Intune**. See [INTUNE-PUBLISH.md](INTUNE-PUBLISH.md) for the details and the command line.
+
+### A new version, group by group (supersedence)
+
+![The apps of the same name: update one, supersede the newest earlier version, or create another](screenshots/en/publish-supersede.png)
+
+**New app that supersedes** creates the new version as a separate app linked to the earlier one. It acts only where you assign it: assign it to a pilot group first, then to the groups of the earlier app. On those devices the earlier version is replaced; elsewhere nothing changes, and the earlier app stays for a rollback.
+
+- **Update** (default): Intune installs this version over the earlier one, and the package removes earlier versions itself (step 5).
+- **Uninstall first**: Intune runs the uninstall command of the earlier app before, even where it is not assigned.
+
+Once no device runs the earlier version, unassign and delete it: Intune keeps at most 10 apps in one supersedence chain.
+
+### Follow the installation
+
+![Status in Intune: devices installed, failed and pending, assignments, supersedence and every device](screenshots/en/status.png)
+
+**Status in Intune** (on the result card, or **Status** in [My packages](#9-my-packages)) reads from Intune, without changing anything:
+
+- how many devices have the app installed, failed, pending, not installed or not applicable;
+- the assignments and the supersedence;
+- every device, the ones with a problem first, with the error code and what it usually means — `0x87D1041C`, for example, is an app not detected after installing: check the detection rule.
+
+**Refresh** reads it again; **Copy report** gives a table for a ticket or a spreadsheet. A device appears after its next check-in with Intune.
 
 ## 8. Batch deploy
 
@@ -189,14 +213,14 @@ The upload shows its progress. Intune receives the app, its icon, the install/un
 
 1. In the catalog, tick several applications (or **Add to batch** on the details) and click **Batch package**.
 2. Set what they share: company, owner, display mode, Intune notifications and deferral.
-3. Optionally **Publish each package to Intune as soon as it is generated**, with what to do with an app of the same name and the assignment. The tenant and the assignment are confirmed before anything starts.
+3. Optionally **Publish each package to Intune as soon as it is generated**, with what to do with an app of the same name (update it, **create a new app that supersedes it**, create another, or do not publish) and the assignment. The tenant and the assignment are confirmed before anything starts.
 4. **Generate N packages**. Each installer is downloaded from its official link, checked against its SHA256 and packaged as in the editor. An `.exe` without known silent switches, or a name that also matches other applications, is **skipped with the reason** — open it in the editor to finish it by hand. A failed publication can be retried alone; **Copy report** gives a table of the results.
 
 ## 9. My packages
 
 ![The package library: search, sort and actions](screenshots/en/packages.png)
 
-Every package of the output folder, newest first (or *Name A–Z*, *Updates first*, and the switch **Only with a new version**). **Reopen** loads the project in the editor (a new version of the application keeps all your customizations: only the installer and the version change), **Instructions** opens the Intune instructions, **Folder** opens it in Explorer.
+Every package of the output folder, newest first (or *Name A–Z*, *Updates first*, and the switch **Only with a new version**). **Status** (packages published from this computer) shows [how the installation goes](#follow-the-installation), **Reopen** loads the project in the editor (a new version of the application keeps all your customizations: only the installer and the version change), **Instructions** opens the Intune instructions, **Folder** opens it in Explorer.
 
 ## 10. Settings
 
@@ -229,14 +253,15 @@ The check reads the files of the latest release on github.com, so it works on co
 ```powershell
 J365.IntunePSApp.exe --build <project.json|installer> [--out <folder>] [--native]
 J365.IntunePSApp.exe --batch <id1,id2,...> [--mode Silent] [--notifications hideAll] [--company <name>] [--out <folder>]
-                     [--publish [--if-exists Update|CreateNew|Fail] [--assign none|available|required] [--assign-to AllUsers|AllDevices|Group] [--group <id>]]
+                     [--publish [--if-exists Update|Supersede|CreateNew|Fail [--supersedence Update|Replace]]
+                                [--assign none|available|required] [--assign-to AllUsers|AllDevices|Group] [--group <id>]]
 J365.IntunePSApp.exe --sandbox <package folder>
 J365.IntunePSApp.exe --setup | --update-catalog [--force] | --update [--check]
 J365.IntunePSApp.exe --install [--desktop-shortcut] [--quiet] | --uninstall [--purge] [--quiet]
 J365.IntunePSApp.exe --version | --help
 ```
 
-`--batch` accepts winget IDs and Microsoft Store product IDs. `--publish` uses the connection of this computer (the certificate is the natural choice for scheduled runs).
+`--batch` accepts winget IDs and Microsoft Store product IDs. `--publish` uses the connection of this computer (the certificate is the natural choice for scheduled runs); `--if-exists Supersede` publishes each new version as a new app that supersedes the earlier one.
 
 ## 13. Logs and troubleshooting
 

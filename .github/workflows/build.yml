@@ -86,6 +86,8 @@ jobs:
             if (-not (Test-Path "$folder/workspace-checks.txt")) { throw 'Workspace regression checks did not complete.' }
             if (-not (Test-Path "$folder/03-editor-2.png")) { throw 'The editor capture is missing.' }
             if (-not (Test-Path "$folder/02-batch.png")) { throw 'The batch window capture is missing.' }
+            if (-not (Test-Path "$folder/09-publish-supersede.png")) { throw 'The publishing dialog with the supersedence is missing.' }
+            if (-not (Test-Path "$folder/10-status.png")) { throw 'The status window capture is missing.' }
             if ((Get-Content "$folder/editor-state.txt" -Raw).Trim() -ne 'unsaved=False') { throw 'Navigating changed the project.' }
           }
 

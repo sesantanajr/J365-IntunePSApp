@@ -2,6 +2,29 @@
 
 All notable changes to J365 IntunePSApp. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.8.0 - 2026-11-23
+
+A new version can be rolled out group by group (supersedence), and the install status of a published app is read from Intune.
+
+### Added
+
+- **Supersedence.** A new version can be published as a new Intune app that supersedes the earlier one, instead of replacing the content of that app at once. Intune moves to it only the devices where the new app is assigned (a pilot group first, then wider), and the earlier app stays for a rollback. *Update* (default) installs over the earlier version, and J365 packages remove earlier versions themselves; *Uninstall first* makes Intune run the uninstall command of the earlier app before, even where it is not assigned.
+  - Publishing dialog: the list of apps of the same name offers *New app that supersedes* the newest earlier version, and *If an app with this name already exists* has *Create a new app that supersedes it*, with the type and what to expect.
+  - Batch window: *Create a new app that supersedes it*. Command line: `--if-exists Supersede [--supersedence Update|Replace]`.
+  - `Publish-ToIntune.ps1`: `-IfExists Supersede` (the newest app of the same name, by version) or with `-AppId`, and `-SupersedenceType Update|Replace`. The link is made as the Intune admin center makes it (`updateRelationships` of the new app, once its content is active, before its assignment). A refused link leaves the new app published and says why; `publish-result.json` records the superseded app, the type and a failure.
+- **Status in Intune.** On the result card of a published package, and *Status* in *My packages*: how many devices have the app installed, failed, pending, not installed or not applicable; its assignments and supersedence; and every device, problems first, with the error code and what it usually means (`0x87D1041C`, `0x80070642`, `0x80070652`, `0x80070643`, and the text of Windows for any other `0x8007xxxx`). *Copy report* gives a tab-separated table. It is read with the permission the connection already has (`DeviceManagementApps`): the report functions of Intune (`retrieveDeviceAppInstallationStatusReport`, or the older `getDeviceInstallStatusReport`), page by page, or else an export of the documented report `DeviceInstallStatusByApp`. A refused report still shows the app, its assignments and supersedence. Nothing is changed in the tenant.
+- **The publication is tested end to end:** `Publish-ToIntune.ps1` runs in the tests, in Windows PowerShell 5.1, against a local stand-in of Microsoft Graph (creation, upload to "Azure Storage", commit, supersedence, assignment, a refused link). The interface checks of every build render the publishing dialog with the supersedence and the status window.
+
+### Fixed
+
+- The Portuguese summary of the batch window read "1 pulados · 1 publicados"; it now agrees with any number ("Gerados: 4 de 6 · com avisos: 1 · pulados: 1 · com falha: 0 · publicados: 1"). The sample states of the capture mode count as generated.
+- An unknown `--if-exists` on the command line became an update; it is now refused with the usage (choices in any case: `supersede`, `createnew`).
+- `tools/Render-Screenshots.ps1` stops at once under Windows PowerShell 5.1, which wrote dates the application could not read.
+
+### Documentation
+
+- User guide (English and Portuguese), README and `docs/INTUNE-PUBLISH.md`: supersedence (when to update and when to supersede, the rules of Intune, the limit of 10 apps per chain) and the status, with new captures.
+
 ## 2.7.0 - 2026-11-23
 
 Updates that work on company networks, faster and safer packages, and a review of the whole code (packaging, publishing, settings, installation and interface), driven by the logs of a real deployment.

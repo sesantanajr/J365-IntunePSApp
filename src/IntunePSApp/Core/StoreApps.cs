@@ -350,6 +350,7 @@ namespace J365.IntunePSApp.Core
                 string existing = await FindAsync(g, app.Id, ct);
                 var (icon, iconType) = await StoreCatalog.LogoAsync(app, ct);
                 string owner = string.IsNullOrWhiteSpace(o.Owner) ? o.CompanyName ?? "" : o.Owner;
+                // Supersede, too, keeps the existing Store app: the Store updates it by itself, so there is no version to supersede.
                 if (existing != null && po.IfExists != "CreateNew")
                 {
                     result.AppId = existing;

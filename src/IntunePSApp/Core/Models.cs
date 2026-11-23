@@ -508,6 +508,9 @@ namespace J365.IntunePSApp.Core
         public string Icon { get; set; }
         public bool HasIcon => !string.IsNullOrEmpty(Icon);
         public bool NoIcon => !HasIcon;
+        /// <summary>The last publication of the package to Intune that went through (Intune\publish-result.json), or null.</summary>
+        public PublishResult Publication { get; set; }
+        public bool IsPublished => Publication?.IsPublished == true && Guid.TryParse(Publication.AppId, out _);
 
         public string Title => $"{AppName} {AppVersion}".Trim();
         public string DateLabel => Date.ToString("g", Loc.Instance.Culture);

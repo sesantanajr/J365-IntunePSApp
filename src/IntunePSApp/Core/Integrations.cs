@@ -232,14 +232,19 @@ namespace J365.IntunePSApp.Core
         public string TenantId { get; set; } = "";
         public string ClientId { get; set; } = "";
         public bool DeviceCode { get; set; }
-        /// <summary>Ask | Fail | Update | CreateNew</summary>
+        /// <summary>
+        /// Ask | Fail | Update | CreateNew | Supersede (a new app that supersedes the earlier version: <see cref="AppId"/>, or
+        /// the newest app of the same name).
+        /// </summary>
         public string IfExists { get; set; } = "Ask";
+        /// <summary>With Supersede: Update (Intune installs over the earlier app) or Replace (Intune uninstalls it first).</summary>
+        public string SupersedenceType { get; set; } = "Update";
         /// <summary>none | available | required</summary>
         public string AssignIntent { get; set; } = "none";
         /// <summary>AllUsers | AllDevices | Group</summary>
         public string AssignTo { get; set; } = "AllUsers";
         public string GroupId { get; set; } = "";
-        /// <summary>Intune app to update with this package (a previous version); empty: looked up by name.</summary>
+        /// <summary>Intune app to update with this package (a previous version), or to supersede; empty: looked up by name.</summary>
         public string AppId { get; set; } = "";
         /// <summary>Certificate of this computer: the script connects as the application (app-only) instead of a user.</summary>
         public string CertificateThumbprint { get; set; } = "";
@@ -259,8 +264,18 @@ namespace J365.IntunePSApp.Core
         public string Assignment { get; set; }
         public string Error { get; set; }
         public string Utc { get; set; }
+        /// <summary>The earlier app this one supersedes (a new app over an earlier version), when there is one.</summary>
+        public string SupersededAppId { get; set; }
+        public string SupersededName { get; set; }
+        public string SupersededVersion { get; set; }
+        /// <summary>update | replace</summary>
+        public string SupersedenceType { get; set; }
+        /// <summary>Empty when the supersedence was created; "failed: ..." when the app was published without it.</summary>
+        public string Supersedence { get; set; }
 
         public bool IsPublished => string.Equals(Status, "published", StringComparison.OrdinalIgnoreCase);
+        public bool Supersedes => !string.IsNullOrWhiteSpace(SupersededAppId);
+        public bool SupersedenceFailed => Supersedes && (Supersedence ?? "").StartsWith("failed", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>What a publication says, in the language of the interface (the script itself writes English).</summary>
@@ -277,8 +292,17 @@ namespace J365.IntunePSApp.Core
             if (step.StartsWith("Creating the app", StringComparison.Ordinal)) return T("Publish_StepCreating");
             if (step.StartsWith("Uploading", StringComparison.Ordinal)) return T("Publish_StepUploading", Regex.Match(step, @"[\d.,]+ MB").Value);
             if (step.StartsWith("Waiting for Intune", StringComparison.Ordinal)) return T("Publish_StepCommitting");
+            if (step.StartsWith("Superseding", StringComparison.Ordinal)) return T("Publish_StepSuperseding");
             if (step.StartsWith("Assigning", StringComparison.Ordinal)) return T("Publish_StepAssigning");
             return step;
+        }
+
+        /// <summary>"7-Zip 25.01": the name and the version of an app, once (names made before 2.5 carry the version).</summary>
+        public static string AppLabel(string name, string version)
+        {
+            name = (name ?? "").Trim();
+            version = (version ?? "").Trim();
+            return version.Length == 0 || name.EndsWith(version, StringComparison.OrdinalIgnoreCase) ? name : $"{name} {version}";
         }
 
         /// <summary>Intune refused the publication (no subscription, no permission): the answer says how Intune treats the connection.</summary>
@@ -300,6 +324,13 @@ namespace J365.IntunePSApp.Core
             if (r.IsPublished)
             {
                 string text = r.Action == "updated" ? T("Ed_PublishUpdated", r.DisplayName, r.TenantId) : T("Ed_PublishCreated", r.DisplayName, r.TenantId);
+                if (r.Supersedes)
+                {
+                    string earlier = AppLabel(r.SupersededName, r.SupersededVersion);
+                    text += " " + (r.SupersedenceFailed ? T("Ed_PublishSupersedeFailed", earlier, r.Supersedence.Substring("failed:".Length).Trim())
+                        : string.Equals(r.SupersedenceType, "replace", StringComparison.OrdinalIgnoreCase) ? T("Ed_PublishSupersedesReplace", earlier)
+                        : T("Ed_PublishSupersedesUpdate", earlier));
+                }
                 if (!string.IsNullOrWhiteSpace(r.Assignment)) text += " " + T("Ed_PublishAssigned", r.Assignment);
                 return text;
             }
@@ -334,6 +365,7 @@ namespace J365.IntunePSApp.Core
             if (!IsTenant(o.TenantId)) return "Publish_InvalidTenant";
             if (!IsGuid(o.ClientId)) return "Publish_InvalidClient";
             if (!string.IsNullOrWhiteSpace(o.CertificateThumbprint) && AppCertificate.Normalize(o.CertificateThumbprint).Length == 0) return "Publish_InvalidCertificate";
+            if (o.IfExists == "Supersede" && o.SupersedenceType is not ("Update" or "Replace")) return "Publish_InvalidSupersedence";
             if (o.AssignIntent != "none")
             {
                 if (o.AssignTo == "Group" && !IsGuid(o.GroupId)) return "Publish_InvalidGroup";
@@ -349,7 +381,9 @@ namespace J365.IntunePSApp.Core
             var sb = new StringBuilder($"-NoProfile -ExecutionPolicy Bypass -File \"{publishScript}\" -TenantId \"{o.TenantId.Trim()}\" -ClientId \"{o.ClientId.Trim()}\"");
             if (AppCertificate.Normalize(o.CertificateThumbprint) is { Length: > 0 } thumbprint) sb.Append(" -CertificateThumbprint ").Append(thumbprint);
             else if (o.DeviceCode) sb.Append(" -DeviceCode");
-            if (o.IfExists is "Fail" or "Update" or "CreateNew") sb.Append(" -IfExists ").Append(o.IfExists);
+            if (o.IfExists is "Fail" or "Update" or "CreateNew" or "Supersede") sb.Append(" -IfExists ").Append(o.IfExists);
+            // Update is the default of the script.
+            if (o.IfExists == "Supersede" && o.SupersedenceType == "Replace") sb.Append(" -SupersedenceType Replace");
             if (o.AssignIntent is "available" or "required")
             {
                 sb.Append(" -AssignIntent ").Append(o.AssignIntent).Append(" -AssignTo ").Append(o.AssignTo is "AllDevices" or "Group" ? o.AssignTo : "AllUsers");
@@ -403,7 +437,7 @@ namespace J365.IntunePSApp.Core
 
         public static Process LaunchInApp(string publishScript, PublishOptions o, string refreshToken, Action<string> output)
         {
-            if (Check(o) != null || o.IfExists is not ("Update" or "CreateNew" or "Fail")) throw new ArgumentException("Invalid publishing options.");
+            if (Check(o) != null || o.IfExists is not ("Update" or "CreateNew" or "Fail" or "Supersede")) throw new ArgumentException("Invalid publishing options.");
             string cancel = CancelFile(publishScript);
             try { if (File.Exists(cancel)) File.Delete(cancel); } catch { }
             var psi = ToolsService.PowerShellStartInfo(Arguments(publishScript, o) + " -Force -CancelFile \"" + cancel + "\"");

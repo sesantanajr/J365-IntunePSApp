@@ -1,8 +1,8 @@
-# Screenshots — J365 IntunePSApp 2.7
+# Screenshots — J365 IntunePSApp 2.8
 
 Unmodified PNG captures rendered by the application itself (its `--snapshot` mode), in English (`en/`) and Portuguese (`pt-BR/`), used by the [README](../../README.md) and the user guide ([English](../USER-GUIDE.md), [Português](../USER-GUIDE.pt-BR.md)).
 
-They show a fictitious company, *Contoso*, with an isolated data folder (`C:\Users\Public\J365-Docs`): the 7-Zip MSI analysed and really packaged, two packages made before (7-Zip and the Visual C++ Redistributable), and a **sample** Microsoft Intune connection. Nothing was published: sign-in and Microsoft Graph pointed to a closed local port, and the tenant and application IDs shown do not exist.
+They show a fictitious company, *Contoso*, with an isolated data folder (`C:\Users\Public\J365-Docs`): the 7-Zip MSI analysed and really packaged, two packages made before (7-Zip and the Visual C++ Redistributable), and a **sample** Microsoft Intune connection. Nothing was published: sign-in and Microsoft Graph pointed to a closed local port, and the tenant and application IDs shown do not exist. The apps of the same name in the publishing dialog and the status window (devices, users, groups) are samples of the capture mode.
 
 ## Regenerate
 
@@ -34,6 +34,8 @@ pwsh .\tools\Render-Screenshots.ps1 -Installer <7z…-x64.msi> -Extra <VC_redist
 | generated.png | 04-generated | Light |
 | needs-rebuild.png | 04-editor-needs-rebuild (checks pass) | Light |
 | publish.png | 09-publish | Light |
+| publish-supersede.png | 09-publish-supersede (sample apps of the same name, supersedence chosen) | Light |
+| status.png | 10-status (sample status of a published app) | Light |
 | packages.png | 05-packages | Light |
 | no-results.png | 05-packages-no-results (checks pass) | Light |
 | settings.png, appearance.png, company.png, defaults.png, intune.png, components.png, about.png | 06-settings, 06-settings-* | Light |

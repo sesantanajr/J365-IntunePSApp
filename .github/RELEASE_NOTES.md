@@ -1,49 +1,43 @@
-## J365 IntunePSApp 2.7.0
+## J365 IntunePSApp 2.8.0
 
 ### Português
 
-Atualizações que funcionam em redes corporativas, pacotes mais rápidos e seguros e uma revisão do código inteiro, a partir dos logs de uma implantação real.
+Uma versão nova pode ir para os dispositivos grupo a grupo, e o status de instalação de um app publicado aparece no próprio aplicativo.
 
-- **"Você tem a versão mais recente" com uma versão nova disponível:** a verificação usava a API do GitHub, limitada a 60 consultas por hora por endereço público, e numa rede corporativa todos dividem o mesmo endereço. Agora a versão é lida no `SHA256SUMS.txt` da última release, no github.com e sem esse limite; a API e a página da release ficam como alternativas, e o log registra cada verificação. **Cópias até a 2.6.0 ainda dependem da API:** se continuarem dizendo "versão mais recente", baixe esta versão uma vez manualmente.
-- **Apps da Microsoft Store voltam a ser publicados:** o tipo `winGetApp` só existe no Microsoft Graph beta. Uma falha de rede não cria mais apps nem registros duplicados.
-- **A mesma versão já instalada não é mais reinstalada:** num Acrobat Reader real, o pacote removia e reinstalava a versão idêntica em 9 minutos, depois de pedir para fechar o app. Agora ele só aplica as ações pós-instalação e grava a marca. A opção fica na etapa Desinstalação.
-- **Pacotes em pastas longas (OneDrive):**
-  - nomes de pasta curtos e caminho verificado antes do IntuneWinAppUtil;
-  - empacotador interno muito mais rápido, porque não recompacta o instalador;
-  - aviso quando a pasta de pacotes está no OneDrive.
-- **Uma janela por vez:** abrir o aplicativo de novo traz a janela aberta para a frente. Antes, duas janelas sobrescreviam as configurações uma da outra. O `config.json` agora é gravado com segurança.
-- **Outras correções:**
-  - lista de versões anteriores não pré-seleciona mais um app de outro nome;
-  - lote não inicia duas vezes durante o login;
-  - duplo clique na barra de rolagem do catálogo não baixa mais um app;
-  - edições nas Configurações não se perdem mais.
-- **Textos e documentação:** textos em português revisados e documentação atualizada.
+- **Substituição (supersedence):** publique a versão nova como um app novo do Intune que substitui o anterior, em vez de trocar o conteúdo dele de uma vez.
+  - O Intune leva para a versão nova só os dispositivos onde o app novo estiver atribuído: primeiro um grupo piloto, depois mais grupos. O app anterior continua lá para um rollback.
+  - *Atualizar* (padrão) instala por cima da versão anterior, e o pacote remove as versões anteriores sozinho. *Desinstalar antes* faz o Intune remover o app anterior primeiro.
+  - Na janela de publicação (a lista de apps com o mesmo nome oferece *App novo que substitui*), no lote e na linha de comando (`--if-exists Supersede`). O `Publish-ToIntune.ps1` ganhou `-IfExists Supersede` e `-SupersedenceType`.
+- **Status no Intune:** no cartão de resultado de um pacote publicado e em *Meus pacotes*.
+  - Quantos dispositivos têm o app instalado, com falha, pendente, não instalado ou não aplicável.
+  - As atribuições e a substituição do app.
+  - Cada dispositivo, os com problema primeiro, com o código do erro explicado (`0x87D1041C`: não detectado depois de instalar).
+  - Lido com a permissão que a conexão já tem; nada é alterado no tenant. *Copiar relatório* gera uma tabela para um chamado ou uma planilha.
+- **A publicação testada de ponta a ponta:** o script de publicação roda nos testes contra um Microsoft Graph simulado, no Windows PowerShell 5.1.
+- **Correções:** o resumo do lote concorda com qualquer número ("pulados: 1"), e uma escolha desconhecida em `--if-exists` é recusada em vez de virar uma atualização.
 
 ### English
 
-Updates that work on company networks, faster and safer packages, and a review of the whole code, driven by the logs of a real deployment.
+A new version can reach the devices group by group, and the install status of a published app shows in the application itself.
 
-- **"You have the latest version" while a newer one existed:** the check used the GitHub API, limited to 60 requests an hour per public address, and on a company network everyone shares that address. The version is now read from the `SHA256SUMS.txt` of the latest release, on github.com and without that limit. The API and the release page are fallbacks, and every check is logged. **Copies up to 2.6.0 still depend on the API:** if one keeps saying "up to date", download this release once by hand.
-- **Apps of the Microsoft Store can be published again:** the `winGetApp` type exists only in Microsoft Graph beta. A network failure no longer creates duplicate apps or registrations.
-- **The same version already installed is no longer reinstalled:** with a real Acrobat Reader, the package removed and reinstalled the identical version in 9 minutes, after asking the user to close the app. It now only applies the post-install actions and records its mark. The option is on the Uninstall step.
-- **Packages in long folders (OneDrive):**
-  - short folder names, and the path is checked before IntuneWinAppUtil runs;
-  - a much faster built-in packager, because it no longer recompresses the installer;
-  - a warning when the packages folder is inside OneDrive.
-- **One window at a time:** starting the application again brings the open window to the front. Before, two windows overwrote each other's settings. `config.json` is now written safely.
-- **Other fixes:**
-  - the list of earlier versions no longer preselects an app with another name;
-  - a batch no longer starts twice during the sign-in;
-  - a double-click on the catalog's scroll bar no longer downloads an app;
-  - edits in Settings are no longer lost.
-- **Texts and documentation:** Portuguese texts reviewed and documentation brought up to date.
+- **Supersedence:** publish the new version as a new Intune app that supersedes the earlier one, instead of replacing the content of that app at once.
+  - Intune moves to the new version only the devices where the new app is assigned: a pilot group first, then wider. The earlier app stays for a rollback.
+  - *Update* (default) installs over the earlier version, and the package removes earlier versions itself. *Uninstall first* makes Intune remove the earlier app before.
+  - In the publishing dialog (the list of apps of the same name offers *New app that supersedes*), the batch window and the command line (`--if-exists Supersede`). `Publish-ToIntune.ps1` has `-IfExists Supersede` and `-SupersedenceType`.
+- **Status in Intune:** on the result card of a published package and in *My packages*.
+  - How many devices have the app installed, failed, pending, not installed or not applicable.
+  - The assignments and the supersedence of the app.
+  - Every device, problems first, with its error code explained (`0x87D1041C`: not detected after installing).
+  - Read with the permission the connection already has; nothing is changed in the tenant. *Copy report* gives a table for a ticket or a spreadsheet.
+- **The publication tested end to end:** the publishing script runs in the tests against a local stand-in of Microsoft Graph, in Windows PowerShell 5.1.
+- **Fixes:** the Portuguese summary of a batch agrees with any number ("pulados: 1"), and an unknown choice of `--if-exists` is refused instead of becoming an update.
 
-See the [CHANGELOG](https://github.com/sesantanajr/J365-IntunePSApp/blob/main/CHANGELOG.md).
+See the [CHANGELOG](https://github.com/sesantanajr/J365-IntunePSApp/blob/main/CHANGELOG.md) and the user guide ([English](https://github.com/sesantanajr/J365-IntunePSApp/blob/main/docs/USER-GUIDE.md), [Português](https://github.com/sesantanajr/J365-IntunePSApp/blob/main/docs/USER-GUIDE.pt-BR.md)).
 
 ### Download
 
-- `J365-IntunePSApp-2.7.0-win-x64.zip`: extraia e execute `J365.IntunePSApp.exe` / extract and run the portable application.
-- `J365-IntunePSApp-2.7.0-source.zip`: código-fonte / source code.
+- `J365-IntunePSApp-2.8.0-win-x64.zip`: extraia e execute `J365.IntunePSApp.exe` / extract and run the portable application.
+- `J365-IntunePSApp-2.8.0-source.zip`: código-fonte / source code.
 - `SHA256SUMS.txt`: verificações SHA-256 / SHA-256 checksums.
 
 **Já tem o J365 IntunePSApp?**

@@ -221,6 +221,26 @@ namespace J365.IntunePSApp
                         await ShotDialog(new Views.PublishDialog(IntunePublisher.Prepare(intune), s.AppName + " " + s.AppVersion, null, s.AppName), "09-publish");
                 }
 
+                // What to do with the apps of the same name, with the supersedence of the earlier version chosen, and the status
+                // of a published app. Both are drawn from samples (nothing is asked to Intune), in every run.
+                {
+                    var current = w.Editor.Collect();
+                    string name = string.IsNullOrWhiteSpace(current.AppName) ? "7-Zip" : current.AppName;
+                    string version = string.IsNullOrWhiteSpace(current.AppVersion) ? "26.06" : current.AppVersion;
+                    string folder = w.Editor.LastIntuneFolder is string built && Directory.Exists(built) ? built
+                        : Directory.CreateDirectory(Path.Combine(AppPaths.Temp, "publish-check-" + Guid.NewGuid().ToString("N"))).FullName;
+                    string earlier = EarlierVersion(version);
+                    var publish = new Views.PublishDialog(IntunePublisher.Prepare(folder), name + " " + version, null, name, version);
+                    publish.ShowSampleMatches(new System.Collections.Generic.List<(string Id, string Name, string Version)>
+                    {
+                        ("1d7e4c2b-9f3a-4b8e-a5c6-7e2f1d0b9a83", name, earlier),
+                        ("5a9c3e1f-2b4d-4c6e-8f1a-3b5d7e9f1a2c", name, EarlierVersion(earlier))
+                    });
+                    await ShotDialog(publish, "09-publish-supersede");
+                    var sample = Views.AppStatusWindow.Sample();
+                    await ShotDialog(new Views.AppStatusWindow(sample.AppId, $"{sample.Name} {sample.Version}", null, sample), "10-status");
+                }
+
                 w.Navigate("packages");
                 await Shot("05-packages");
                 if (App.HasArg("--snapshot-state-checks"))
@@ -277,6 +297,19 @@ namespace J365.IntunePSApp
                 File.WriteAllText(Path.Combine(dir, "error.txt"), ex.ToString());
             }
             Application.Current.Shutdown();
+        }
+
+        /// <summary>
+        /// A version before <paramref name="version"/> for the sample apps of the captures: "26.06" gives "25.01" (versions
+        /// numbered by year and release), "3.2.0" gives "2.2.0".
+        /// </summary>
+        internal static string EarlierVersion(string version)
+        {
+            var parts = (version ?? "").Split('.');
+            if (!int.TryParse(parts[0], out int major) || major <= 0) return "0.9";
+            if (parts.Length == 2 && parts[1].Length == 2) return $"{major - 1}.01";
+            parts[0] = (major - 1).ToString();
+            return string.Join(".", parts);
         }
     }
 }

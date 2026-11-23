@@ -269,7 +269,9 @@ namespace J365.IntunePSApp
             // --publish: each package goes to Intune with the connection of this computer (the certificate connects without
             // anyone; a user connection needs a session opened in the application before).
             o.Publish = HasArg("--publish");
-            if (Arg("--if-exists") is string ifExists) o.IfExists = ifExists;
+            // Any case ("supersede"); an unknown choice is refused instead of becoming an update.
+            if (Arg("--if-exists") is string ifExists && (o.IfExists = BatchOptions.Choice(ifExists, "Update", "Supersede", "CreateNew", "Fail")) == null) { Console.WriteLine(T("Cli_BatchUsage")); return 2; }
+            if (Arg("--supersedence") is string supersedence && (o.SupersedenceType = BatchOptions.Choice(supersedence, "Update", "Replace")) == null) { Console.WriteLine(T("Cli_BatchUsage")); return 2; }
             if (Arg("--assign") is string assign) o.AssignIntent = assign;
             if (Arg("--assign-to") is string assignTo) o.AssignTo = assignTo;
             if (Arg("--group") is string group) o.GroupId = group;

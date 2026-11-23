@@ -2,7 +2,7 @@
 
 # J365 IntunePSApp — Guia de uso
 
-De um instalador (`.msi` ou `.exe`) ou de um aplicativo do catálogo até um app Win32 no Microsoft Intune: este guia percorre todas as telas do **J365 IntunePSApp 2.7** com capturas reais. Os exemplos usam uma empresa fictícia, a *Contoso*, e o MSI do 7-Zip.
+De um instalador (`.msi` ou `.exe`) ou de um aplicativo do catálogo até um app Win32 no Microsoft Intune: este guia percorre todas as telas do **J365 IntunePSApp 2.8** com capturas reais. Os exemplos usam uma empresa fictícia, a *Contoso*, e o MSI do 7-Zip.
 
 | Você quer… | Vá para |
 | --- | --- |
@@ -11,6 +11,7 @@ De um instalador (`.msi` ou `.exe`) ou de um aplicativo do catálogo até um app
 | Montar um pacote passo a passo | [4. Crie um pacote](#4-crie-um-pacote-passo-a-passo) |
 | Conferir um pacote antes de ele chegar aos dispositivos | [5. Teste antes de publicar](#5-teste-antes-de-publicar) |
 | Enviar para o Intune | [6. Conecte ao Intune](#6-conecte-ao-intune) · [7. Publique](#7-publique-no-intune) |
+| Publicar uma versão nova aos poucos e acompanhar a instalação | [Substituição](#uma-versão-nova-grupo-a-grupo-substituição) · [Status no Intune](#acompanhe-a-instalação) |
 | Empacotar (e publicar) vários aplicativos de uma vez | [8. Deploy em lote](#8-deploy-em-lote) |
 | Reabrir, atualizar ou encontrar um pacote | [9. Meus pacotes](#9-meus-pacotes) |
 | Ajustar padrões, identidade visual e conexão | [10. Configurações](#10-configurações) |
@@ -176,12 +177,35 @@ Quando algo falha, a janela diz o motivo e o que fazer (função não ativa no P
 
 ![Janela de publicação: conexão, app com o mesmo nome e atribuição](screenshots/pt-BR/publish.png)
 
-- **Se já existir um app com este nome**: *Perguntar* lista os apps do tenant com esse nome — atualizar um deles mantém as atribuições e envia o conteúdo novo; ou crie um app novo. Só um app com exatamente este nome vem pré-selecionado.
+- **Se já existir um app com este nome**: *Perguntar* lista os apps do tenant com esse nome. Escolha **atualizar** um deles (ele mantém as atribuições e recebe o conteúdo novo de uma vez), publicar um **app novo que substitui** a versão anterior (novidade da 2.8) ou criar outro app. Só um app com exatamente este nome vem pré-selecionado.
 - **Atribuição**: nenhuma (atribua depois no Intune — recomendado), *disponível* ou *obrigatória*, para um grupo, todos os usuários ou todos os dispositivos. Uma atribuição obrigatória ampla pede confirmação.
 - **Opções avançadas**: **Executar numa janela do PowerShell**, ou **Copiar comando** para executar o `Publish-ToIntune.ps1` você mesmo (ele funciona também sem o aplicativo).
 - **Validar pacote** confere tudo sem conectar.
 
-O envio mostra o progresso. O Intune recebe o app, o ícone, os comandos de instalação e desinstalação, o script de detecção, os requisitos (arquitetura, Windows mínimo), os códigos de retorno, as notificações e o comportamento de reinício. Um app incompleto é removido se algo falhar ou se você cancelar. O cartão de resultado então mostra **Abrir no Intune**. Detalhes e linha de comando no [INTUNE-PUBLISH.md](INTUNE-PUBLISH.md).
+O envio mostra o progresso. O Intune recebe o app, o ícone, os comandos de instalação e desinstalação, o script de detecção, os requisitos (arquitetura, Windows mínimo), os códigos de retorno, as notificações e o comportamento de reinício. Um app incompleto é removido se algo falhar ou se você cancelar. O cartão de resultado então mostra **Abrir no Intune** e **Status no Intune**. Detalhes e linha de comando no [INTUNE-PUBLISH.md](INTUNE-PUBLISH.md).
+
+### Uma versão nova, grupo a grupo (substituição)
+
+![Os apps com o mesmo nome: atualizar um, substituir a versão anterior mais nova ou criar outro](screenshots/pt-BR/publish-supersede.png)
+
+**App novo que substitui** cria a versão nova como um app separado, ligado ao anterior. Ele só age onde você o atribuir: atribua primeiro a um grupo piloto e depois aos grupos do app anterior. Nesses dispositivos a versão anterior é substituída; nos demais nada muda, e o app anterior continua lá para um rollback.
+
+- **Atualizar** (padrão): o Intune instala esta versão por cima da anterior, e o próprio pacote remove as versões anteriores (etapa 5).
+- **Desinstalar antes**: o Intune executa antes o comando de desinstalação do app anterior, mesmo onde ele não está atribuído.
+
+Quando nenhum dispositivo usar mais a versão anterior, remova as atribuições dela e exclua-a: o Intune aceita no máximo 10 apps numa cadeia de substituição.
+
+### Acompanhe a instalação
+
+![Status no Intune: dispositivos instalados, com falha e pendentes, atribuições, substituição e cada dispositivo](screenshots/pt-BR/status.png)
+
+**Status no Intune** (no cartão de resultado, ou **Status** em [Meus pacotes](#9-meus-pacotes)) lê do Intune, sem alterar nada:
+
+- quantos dispositivos têm o app instalado, com falha, pendente, não instalado ou não aplicável;
+- as atribuições e a substituição;
+- cada dispositivo, os com problema primeiro, com o código do erro e o que ele costuma significar — `0x87D1041C`, por exemplo, é um app não detectado depois de instalar: confira a regra de detecção.
+
+**Atualizar** lê de novo; **Copiar relatório** gera uma tabela para um chamado ou uma planilha. Um dispositivo aparece depois da próxima sincronização com o Intune.
 
 ## 8. Deploy em lote
 
@@ -189,14 +213,14 @@ O envio mostra o progresso. O Intune recebe o app, o ícone, os comandos de inst
 
 1. No catálogo, marque vários aplicativos (ou **Adicionar ao lote** nos detalhes) e clique em **Gerar em lote**.
 2. Defina o que eles têm em comum: empresa, proprietário, modo de exibição, notificações do Intune e adiamento.
-3. Se quiser, ligue **Publicar cada pacote no Intune assim que for gerado (deploy)**, com o que fazer com um app do mesmo nome e a atribuição. O tenant e a atribuição são confirmados antes de qualquer coisa começar.
+3. Se quiser, ligue **Publicar cada pacote no Intune assim que for gerado (deploy)**, com o que fazer com um app do mesmo nome (atualizá-lo, **criar um app novo que substitui o existente**, criar outro ou não publicar) e a atribuição. O tenant e a atribuição são confirmados antes de qualquer coisa começar.
 4. **Gerar N pacotes**. Cada instalador é baixado do link oficial, conferido pelo SHA256 e empacotado como no editor. Um `.exe` sem parâmetros silenciosos conhecidos, ou um nome que também corresponde a outros aplicativos, é **pulado com o motivo** — abra-o no editor para terminar manualmente. Uma publicação que falhou pode ser repetida sozinha; **Copiar relatório** gera uma tabela com os resultados.
 
 ## 9. Meus pacotes
 
 ![A biblioteca de pacotes: busca, ordenação e ações](screenshots/pt-BR/packages.png)
 
-Todos os pacotes da pasta de saída, do mais recente ao mais antigo (ou *Nome A–Z*, *Atualizações primeiro*, e a chave **Somente com versão nova**). **Reabrir** carrega o projeto no editor (uma versão nova do aplicativo mantém todas as suas personalizações: só o instalador e a versão mudam), **Instruções** abre as instruções do Intune, **Pasta** abre no Explorer.
+Todos os pacotes da pasta de saída, do mais recente ao mais antigo (ou *Nome A–Z*, *Atualizações primeiro*, e a chave **Somente com versão nova**). **Status** (pacotes publicados a partir deste computador) mostra [como está a instalação](#acompanhe-a-instalação), **Reabrir** carrega o projeto no editor (uma versão nova do aplicativo mantém todas as suas personalizações: só o instalador e a versão mudam), **Instruções** abre as instruções do Intune, **Pasta** abre no Explorer.
 
 ## 10. Configurações
 
@@ -229,14 +253,15 @@ A verificação lê os arquivos da última versão no github.com, então funcion
 ```powershell
 J365.IntunePSApp.exe --build <project.json|instalador> [--out <pasta>] [--native]
 J365.IntunePSApp.exe --batch <id1,id2,...> [--mode Silent] [--notifications hideAll] [--company <nome>] [--out <pasta>]
-                     [--publish [--if-exists Update|CreateNew|Fail] [--assign none|available|required] [--assign-to AllUsers|AllDevices|Group] [--group <id>]]
+                     [--publish [--if-exists Update|Supersede|CreateNew|Fail [--supersedence Update|Replace]]
+                                [--assign none|available|required] [--assign-to AllUsers|AllDevices|Group] [--group <id>]]
 J365.IntunePSApp.exe --sandbox <pasta do pacote>
 J365.IntunePSApp.exe --setup | --update-catalog [--force] | --update [--check]
 J365.IntunePSApp.exe --install [--desktop-shortcut] [--quiet] | --uninstall [--purge] [--quiet]
 J365.IntunePSApp.exe --version | --help
 ```
 
-O `--batch` aceita IDs do winget e IDs de produto da Microsoft Store. O `--publish` usa a conexão deste computador (o certificado é a escolha natural para execuções agendadas).
+O `--batch` aceita IDs do winget e IDs de produto da Microsoft Store. O `--publish` usa a conexão deste computador (o certificado é a escolha natural para execuções agendadas); `--if-exists Supersede` publica cada versão nova como um app novo que substitui o anterior.
 
 ## 13. Logs e solução de problemas
 

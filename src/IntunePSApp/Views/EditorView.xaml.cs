@@ -1793,6 +1793,13 @@ namespace J365.IntunePSApp.Views
             BtnPublishOpen.Tag = action;
             BtnPublishOpen.Content = action switch { "purchase" => T(IntuneSubscription.FixLabelKey), "plan" => T("Settings_IntuneCheckPlan"), _ => T("Ed_PublishOpen") };
             BtnPublishOpen.Visibility = action.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            // A published app: how its installation goes on the devices, read from Intune.
+            BtnPublishStatus.Visibility = ok && IntunePublisher.IsGuid(r.AppId) ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void PublishStatus_Click(object sender, RoutedEventArgs e)
+        {
+            if (_publishResult?.IsPublished == true) AppStatusWindow.Open(Window.GetWindow(this), _publishResult, HeaderTitle.Text);
         }
 
         private async void PublishOpen_Click(object sender, RoutedEventArgs e)

@@ -27,8 +27,9 @@
       3. Looks for an app with the same name. By default it asks what to do; see -IfExists.
       4. Creates the app, uploads the content and waits until Intune confirms it.
          If anything fails after the app was created, the incomplete app is removed again.
-      5. Optionally assigns it (-AssignIntent). By default the app is created WITHOUT assignments.
-      6. Writes publish-result.json in this folder (app id, link to the Intune admin center, or the error).
+      5. With -IfExists Supersede, makes the new app supersede the earlier version (see -SupersedenceType).
+      6. Optionally assigns it (-AssignIntent). By default the app is created WITHOUT assignments.
+      7. Writes publish-result.json in this folder (app id, link to the Intune admin center, or the error).
 
     Exit codes: 0 = published (or validated), 1 = failed, 2 = cancelled.
 
@@ -53,8 +54,14 @@
 
 .PARAMETER IfExists
     What to do when an app with the same name already exists in the tenant:
-    Ask (default), Fail, Update (new content and settings on the existing app, assignments are kept)
-    or CreateNew (a second app with the same name).
+    Ask (default), Fail, Update (new content and settings on the existing app, assignments are kept),
+    Supersede (a new app that supersedes the newest of them: a gradual rollout, group by group, with the
+    earlier app kept for a rollback) or CreateNew (a second app with the same name, unrelated).
+
+.PARAMETER SupersedenceType
+    With -IfExists Supersede: Update (default; Intune installs the new app over the earlier one, and the
+    package removes earlier versions itself) or Replace (Intune uninstalls the earlier app first, even where
+    it is not assigned). Either way the new app acts only where it is assigned.
 
 .PARAMETER AssignIntent
     none (default), available or required. Only applied to an app created by this run.
@@ -68,6 +75,7 @@
 .PARAMETER AppId
     Id of the Intune app to update (for example the previous version of this application). Its settings and content
     are replaced by this package; its assignments are kept. Without it, the app is looked up by its exact name.
+    With -IfExists Supersede, the app that the new one supersedes.
 
 .PARAMETER Force
     Does not ask for confirmation. With -IfExists Ask, an existing app then stops the script.
@@ -92,6 +100,9 @@
 
 .EXAMPLE
     .\Publish-ToIntune.ps1 -TenantId contoso.onmicrosoft.com -ClientId <id> -AssignIntent available -AssignTo Group -GroupId <group id>
+
+.EXAMPLE
+    .\Publish-ToIntune.ps1 -TenantId contoso.onmicrosoft.com -ClientId <id> -IfExists Supersede -AssignIntent required -AssignTo Group -GroupId <pilot group id>
 #>
 [CmdletBinding()]
 param
@@ -101,8 +112,10 @@ param
     [switch]$DeviceCode,
     [string]$CertificateThumbprint,
     [switch]$ValidateOnly,
-    [ValidateSet('Ask', 'Fail', 'Update', 'CreateNew')]
+    [ValidateSet('Ask', 'Fail', 'Update', 'CreateNew', 'Supersede')]
     [string]$IfExists = 'Ask',
+    [ValidateSet('Update', 'Replace')]
+    [string]$SupersedenceType = 'Update',
     [ValidateSet('none', 'available', 'required')]
     [string]$AssignIntent = 'none',
     [ValidateSet('AllUsers', 'AllDevices', 'Group')]
@@ -132,8 +145,10 @@ $resultPath = Join-Path $here 'publish-result.json'
 $script:Token = $null
 $script:CreatedAppId = $null
 $script:Result = [ordered]@{
-    schema = 1; status = 'failed'; action = ''; appId = ''; displayName = ''; appVersion = ''; tenantId = ''
+    schema = 2; status = 'failed'; action = ''; appId = ''; displayName = ''; appVersion = ''; tenantId = ''
     portalUrl = ''; assignment = ''; error = ''; utc = ''
+    # A new app that supersedes an earlier version: that app, the type (update or replace), and a failure of the link.
+    supersededAppId = ''; supersededName = ''; supersededVersion = ''; supersedenceType = ''; supersedence = ''
 }
 
 function Write-Step([string]$Text) { Write-Host ('> ' + $Text) -ForegroundColor Cyan }
@@ -171,6 +186,21 @@ function Stop-Script([int]$Code)
 {
     if ($Pause) { Write-Host ''; $null = Read-Host 'Press Enter to close this window' }
     exit $Code
+}
+
+# A version as a key that sorts as versions do ("26.06" after "25.01", "10.2" after "9.9"); no number sorts first.
+function Get-VersionKey([string]$Version)
+{
+    return ((@([regex]::Matches([string]$Version, '\d+')) | Select-Object -First 6 | ForEach-Object { $_.Value.PadLeft(10, '0') }) -join '.')
+}
+
+# "7-Zip" (25.01), or "7-Zip 25.01" when the name already carries the version (apps made before 2.5).
+function Get-AppLabel($App)
+{
+    $name = [string]$App.displayName
+    $version = [string]$App.displayVersion
+    if ($version -and -not $name.EndsWith($version)) { return ('"' + $name + '" ' + $version) }
+    return ('"' + $name + '"')
 }
 
 # ---------------------------------------------------------------- HTTP
@@ -515,6 +545,19 @@ function Wait-FileState([string]$FilePath, [string]$Stage, [int]$Minutes)
     throw ('Intune did not finish "' + $Stage + '" within ' + $Minutes + ' minutes.')
 }
 
+# Intune links and assigns an app once it is published, a few seconds after its content became active. Not cancellable:
+# the app is complete by then, and a cancel must not report a published app as cancelled.
+function Wait-Published([string]$Id)
+{
+    for ($i = 0; $i -lt 20; $i++)
+    {
+        $published = ''
+        try { $published = [string](Invoke-Graph -Method 'GET' -Path ('/deviceAppManagement/mobileApps/' + $Id + '?$select=publishingState')).publishingState } catch { }
+        if (-not $published -or $published -eq 'published') { return }
+        Start-Sleep -Seconds 3
+    }
+}
+
 # The upload address of the content (a SAS link of Azure Storage) is valid for a limited time: it is renewed when it is
 # 7 minutes old, and at once after Azure Storage refused it.
 function Update-UploadAddress([switch]$Force)
@@ -679,6 +722,7 @@ try
     Write-Host ('  Detection       : ' + $app.detectionScript)
     Write-Host ('  Icon            : ' + $iconLabel)
     Write-Host ('  Assignment      : ' + $assignmentLabel)
+    if ($IfExists -eq 'Supersede') { Write-Host ('  Supersedes      : the earlier version (' + $SupersedenceType.ToLower() + ')') }
     if ($AssignIntent -ne 'none') { Write-Host ('  Notifications   : ' + $notifications) }
     Write-Host ('  Device restart  : ' + $restart)
     Write-Host ''
@@ -714,14 +758,25 @@ try
 
     # ------------------------------------------------------------ existing app with the same name
     $targetId = $null
+    # The earlier app that a new one supersedes (-IfExists Supersede).
+    $supersede = $null
     if ($AppId)
     {
-        # A new version of an app already in Intune: update that very app (assignments and history are kept).
-        Write-Step 'Looking for the app to update...'
+        # A new version of an app already in Intune: update that very app (assignments and history are kept), or create a
+        # new app that supersedes it.
+        if ($IfExists -eq 'Supersede') { Write-Step 'Looking for the app to supersede...' } else { Write-Step 'Looking for the app to update...' }
         $current = Invoke-Graph -Method 'GET' -Path ('/deviceAppManagement/mobileApps/' + [uri]::EscapeDataString($AppId.Trim()))
         if (-not $current -or [string]$current.'@odata.type' -ne '#microsoft.graph.win32LobApp') { throw ('The app ' + $AppId + ' was not found in Intune, or it is not a Windows app (Win32).') }
-        $targetId = [string]$current.id
-        Write-Ok ('Updating "' + [string]$current.displayName + '" (version ' + [string]$current.displayVersion + ') to ' + [string]$app.appVersion)
+        if ($IfExists -eq 'Supersede')
+        {
+            $supersede = $current
+            Write-Ok ('A new app will supersede ' + (Get-AppLabel $current) + ' (' + $SupersedenceType.ToLower() + ')')
+        }
+        else
+        {
+            $targetId = [string]$current.id
+            Write-Ok ('Updating "' + [string]$current.displayName + '" (version ' + [string]$current.displayVersion + ') to ' + [string]$app.appVersion)
+        }
     }
     else {
     Write-Step 'Looking for an app with the same name...'
@@ -738,8 +793,8 @@ try
             if ($Force) { $choice = 'Fail' }
             else
             {
-                $answer = Read-Host '  [U]pdate the existing app, create a [N]ew one with the same name, or [C]ancel? (U/N/C)'
-                if ($answer -match '^\s*u') { $choice = 'Update' } elseif ($answer -match '^\s*n') { $choice = 'CreateNew' } else { $choice = 'Cancel' }
+                $answer = Read-Host '  [U]pdate the existing app, create a new app that [S]upersedes it, create a [N]ew one with the same name, or [C]ancel? (U/S/N/C)'
+                if ($answer -match '^\s*u') { $choice = 'Update' } elseif ($answer -match '^\s*s') { $choice = 'Supersede' } elseif ($answer -match '^\s*n') { $choice = 'CreateNew' } else { $choice = 'Cancel' }
             }
         }
         if ($choice -eq 'Cancel')
@@ -748,17 +803,29 @@ try
             Save-Result 'cancelled' ''
             Stop-Script 2
         }
-        if ($choice -eq 'Fail') { throw ('An app named "' + $app.displayName + '" already exists. Use -IfExists Update or -IfExists CreateNew.') }
+        if ($choice -eq 'Fail') { throw ('An app named "' + $app.displayName + '" already exists. Use -IfExists Update, Supersede or CreateNew.') }
         if ($choice -eq 'Update')
         {
-            if ($existing.Count -gt 1) { throw 'More than one app has this name: update the right one in the Intune admin center, or use -IfExists CreateNew.' }
+            if ($existing.Count -gt 1) { throw 'More than one app has this name: update the right one in the Intune admin center, or use -IfExists Supersede or CreateNew.' }
             $targetId = [string]$existing[0].id
             # An app of the same name made some other way (by hand, by another tool): updating it replaces its commands,
             # detection and return codes with those of this package, and its assignments then install this package.
             if (-not ([string]$existing[0].notes).StartsWith('Packaged with')) { Write-Note 'This app was not created by J365 IntunePSApp: its install and uninstall commands, detection rule and return codes are replaced by those of this package, and its assignments are kept.' }
         }
+        if ($choice -eq 'Supersede')
+        {
+            # The newest of them (by version, then by date): the versions before it are in its own chain, or stay as they are.
+            # The date as a date: PowerShell 7 reads it as one, and its text would not sort by time.
+            $created = { try { ([datetime]$_.createdDateTime).ToUniversalTime() } catch { [datetime]::MinValue } }
+            $supersede = $existing | Sort-Object -Property @{ Expression = { Get-VersionKey ([string]$_.displayVersion) }; Descending = $true }, @{ Expression = $created; Descending = $true } | Select-Object -First 1
+            Write-Ok ('A new app will supersede ' + (Get-AppLabel $supersede) + ' (' + $SupersedenceType.ToLower() + ')')
+        }
     }
-    else { Write-Ok 'No app with this name yet.' }
+    else
+    {
+        Write-Ok 'No app with this name yet.'
+        if ($IfExists -eq 'Supersede') { Write-Note 'There is no earlier version to supersede: the app is created without supersedence.' }
+    }
     }
 
     if (-not $Force)
@@ -766,7 +833,9 @@ try
         Write-Host ''
         $verb = 'Create'
         if ($targetId) { $verb = 'Update' }
-        $answer = Read-Host ($verb + ' the app "' + $app.displayName + '" in the tenant ' + $TenantId + ' now? (Y/N)')
+        $question = $verb + ' the app "' + $app.displayName + '" in the tenant ' + $TenantId
+        if ($supersede) { $question += ', superseding ' + (Get-AppLabel $supersede) + ' (' + $SupersedenceType.ToLower() + '),' }
+        $answer = Read-Host ($question + ' now? (Y/N)')
         if ($answer -notmatch '^\s*(y|s)')
         {
             Write-Note 'Cancelled. Nothing was published.'
@@ -961,6 +1030,42 @@ try
     # From here on the app is complete: a later failure must not remove it.
     $script:CreatedAppId = $null
 
+    # ------------------------------------------------------------ supersedence (a new app over an earlier version)
+    $waited = $false
+    if ($supersede -and $script:Result.action -eq 'created')
+    {
+        $script:Result.supersededAppId = [string]$supersede.id
+        $script:Result.supersededName = [string]$supersede.displayName
+        $script:Result.supersededVersion = [string]$supersede.displayVersion
+        $script:Result.supersedenceType = $SupersedenceType.ToLower()
+        Write-Step ('Superseding ' + (Get-AppLabel $supersede) + '...')
+        Wait-Published $targetId
+        $waited = $true
+        $link = @{
+            relationships = @(
+                [ordered]@{
+                    '@odata.type'    = '#microsoft.graph.mobileAppSupersedence'
+                    targetId         = [string]$supersede.id
+                    supersedenceType = $SupersedenceType.ToLower()
+                }
+            )
+        }
+        try
+        {
+            # As the Intune admin center links them: the relationships of the new app (it has none of its own yet).
+            $null = Invoke-Graph -Method 'POST' -Path ('/deviceAppManagement/mobileApps/' + $targetId + '/updateRelationships') -Body $link
+            Write-Ok ('Supersedes ' + (Get-AppLabel $supersede) + ' (' + $SupersedenceType.ToLower() + ')')
+        }
+        catch
+        {
+            # The new app is complete and stays: the supersedence can be added in the admin center (the app > Properties >
+            # Supersedence). Intune also limits how many apps one supersedence chain holds.
+            Write-Note ('The app was published, but the supersedence failed: ' + $_.Exception.Message)
+            Write-Note 'Add it in the Intune admin center (the new app > Properties > Supersedence). A long chain of versions is refused: delete the versions no longer installed anywhere.'
+            $script:Result.supersedence = 'failed: ' + $_.Exception.Message
+        }
+    }
+
     # ------------------------------------------------------------ assignment (new apps only)
     if ($AssignIntent -ne 'none')
     {
@@ -968,14 +1073,7 @@ try
         else
         {
             Write-Step ('Assigning: ' + $assignmentLabel + '...')
-            # Intune assigns only a published app, a few seconds after its content became active.
-            for ($i = 0; $i -lt 20; $i++)
-            {
-                $published = ''
-                try { $published = [string](Invoke-Graph -Method 'GET' -Path ('/deviceAppManagement/mobileApps/' + $targetId + '?$select=publishingState')).publishingState } catch { }
-                if (-not $published -or $published -eq 'published') { break }
-                Start-Sleep -Seconds 3
-            }
+            if (-not $waited) { Wait-Published $targetId }
             $target = @{ '@odata.type' = '#microsoft.graph.allLicensedUsersAssignmentTarget' }
             if ($AssignTo -eq 'AllDevices') { $target = @{ '@odata.type' = '#microsoft.graph.allDevicesAssignmentTarget' } }
             if ($AssignTo -eq 'Group') { $target = [ordered]@{ '@odata.type' = '#microsoft.graph.groupAssignmentTarget'; groupId = $GroupId } }
@@ -1020,6 +1118,14 @@ try
     Write-Host '  1. Open the link above (or https://intune.microsoft.com > Apps > Windows) and review the app.'
     if ($script:Result.assignment -and $script:Result.assignment -notlike 'failed*') { Write-Host '  2. Follow the installation status of the assignment before widening it.' }
     else { Write-Host '  2. Assign it to a pilot group before a broad deployment.' }
+    if ($script:Result.supersededAppId -and -not $script:Result.supersedence)
+    {
+        # Intune: a superseding app takes effect only where it is assigned, whatever the assignments of the earlier app.
+        Write-Host ('  3. Devices that have ' + (Get-AppLabel $supersede) + ' get this version once the new app is assigned to them:')
+        Write-Host '     a pilot group first, then the groups of the earlier app.'
+        Write-Host '  4. When no device runs the earlier version any more, unassign and delete it: Intune keeps at most'
+        Write-Host '     10 apps in one supersedence chain.'
+    }
     Write-Host ''
     Stop-Script 0
 }

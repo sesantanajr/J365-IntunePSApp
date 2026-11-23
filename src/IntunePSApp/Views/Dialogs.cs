@@ -454,8 +454,8 @@ namespace J365.IntunePSApp.Views
     public class PublishDialog : DialogWindow
     {
         private readonly TextBox _group, _command;
-        private readonly ComboBox _ifExists, _assign;
-        private readonly StackPanel _groupPanel, _connection, _advanced, _matches;
+        private readonly ComboBox _ifExists, _assign, _supersedeMode;
+        private readonly StackPanel _groupPanel, _connection, _advanced, _matches, _supersedePanel;
         private readonly TextBlock _status, _existsNote;
         private readonly Button _publish, _toggleAdvanced;
         private readonly string _script, _displayName, _appName, _appVersion;
@@ -493,7 +493,7 @@ namespace J365.IntunePSApp.Views
 
             root.Children.Add(Label(T("Publish_IfExists")));
             _ifExists = new ComboBox();
-            foreach (var (tag, key) in new[] { ("Ask", "Publish_ExistsAsk"), ("Update", "Publish_ExistsUpdate"), ("CreateNew", "Publish_ExistsNew"), ("Fail", "Publish_ExistsFail") })
+            foreach (var (tag, key) in new[] { ("Ask", "Publish_ExistsAsk"), ("Update", "Publish_ExistsUpdate"), ("Supersede", "Publish_ExistsSupersede"), ("CreateNew", "Publish_ExistsNew"), ("Fail", "Publish_ExistsFail") })
                 _ifExists.Items.Add(new ComboBoxItem { Tag = tag, Content = T(key) });
             _ifExists.SelectedIndex = 0;
             root.Children.Add(_ifExists);
@@ -501,6 +501,17 @@ namespace J365.IntunePSApp.Views
             root.Children.Add(_existsNote);
             _matches = new StackPanel { Visibility = Visibility.Collapsed, Margin = new Thickness(0, 6, 0, 0) };
             root.Children.Add(_matches);
+
+            // A new app that supersedes the earlier version: how Intune treats that version on the devices.
+            _supersedePanel = new StackPanel { Visibility = Visibility.Collapsed };
+            _supersedePanel.Children.Add(Label(T("Publish_SupersedeMode")));
+            _supersedeMode = new ComboBox();
+            _supersedeMode.Items.Add(new ComboBoxItem { Tag = "Update", Content = T("Publish_SupersedeUpdate") });
+            _supersedeMode.Items.Add(new ComboBoxItem { Tag = "Replace", Content = T("Publish_SupersedeReplace") });
+            _supersedeMode.SelectedIndex = 0;
+            _supersedePanel.Children.Add(_supersedeMode);
+            _supersedePanel.Children.Add(new TextBlock { Text = T("Publish_SupersedeHint"), Style = S("Hint"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) });
+            root.Children.Add(_supersedePanel);
 
             root.Children.Add(Label(T("Publish_Assign")));
             _assign = new ComboBox();
@@ -555,6 +566,7 @@ namespace J365.IntunePSApp.Views
             _group.TextChanged += (s, e) => UpdateCommand();
             _ifExists.SelectionChanged += (s, e) => { _existsNote.Visibility = Visibility.Collapsed; _matches.Visibility = Visibility.Collapsed; UpdateCommand(); };
             _assign.SelectionChanged += (s, e) => UpdateCommand();
+            _supersedeMode.SelectionChanged += (s, e) => UpdateCommand();
             Closed += (s, e) => _cts?.Cancel();
             UpdateCommand();
             RenderConnection();
@@ -717,6 +729,7 @@ namespace J365.IntunePSApp.Views
                 TenantId = IntuneConnection.TenantId,
                 ClientId = IntuneConnection.ClientId,
                 IfExists = TagOf(_ifExists),
+                SupersedenceType = TagOf(_supersedeMode) == "Replace" ? "Replace" : "Update",
                 AssignIntent = assign[0],
                 AssignTo = assign.Length > 1 ? assign[1] : "AllUsers",
                 GroupId = _group.Text.Trim(),
@@ -725,9 +738,16 @@ namespace J365.IntunePSApp.Views
             };
         }
 
+        /// <summary>The app chosen in the list of apps with this name ("new", "supersede:id" or the id to update), or null.</summary>
+        private string ChosenMatch() => _matches.Visibility == Visibility.Visible
+            ? _matches.Children.OfType<RadioButton>().FirstOrDefault(r => r.IsChecked == true)?.Tag as string : null;
+
+        private bool Superseding => TagOf(_ifExists) == "Supersede" || (ChosenMatch()?.StartsWith("supersede:", StringComparison.Ordinal) ?? false);
+
         private void UpdateCommand()
         {
             var o = Options();
+            _supersedePanel.Visibility = Superseding ? Visibility.Visible : Visibility.Collapsed;
             _groupPanel.Visibility = o.AssignIntent != "none" && o.AssignTo == "Group" ? Visibility.Visible : Visibility.Collapsed;
             if (string.IsNullOrWhiteSpace(o.TenantId)) o.TenantId = "<tenant>";
             if (string.IsNullOrWhiteSpace(o.ClientId)) o.ClientId = "<client-id>";
@@ -761,6 +781,51 @@ namespace J365.IntunePSApp.Views
             finally { button.IsEnabled = true; }
         }
 
+        /// <summary>
+        /// The apps of the tenant named like this one: update one of them (a new version keeps its assignments), create a new
+        /// app that supersedes the newest earlier version (a gradual rollout), or create another app.
+        /// </summary>
+        private void ShowMatches(List<(string Id, string Name, string Version)> found)
+        {
+            _existsNote.Text = T("Publish_RelatedFound", _appName, found.Count);
+            _existsNote.Visibility = Visibility.Visible;
+            _matches.Children.Clear();
+            RadioButton Choice(string tag, string text, bool chosen)
+            {
+                var radio = new RadioButton { GroupName = "intuneApp", Tag = tag, Margin = new Thickness(0, 4, 0, 0), IsChecked = chosen, Content = text };
+                radio.Checked += (s, e) => UpdateCommand();
+                return radio;
+            }
+            // Only an app with exactly this name is chosen for the user (the list starts with it); otherwise "create a new
+            // app" is, so a click never replaces the content of an app with another name.
+            bool preselected = false;
+            foreach (var (id, name, version) in found.Take(8))
+            {
+                bool exact = string.Equals(name, _displayName, StringComparison.OrdinalIgnoreCase);
+                // Since 2.5 the name in Intune carries no version: "the same version" is told by the version itself.
+                bool sameVersion = _appVersion.Length > 0 && version.Length > 0 && VersionUtil.Compare(version, _appVersion) == 0;
+                _matches.Children.Add(Choice(id, sameVersion ? T("Publish_UpdateSame", name) : T("Publish_UpdateOlder", name, string.IsNullOrEmpty(version) ? "?" : version), exact && !preselected));
+                preselected |= exact;
+            }
+            // The newest earlier version can also be superseded by a new app: Intune then moves the devices that have it to
+            // this version group by group, as the new app is assigned, and the earlier app stays for a rollback.
+            var earlier = found.Where(f => _appVersion.Length == 0 || f.Version.Length == 0 || VersionUtil.Compare(f.Version, _appVersion) < 0)
+                .OrderByDescending(f => f.Version, Comparer<string>.Create(VersionUtil.Compare)).FirstOrDefault();
+            if (earlier.Id != null)
+                _matches.Children.Add(Choice("supersede:" + earlier.Id, T("Publish_SupersedeOlder", PublishTexts.AppLabel(earlier.Name, earlier.Version)), false));
+            _matches.Children.Add(Choice("new", T("Publish_CreateNewApp", _displayName), !preselected));
+            _matches.Visibility = Visibility.Visible;
+            UpdateCommand();
+        }
+
+        /// <summary>Capture mode: the list as it shows after the lookup, with the supersedence chosen (nothing is asked to Intune).</summary>
+        public void ShowSampleMatches(List<(string Id, string Name, string Version)> found)
+        {
+            ShowMatches(found);
+            if (_matches.Children.OfType<RadioButton>().FirstOrDefault(r => (r.Tag as string)?.StartsWith("supersede:", StringComparison.Ordinal) == true) is RadioButton supersede)
+                supersede.IsChecked = true;
+        }
+
         /// <summary>Publishes inside the application: signs in when needed and settles what to do with an app of the same name.</summary>
         private async Task PublishAsync()
         {
@@ -777,10 +842,11 @@ namespace J365.IntunePSApp.Views
             _cts = new CancellationTokenSource();
             if (o.IfExists == "Ask" && _matches.Visibility == Visibility.Visible)
             {
-                // Second click: the app chosen in the list (a previous version to update, or a new app).
-                var chosen = _matches.Children.OfType<RadioButton>().FirstOrDefault(r => r.IsChecked == true)?.Tag as string;
+                // Second click: the app chosen in the list (a previous version to update or to supersede, or a new app).
+                var chosen = ChosenMatch();
                 if (chosen == null) return;
                 if (chosen == "new") o.IfExists = "CreateNew";
+                else if (chosen.StartsWith("supersede:", StringComparison.Ordinal)) { o.IfExists = "Supersede"; o.AppId = chosen.Substring("supersede:".Length); }
                 else { o.IfExists = "Update"; o.AppId = chosen; }
             }
             else if (o.IfExists == "Ask")
@@ -794,28 +860,8 @@ namespace J365.IntunePSApp.Views
                     RenderConnection();
                     if (found.Count > 0)
                     {
-                        // The user decides here, before anything is sent: update one of them (a new version keeps its
-                        // assignments) or create another app.
-                        _existsNote.Text = T("Publish_RelatedFound", _appName, found.Count);
-                        _existsNote.Visibility = Visibility.Visible;
-                        _matches.Children.Clear();
-                        // Only an app with exactly this name is chosen for the user (the list starts with it); otherwise
-                        // "create a new app" is, so a click never replaces the content of an app with another name.
-                        bool preselected = false;
-                        foreach (var (id, name, version) in found.Take(8))
-                        {
-                            bool exact = string.Equals(name, _displayName, StringComparison.OrdinalIgnoreCase);
-                            // Since 2.5 the name in Intune carries no version: "the same version" is told by the version itself.
-                            bool sameVersion = _appVersion.Length > 0 && version.Length > 0 && VersionUtil.Compare(version, _appVersion) == 0;
-                            _matches.Children.Add(new RadioButton
-                            {
-                                GroupName = "intuneApp", Tag = id, Margin = new Thickness(0, 4, 0, 0), IsChecked = exact && !preselected,
-                                Content = sameVersion ? T("Publish_UpdateSame", name) : T("Publish_UpdateOlder", name, string.IsNullOrEmpty(version) ? "?" : version)
-                            });
-                            preselected |= exact;
-                        }
-                        _matches.Children.Add(new RadioButton { GroupName = "intuneApp", Tag = "new", Margin = new Thickness(0, 4, 0, 0), IsChecked = !preselected, Content = T("Publish_CreateNewApp", _displayName) });
-                        _matches.Visibility = Visibility.Visible;
+                        // The user decides here, before anything is sent.
+                        ShowMatches(found);
                         return;
                     }
                     o.IfExists = "Fail";   // nothing with this name: create (and stop if one appears meanwhile)

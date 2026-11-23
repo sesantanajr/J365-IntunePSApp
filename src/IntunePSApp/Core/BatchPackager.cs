@@ -34,8 +34,13 @@ namespace J365.IntunePSApp.Core
         // Publication (the connection of this computer, as the editor publishes)
         /// <summary>Publishes each package to Intune as soon as it is generated.</summary>
         public bool Publish { get; set; }
-        /// <summary>An app with the same name in Intune: Update (a new version of it; created when there is none), CreateNew or Fail.</summary>
+        /// <summary>
+        /// An app with the same name in Intune: Update (a new version of it; created when there is none), Supersede (a new app
+        /// that supersedes it), CreateNew or Fail.
+        /// </summary>
         public string IfExists { get; set; } = "Update";
+        /// <summary>With Supersede: Update or Replace (see <see cref="Core.PublishOptions.SupersedenceType"/>).</summary>
+        public string SupersedenceType { get; set; } = "Update";
         /// <summary>none | available | required (only for apps the publication creates; an updated app keeps its assignments).</summary>
         public string AssignIntent { get; set; } = "none";
         /// <summary>AllUsers | AllDevices | Group</summary>
@@ -51,12 +56,20 @@ namespace J365.IntunePSApp.Core
             DeferTimes = c?.DeferTimes ?? 3,
         };
 
+        /// <summary>
+        /// A choice typed on the command line in any case ("supersede", "createnew") as the name the publication knows; null
+        /// when it is none of them.
+        /// </summary>
+        public static string Choice(string value, params string[] choices)
+            => choices.FirstOrDefault(c => string.Equals(c, (value ?? "").Trim(), StringComparison.OrdinalIgnoreCase));
+
         /// <summary>The options of the publication of one package with the connection of this computer.</summary>
         public PublishOptions PublishOptions(bool certificate) => new PublishOptions
         {
             TenantId = IntuneConnection.TenantId,
             ClientId = IntuneConnection.ClientId,
-            IfExists = IfExists is "CreateNew" or "Fail" ? IfExists : "Update",
+            IfExists = Choice(IfExists, "CreateNew", "Fail", "Supersede") ?? "Update",
+            SupersedenceType = Choice(SupersedenceType, "Replace") ?? "Update",
             AssignIntent = AssignIntent is "available" or "required" ? AssignIntent : "none",
             AssignTo = AssignTo is "AllDevices" or "Group" ? AssignTo : "AllUsers",
             GroupId = (GroupId ?? "").Trim(),

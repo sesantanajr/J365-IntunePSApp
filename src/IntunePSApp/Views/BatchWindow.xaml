@@ -122,6 +122,7 @@
                   <TextBlock Text="{l:T Batch_IfExists}" Style="{StaticResource Label}"/>
                   <ComboBox x:Name="CmbIfExists">
                     <ComboBoxItem Tag="Update" Content="{l:T Batch_IfExistsUpdate}"/>
+                    <ComboBoxItem Tag="Supersede" Content="{l:T Batch_IfExistsSupersede}"/>
                     <ComboBoxItem Tag="CreateNew" Content="{l:T Batch_IfExistsNew}"/>
                     <ComboBoxItem Tag="Fail" Content="{l:T Batch_IfExistsSkip}"/>
                   </ComboBox>

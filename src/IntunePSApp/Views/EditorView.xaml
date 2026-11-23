@@ -635,7 +635,8 @@
                 <!-- Outcome of the publication, read from Intune\publish-result.json -->
                 <Border x:Name="PublishStatus" CornerRadius="10" Padding="14,10" Margin="0,6,0,0" Background="{DynamicResource BrandSoft}" Visibility="Collapsed">
                   <DockPanel>
-                    <Button x:Name="BtnPublishOpen" DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Content="{l:T Ed_PublishOpen}" Margin="10,0,0,0" VerticalAlignment="Center" Click="PublishOpen_Click" Visibility="Collapsed"/>
+                    <Button x:Name="BtnPublishOpen" DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Content="{l:T Ed_PublishOpen}" Margin="4,0,0,0" VerticalAlignment="Center" Click="PublishOpen_Click" Visibility="Collapsed"/>
+                    <Button x:Name="BtnPublishStatus" DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Content="{l:T Ed_PublishStatus}" Margin="10,0,0,0" VerticalAlignment="Center" Click="PublishStatus_Click" Visibility="Collapsed"/>
                     <TextBlock x:Name="PublishStatusIcon" DockPanel.Dock="Left" Text="&#xE898;" Style="{StaticResource Icon}" Margin="0,0,10,0" Foreground="{DynamicResource Brand}"/>
                     <TextBlock x:Name="PublishStatusText" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="{DynamicResource Ink2}"/>
                   </DockPanel>

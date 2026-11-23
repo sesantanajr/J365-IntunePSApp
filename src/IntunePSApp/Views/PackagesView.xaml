@@ -101,6 +101,10 @@
                         Visibility="{Binding HasUpdate, Converter={StaticResource BoolToVis}}" ToolTip="{l:T Packages_UpdateTip}">
                   <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE895;" Style="{StaticResource Icon}" Foreground="White" FontSize="13" Margin="0,0,6,0"/><TextBlock Text="{l:T Packages_Update}"/></StackPanel>
                 </Button>
+                <Button Style="{StaticResource GhostButton}" Tag="{Binding}" Click="Status_Click" ToolTip="{l:T Packages_StatusTip}"
+                        Visibility="{Binding IsPublished, Converter={StaticResource BoolToVis}}">
+                  <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE9D9;" Style="{StaticResource Icon}" FontSize="13" Margin="0,0,6,0"/><TextBlock Text="{l:T Packages_Status}"/></StackPanel>
+                </Button>
                 <Button Style="{StaticResource GhostButton}" Tag="{Binding}" Click="Reopen_Click">
                   <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE70F;" Style="{StaticResource Icon}" FontSize="13" Margin="0,0,6,0"/><TextBlock Text="{l:T Packages_Reopen}"/></StackPanel>
                 </Button>

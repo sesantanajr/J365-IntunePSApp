@@ -106,13 +106,18 @@ powershell -ExecutionPolicy Bypass -File .\Publish-ToIntune.ps1 -TenantId contos
 
 # Publishes and makes it available to a pilot group
 powershell -ExecutionPolicy Bypass -File .\Publish-ToIntune.ps1 -TenantId contoso.onmicrosoft.com -ClientId <id> -AssignIntent available -AssignTo Group -GroupId <object id of the group>
+
+# A new version as a new app that supersedes the earlier one, required for a pilot group (2.8)
+powershell -ExecutionPolicy Bypass -File .\Publish-ToIntune.ps1 -TenantId contoso.onmicrosoft.com -ClientId <id> -IfExists Supersede -AssignIntent required -AssignTo Group -GroupId <object id of the pilot group>
 ```
 
 | Parameter | Meaning |
 |---|---|
 | `-ValidateOnly` | Checks the files and values; nothing is sent. |
 | `-DeviceCode` | Signs in with a code instead of the browser. Many organisations block this flow with Conditional Access; prefer the browser. |
-| `-IfExists Ask\|Fail\|Update\|CreateNew` | What to do when an app with the same name exists. `Ask` (default) asks in the window; with `-Force` it stops instead. `Update` sends new content and settings to the existing app and keeps its assignments. |
+| `-IfExists Ask\|Fail\|Update\|Supersede\|CreateNew` | What to do when an app with the same name exists. `Ask` (default) asks in the window; with `-Force` it stops instead. `Update` sends new content and settings to the existing app and keeps its assignments. `Supersede` creates a new app that supersedes the newest of them (see [below](#a-new-version-update-or-supersede-and-follow-the-installation-28)). |
+| `-SupersedenceType Update\|Replace` | With `Supersede`: `Update` (default) installs over the earlier version; `Replace` makes Intune uninstall it first. |
+| `-AppId <id>` | The app to update, or with `Supersede` the app to supersede, instead of looking it up by name. |
 | `-AssignIntent none\|available\|required` | Optional assignment, only for an app created by this run. Default `none`. |
 | `-AssignTo AllUsers\|AllDevices\|Group` and `-GroupId` | Target of the assignment. Intune has no "available" for all devices. |
 | `-Force` | Does not ask for confirmation. |
@@ -125,10 +130,40 @@ powershell -ExecutionPolicy Bypass -File .\Publish-ToIntune.ps1 -TenantId contos
 3. Looks for an app with exactly the same name. (Inside the application, the list of earlier versions shows the apps named like the application as a whole word, "Git 2.45" but never "GitHub Desktop"; only an app with exactly this name is preselected. An app of the same name that J365 IntunePSApp did not create is updated only when chosen, and the script says so.)
 4. Creates the app, creates a content version, uploads the encrypted content in blocks, commits it and waits until Intune confirms it. Throttling and temporary errors are retried.
 5. If anything fails after the app was created, **the incomplete app is deleted again**: no empty entry is left in the tenant.
-6. Optionally assigns it.
-7. Writes `publish-result.json` in the same folder: status (`published`, `failed`, `cancelled`), app id, link to the admin center, or the error. Exit codes: `0` published or validated, `1` failed, `2` cancelled.
+6. With `-IfExists Supersede`, links the new app to the earlier version (supersedence) once its content is active. A refused link leaves the new app published and says why.
+7. Optionally assigns it.
+8. Writes `publish-result.json` in the same folder: status (`published`, `failed`, `cancelled`), app id, link to the admin center, the supersedence, or the error. Exit codes: `0` published or validated, `1` failed, `2` cancelled.
 
 Afterwards: open the link (or the [Intune admin center](https://intune.microsoft.com) > *Apps > Windows*), review the app and assign it to a pilot group before a broad deployment.
+
+## A new version: update or supersede, and follow the installation (2.8)
+
+**Update or supersede.** When Intune already has an earlier version of the application:
+
+| | Update the existing app | New app that supersedes it |
+|---|---|---|
+| What changes | The content and settings of that app, at once | A second app, linked to the earlier one |
+| Devices | Every device the app is assigned to gets the new version at its next check-in | Only where the new app is assigned: a pilot group first, then wider |
+| Rollback | Publish the earlier package again | The earlier app is still there: unassign the new one |
+| Assignments | Kept | The new app starts with the assignment chosen when publishing (or none) |
+
+Supersedence follows the rules of Intune ([documentation](https://learn.microsoft.com/intune/app-management/deployment/configure-win32-supersedence)):
+
+- The new app acts only where it is assigned. There, it supersedes the earlier version whether or not the earlier app is assigned too.
+- **Update** (default) installs the new version over the earlier one: J365 packages remove earlier versions themselves when *Uninstall any version already installed* is on (step 5 of the editor). **Uninstall first** (`-SupersedenceType Replace`) makes Intune run the uninstall command of the earlier app before, even on devices where it is not assigned.
+- With an *available* assignment, the Company Portal shows only the new app.
+- A chain (A superseded by B, B by C) is superseded by its last app. Intune keeps at most 10 apps in one chain: once no device runs a version any more, unassign and delete it.
+- With your account, linking apps takes the Intune permission to relate apps (*Mobile apps > Relate*; Intune Administrator and Application Manager have it). The app certificate uses the application permission `DeviceManagementApps.ReadWrite.All`, which covers it.
+
+The publishing dialog lists the apps of the tenant named like the application, with *Update* for each one and *New app that supersedes* for the newest earlier version. *Create a new app that supersedes it* (in the dialog, the batch window, or `--if-exists Supersede` on the command line) supersedes the newest app with the same name. When Intune refuses the link, the new app stays published and the result card says why; add the link in the admin center (the new app > *Properties > Supersedence*).
+
+**Status in Intune.** *Status in Intune* on the result card of a published package, and *Status* in *My packages*, read with the connection of this computer and the same permission:
+
+- how many devices have the app installed, failed, pending, not installed or not applicable;
+- the assignments (groups by object ID: their names would take a permission to read the directory) and the supersedence;
+- every device, the ones with a problem first, with its error code and what the code usually means (for example `0x87D1041C`: not detected after installing; `0x80070642`: the user deferred).
+
+The device install report comes from the report functions of Intune (`retrieveDeviceAppInstallationStatusReport`, or the older `getDeviceInstallStatusReport`), or else from an export of the documented report `DeviceInstallStatusByApp`. A device appears after its next check-in, as in the admin center. *Copy report* gives a tab-separated table, for a ticket or a spreadsheet. Nothing is changed in the tenant.
 
 ## Several applications at once, and apps of the Microsoft Store (2.6)
 
@@ -152,8 +187,10 @@ Afterwards: open the link (or the [Intune admin center](https://intune.microsoft
 | `HTTP 401` or `HTTP 403` (`Forbidden`) from Intune | Microsoft Graph accepted the sign-in and **Intune** refused it. First, the subscription of the tenant (above). With your account: an Intune role must be **active** now (Intune Administrator or Global Administrator; with PIM, activate it), your account needs an Intune license unless *Allow access to unlicensed admins* is on (*Intune admin center > Tenant administration > Roles > Administrator licensing*), and the tenant needs an active Intune subscription. The app certificate depends on none of the roles or licenses of an account. The application lists these causes with the error. |
 | `AADSTS700027` (certificate) | The public part of the certificate of this computer is not in the registration, or it was added a moment ago: wait a minute, or connect with the certificate again. |
 | `AADSTS700024` | The clock of this computer is wrong: correct the date and time of Windows. |
-| "An app named ... already exists" | Use `-IfExists Update` or `-IfExists CreateNew`. Intune shows only one of two apps with the same name in the Company Portal. |
+| "An app named ... already exists" | Use `-IfExists Update`, `-IfExists Supersede` or `-IfExists CreateNew`. Intune shows only one of two apps with the same name in the Company Portal. |
 | "The .intunewin file does not match the SHA256" | The file changed after it was generated: generate the package again. |
+| "The app was published, but the supersedence failed" | The new app is complete, without the link. Intune refuses a chain longer than its limit, or an account without the *Relate* permission: delete the versions no longer installed anywhere, or add the supersedence in the admin center. |
+| "Intune did not let this connection read the install report" | The status is in the admin center (the app > *Device install status*). The assignments and the supersedence are still shown. |
 
 ---
 
@@ -263,13 +300,18 @@ powershell -ExecutionPolicy Bypass -File .\Publish-ToIntune.ps1 -TenantId contos
 
 # Publica e deixa disponível para um grupo piloto
 powershell -ExecutionPolicy Bypass -File .\Publish-ToIntune.ps1 -TenantId contoso.onmicrosoft.com -ClientId <id> -AssignIntent available -AssignTo Group -GroupId <ID do objeto do grupo>
+
+# Uma versão nova como app novo que substitui o anterior, obrigatória para um grupo piloto (2.8)
+powershell -ExecutionPolicy Bypass -File .\Publish-ToIntune.ps1 -TenantId contoso.onmicrosoft.com -ClientId <id> -IfExists Supersede -AssignIntent required -AssignTo Group -GroupId <ID do objeto do grupo piloto>
 ```
 
 | Parâmetro | Significado |
 |---|---|
 | `-ValidateOnly` | Confere os arquivos e valores; nada é enviado. |
 | `-DeviceCode` | Entra com um código em vez do navegador. Muitas organizações bloqueiam esse fluxo com Acesso Condicional; prefira o navegador. |
-| `-IfExists Ask\|Fail\|Update\|CreateNew` | O que fazer quando já existe um app com o mesmo nome. `Ask` (padrão) pergunta na janela; com `-Force` ele para. `Update` envia novo conteúdo e configurações para o app existente e mantém as atribuições. |
+| `-IfExists Ask\|Fail\|Update\|Supersede\|CreateNew` | O que fazer quando já existe um app com o mesmo nome. `Ask` (padrão) pergunta na janela; com `-Force` ele para. `Update` envia novo conteúdo e configurações para o app existente e mantém as atribuições. `Supersede` cria um app novo que substitui o mais novo deles (veja [abaixo](#uma-versão-nova-atualizar-ou-substituir-e-acompanhar-a-instalação-28)). |
+| `-SupersedenceType Update\|Replace` | Com `Supersede`: `Update` (padrão) instala por cima da versão anterior; `Replace` faz o Intune desinstalá-la antes. |
+| `-AppId <id>` | O app a atualizar ou, com `Supersede`, o app a substituir, em vez de procurá-lo pelo nome. |
 | `-AssignIntent none\|available\|required` | Atribuição opcional, só para um app criado nesta execução. Padrão `none`. |
 | `-AssignTo AllUsers\|AllDevices\|Group` e `-GroupId` | Destino da atribuição. O Intune não tem "disponível" para todos os dispositivos. |
 | `-Force` | Não pede confirmação. |
@@ -282,10 +324,40 @@ powershell -ExecutionPolicy Bypass -File .\Publish-ToIntune.ps1 -TenantId contos
 3. Procura um app com exatamente o mesmo nome. (Dentro do aplicativo, a lista de versões anteriores mostra os apps com o nome do aplicativo como palavra inteira, "Git 2.45" mas nunca "GitHub Desktop"; só um app com exatamente este nome vem pré-selecionado. Um app do mesmo nome que o J365 IntunePSApp não criou só é atualizado quando escolhido, e o script avisa.)
 4. Cria o app, cria uma versão de conteúdo, envia o conteúdo criptografado em blocos, confirma e espera o Intune validar. Limite de requisições e erros temporários são repetidos.
 5. Se algo falhar depois de o app ter sido criado, **o app incompleto é apagado**: não fica nenhuma entrada vazia no locatário.
-6. Opcionalmente atribui.
-7. Grava o `publish-result.json` na mesma pasta: situação (`published`, `failed`, `cancelled`), ID do app, link para o centro de administração ou o erro. Códigos de saída: `0` publicado ou validado, `1` falhou, `2` cancelado.
+6. Com `-IfExists Supersede`, liga o app novo à versão anterior (substituição) assim que o conteúdo dele estiver ativo. Se o Intune recusar a ligação, o app novo continua publicado e o motivo é informado.
+7. Opcionalmente atribui.
+8. Grava o `publish-result.json` na mesma pasta: situação (`published`, `failed`, `cancelled`), ID do app, link para o centro de administração, a substituição ou o erro. Códigos de saída: `0` publicado ou validado, `1` falhou, `2` cancelado.
 
 Depois: abra o link (ou o [centro de administração do Intune](https://intune.microsoft.com) > *Aplicativos > Windows*), revise o aplicativo e atribua a um grupo piloto antes de uma implantação ampla.
+
+## Uma versão nova: atualizar ou substituir, e acompanhar a instalação (2.8)
+
+**Atualizar ou substituir.** Quando o Intune já tem uma versão anterior do aplicativo:
+
+| | Atualizar o app existente | App novo que substitui o anterior |
+|---|---|---|
+| O que muda | O conteúdo e as configurações daquele app, de uma vez | Um segundo app, ligado ao anterior |
+| Dispositivos | Todo dispositivo para o qual o app está atribuído recebe a versão nova na próxima sincronização | Só onde o app novo estiver atribuído: primeiro um grupo piloto, depois mais grupos |
+| Rollback | Publicar de novo o pacote anterior | O app anterior continua lá: remova a atribuição do novo |
+| Atribuições | Mantidas | O app novo começa com a atribuição escolhida ao publicar (ou nenhuma) |
+
+A substituição segue as regras do Intune ([documentação](https://learn.microsoft.com/intune/app-management/deployment/configure-win32-supersedence)):
+
+- O app novo só age onde estiver atribuído. Ali, ele substitui a versão anterior, esteja o app anterior atribuído ou não.
+- **Atualizar** (padrão) instala a versão nova por cima da anterior: os pacotes do J365 removem as versões anteriores sozinhos quando *Desinstalar qualquer versão já instalada* está ligado (etapa 5 do editor). **Desinstalar antes** (`-SupersedenceType Replace`) faz o Intune executar antes o comando de desinstalação do app anterior, mesmo nos dispositivos onde ele não está atribuído.
+- Com uma atribuição *disponível*, o Portal da Empresa mostra só o app novo.
+- Uma cadeia (A substituído por B, B por C) é substituída pelo último app dela. O Intune aceita no máximo 10 apps numa cadeia: quando nenhum dispositivo usar mais uma versão, remova as atribuições dela e exclua-a.
+- Com a sua conta, ligar apps exige a permissão do Intune de relacionar apps (*Aplicativos móveis > Relacionar*; Administrador do Intune e Gerenciador de Aplicativos têm). O certificado do aplicativo usa a permissão de aplicativo `DeviceManagementApps.ReadWrite.All`, que cobre isso.
+
+A janela de publicação lista os apps do tenant com o nome do aplicativo, com *Atualizar* para cada um e *App novo que substitui* para a versão anterior mais nova. *Criar um app novo que substitui o existente* (na janela, no lote ou com `--if-exists Supersede` na linha de comando) substitui o app mais novo com o mesmo nome. Se o Intune recusar a ligação, o app novo continua publicado e o cartão de resultado diz o motivo; adicione a ligação no centro de administração (o app novo > *Propriedades > Substituição*).
+
+**Status no Intune.** *Status no Intune*, no cartão de resultado de um pacote publicado, e *Status*, em *Meus pacotes*, leem com a conexão deste computador e a mesma permissão:
+
+- quantos dispositivos têm o app instalado, com falha, pendente, não instalado ou não aplicável;
+- as atribuições (grupos pelo ID do objeto: os nomes exigiriam permissão para ler o diretório) e a substituição;
+- cada dispositivo, os com problema primeiro, com o código do erro e o que ele costuma significar (por exemplo `0x87D1041C`: não detectado depois de instalar; `0x80070642`: o usuário adiou).
+
+O relatório de instalação por dispositivo vem das funções de relatório do Intune (`retrieveDeviceAppInstallationStatusReport`, ou a antiga `getDeviceInstallStatusReport`) ou, se nenhuma responder, de uma exportação do relatório documentado `DeviceInstallStatusByApp`. Um dispositivo aparece depois da próxima sincronização, como no centro de administração. *Copiar relatório* gera uma tabela separada por tabulações, para um chamado ou uma planilha. Nada é alterado no tenant.
 
 ## Vários aplicativos de uma vez e apps da Microsoft Store (2.6)
 
@@ -309,5 +381,7 @@ Depois: abra o link (ou o [centro de administração do Intune](https://intune.m
 | `HTTP 401` ou `HTTP 403` (`Forbidden`) do Intune | O Microsoft Graph aceitou o login e o **Intune** recusou. Primeiro, a assinatura do tenant (acima). Com a sua conta: uma função do Intune precisa estar **ativa** agora (Administrador do Intune ou Administrador Global; com PIM, ative-a), a sua conta precisa de licença do Intune a menos que *Permitir acesso a administradores sem licença* esteja ligado (*centro de administração do Intune > Administração de locatários > Funções > Licenciamento de administrador*), e o tenant precisa de uma assinatura ativa do Intune. O certificado do aplicativo não depende de função nem de licença de uma conta. O aplicativo lista essas causas junto com o erro. |
 | `AADSTS700027` (certificado) | A parte pública do certificado deste computador não está no registro, ou foi adicionada agora: aguarde um minuto, ou refaça a conexão com certificado. |
 | `AADSTS700024` | O relógio deste computador está errado: corrija a data e a hora do Windows. |
-| "An app named ... already exists" | Use `-IfExists Update` ou `-IfExists CreateNew`. O Intune mostra só um de dois apps com o mesmo nome no Portal da Empresa. |
+| "An app named ... already exists" | Use `-IfExists Update`, `-IfExists Supersede` ou `-IfExists CreateNew`. O Intune mostra só um de dois apps com o mesmo nome no Portal da Empresa. |
 | "The .intunewin file does not match the SHA256" | O arquivo mudou depois de gerado: gere o pacote novamente. |
+| "The app was published, but the supersedence failed" | O app novo está completo, sem a ligação. O Intune recusa uma cadeia maior que o limite dele, ou uma conta sem a permissão *Relacionar*: exclua as versões que não estão mais instaladas em lugar nenhum, ou adicione a substituição no centro de administração. |
+| "O Intune não deixou esta conexão ler o relatório de instalação" | O status está no centro de administração (o app > *Status de instalação do dispositivo*). As atribuições e a substituição continuam aparecendo. |
