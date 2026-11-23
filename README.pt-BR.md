@@ -3,8 +3,8 @@
 <p align="center"><img src="docs/assets/hero-pt-BR.svg" alt="J365 IntunePSApp 2.6 — do instalador ao Intune, com controle em cada etapa" width="100%"></p>
 
 <p align="center"><b>Menos tarefas repetitivas. Mais consistência nos seus pacotes.</b><br>Uma interface visual para preparar, personalizar, testar e publicar aplicativos Windows.</p>
-<p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v2.6.1/J365-IntunePSApp-2.6.1-win-x64.zip"><img src="docs/assets/download-pt-BR.svg" alt="Baixar J365 IntunePSApp 2.6.1 — Windows x64" width="400"></a></p>
-<p align="center"><a href="#recursos">Conheça os recursos</a> · <a href="#comecar">Como começar</a> · <a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/tag/v2.6.1">Notas da versão</a></p>
+<p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v2.6.0/J365-IntunePSApp-2.6.0-win-x64.zip"><img src="docs/assets/download-pt-BR.svg" alt="Baixar J365 IntunePSApp 2.6.0 — Windows x64" width="400"></a></p>
+<p align="center"><a href="#recursos">Conheça os recursos</a> · <a href="#comecar">Como começar</a> · <a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/tag/v2.6.0">Notas da versão</a></p>
 <p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/actions/workflows/build.yml"><img alt="Build and tests" src="https://github.com/sesantanajr/J365-IntunePSApp/actions/workflows/build.yml/badge.svg"></a> <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-315CF5?style=flat-square"></a> <img alt="Windows x64" src="https://img.shields.io/badge/Windows-x64-0A5CA8?style=flat-square"></p>
 
 ## Seu próximo pacote começa aqui
@@ -93,11 +93,12 @@ O teste pode ser executado localmente ou no **Windows Sandbox**, quando disponí
 
 ## Novidades da 2.6
 
+- **Apps da Microsoft Store:** o catálogo também pesquisa a Microsoft Store ao vivo, pelo nome ou pelo ID (`9PM860492SZD` encontra o Microsoft PC Manager), e publica esses apps no Intune como **Microsoft Store app (new)**: o Intune instala pela Store e mantém atualizado, sem pacote, com o logo oficial no Portal da Empresa. Sozinhos ou em lote.
 - **Deploy em lote:** marque vários aplicativos no catálogo e gere todos de uma vez com as mesmas configurações (nome da empresa, proprietário, modo de exibição, notificações e adiamento). Cada instalador é baixado do link oficial, conferido pelo SHA256 e empacotado como no editor; opcionalmente, cada pacote é publicado no Intune com a mesma atribuição. Um `.exe` sem parâmetros silenciosos conhecidos, ou um nome que também corresponde a outros aplicativos, é pulado com o motivo, nunca adivinhado, e pode ser aberto no editor. Também por linha de comando: `--batch id1,id2 --mode Silent --publish`.
 - **Instalação silenciosa de verdade:** no modo **Silencioso** o pacote não mostra janelas nem bloqueia aplicativos e, por padrão, a atribuição criada na publicação oculta as notificações do Intune (`hideAll`) e não reinicia o computador. A escolha de notificações também pode ser feita por pacote e como padrão da empresa.
 - **Menos campos repetidos:** a opção de desinstalar versões anteriores fica só na etapa Desinstalação; o nome e a versão da detecção acompanham as etapas Desinstalação e Aplicativo até serem alterados.
 - **Ícones corretos:** ícones genéricos de instaladores (Inno Setup, WiX Burn e os ícones de fábrica do NSIS) não vão mais para o Portal da Empresa; entra o ícone do programa instalado ou o bloco com as iniciais.
-- **Atualização confiável (2.6.1):** "Verificar agora" só diz que está atualizado quando conseguiu consultar o GitHub, mostra a versão encontrada e, se a API do GitHub estiver bloqueada, usa a página de versões.
+- **Atualização confiável:** "Verificar agora" só diz que está atualizado quando conseguiu consultar o GitHub, mostra a versão encontrada e, se a API do GitHub estiver bloqueada, usa a página de versões.
 - **Parâmetros corretos:** switches que a análise encontra no próprio instalador (NSIS, InstallShield, Advanced Installer, Squirrel) não são mais descartados quando o banco de dados não traz switches; instaladores Inno Setup por usuário recebem `/CURRENTUSER`, como no winget (432 aplicativos); e a detecção do .NET Desktop Runtime 10 volta a reconhecer o nome que ele registra.
 
 ## Evolução com qualidade
@@ -114,7 +115,7 @@ Projetos antigos continuam legíveis. Atualizar o editor não altera automaticam
 
 [Novidades por versão](CHANGELOG.md) · [Análise técnica](docs/QUALITY-25.md) · [Publicação no Intune](docs/INTUNE-PUBLISH.md) · [Compilar](docs/BUILDING.md) · [Arquitetura / Architecture](docs/ARCHITECTURE.md)
 
-[Contribuir](CONTRIBUTING.md) · [Relatar um problema](https://github.com/sesantanajr/J365-IntunePSApp/issues) · [Security](SECURITY.md) · [SHA256SUMS.txt](https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v2.6.1/SHA256SUMS.txt)
+[Contribuir](CONTRIBUTING.md) · [Relatar um problema](https://github.com/sesantanajr/J365-IntunePSApp/issues) · [Security](SECURITY.md) · [SHA256SUMS.txt](https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v2.6.0/SHA256SUMS.txt)
 
 ---
 

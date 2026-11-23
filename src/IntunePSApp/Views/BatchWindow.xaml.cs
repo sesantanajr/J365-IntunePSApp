@@ -23,6 +23,8 @@ namespace J365.IntunePSApp.Views
         private readonly ObservableCollection<BatchItem> _items;
         private CancellationTokenSource _cts;
         private bool _running, _closeWhenDone;
+        /// <summary>Every application comes from the Microsoft Store: nothing to build, the window publishes them.</summary>
+        private readonly bool _storeOnly;
 
         /// <summary>Applications whose package was generated (and published, when asked): the catalog takes them out of its selection.</summary>
         public IReadOnlyList<CatalogApp> Built => _items.Where(i => i.Succeeded).Select(i => i.App).ToList();
@@ -36,6 +38,7 @@ namespace J365.IntunePSApp.Views
             var cfg = ConfigStore.Current;
             _items = new ObservableCollection<BatchItem>(BatchPackager.Plan(apps, cfg));
             Items.ItemsSource = _items;
+            _storeOnly = _items.Count > 0 && _items.All(i => i.App?.IsStore == true);
 
             var o = BatchOptions.FromConfig(cfg);
             TxtCompany.Text = o.CompanyName;
@@ -46,6 +49,11 @@ namespace J365.IntunePSApp.Views
             TxtDeferTimes.Text = o.DeferTimes.ToString();
             SelectTag(CmbIfExists, o.IfExists);
             SelectTag(CmbAssign, "none|AllUsers");
+            if (_storeOnly)
+            {
+                ChkPublish.IsChecked = true;
+                ChkPublish.IsEnabled = false;
+            }
             ChkDefer.Checked += (s, e) => UpdateHints();
             ChkDefer.Unchecked += (s, e) => UpdateHints();
             Closing += OnClosing;
@@ -65,7 +73,7 @@ namespace J365.IntunePSApp.Views
         {
             SettingsView.RefreshSelection(CmbMode, CmbNotify, CmbIfExists, CmbAssign);
             Title = T("Batch_Title");
-            Heading.Text = T("Batch_Heading", _items.Count);
+            Heading.Text = _storeOnly ? T("Batch_HeadingStore", _items.Count) : T("Batch_Heading", _items.Count);
             foreach (var i in _items) i.Changed();
             UpdateHints();
             UpdatePublish();
@@ -117,7 +125,10 @@ namespace J365.IntunePSApp.Views
             PublishConnection.Text = !ready ? T("Batch_PublishNotConnected")
                 : IntuneSubscription.Blocks ? T("Ed_PublishCalloutNoPlan", IntuneConnection.Account, IntuneConnection.TenantLabel)
                 : T("Batch_PublishConnection", IntuneConnection.Account, IntuneConnection.TenantLabel);
-            PublishConnection.SetResourceReference(TextBlock.ForegroundProperty, ready && !IntuneSubscription.Blocks ? "Muted" : "Warning");
+            // Applications of the Store are only published: without the publication they would be skipped.
+            int store = _items.Count(i => i.App?.IsStore == true);
+            if (!publish && store > 0) PublishConnection.Text = T("Batch_StoreNeedsPublishHint", store) + " " + PublishConnection.Text;
+            PublishConnection.SetResourceReference(TextBlock.ForegroundProperty, ready && !IntuneSubscription.Blocks && (publish || store == 0) ? "Muted" : "Warning");
         }
 
         private void UpdateButtons()
@@ -126,6 +137,7 @@ namespace J365.IntunePSApp.Views
             bool publish = ChkPublish.IsChecked == true;
             BtnStart.Content = _running ? T("Batch_Running")
                 : _items.Any(i => i.IsFinished) && pending > 0 ? T("Batch_Retry", pending)
+                : _storeOnly ? T("Batch_StartStore", pending)
                 : publish ? T("Batch_StartPublish", pending) : T("Batch_Start", pending);
             BtnStart.IsEnabled = !_running && pending > 0;
             BtnClose.Content = _running ? T("Common_Cancel") : T("Common_Close");

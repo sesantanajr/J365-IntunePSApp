@@ -96,8 +96,8 @@ namespace J365.IntunePSApp.Core
         public string Title => $"{App?.Name} {App?.Version}".Trim();
         public string Initials => App?.Initials ?? "?";
         public string AvatarColor => App?.AvatarColor ?? "#0A5CA8";
-        public string InstallerLabel => Installer == null || !Installer.IsSupported
-            ? T("Batch_NoInstaller")
+        public string InstallerLabel => Installer?.IsStore == true ? T("Batch_StoreInstaller")
+            : Installer == null || !Installer.IsSupported ? T("Batch_NoInstaller")
             : $"{Installer.TypeLabel}  ·  {Installer.ArchLabel}  ·  {Installer.ScopeLabel}";
         public string StateLabel => T("Batch_State_" + State);
         public bool IsFinished => State is BatchState.Done or BatchState.Warning or BatchState.Skipped or BatchState.Failed or BatchState.Cancelled
@@ -164,7 +164,9 @@ namespace J365.IntunePSApp.Core
         public static List<BatchItem> Plan(IEnumerable<CatalogApp> apps, AppConfig cfg)
             => (apps ?? Enumerable.Empty<CatalogApp>()).Where(a => a != null)
                 .GroupBy(a => a.Id, StringComparer.OrdinalIgnoreCase).Select(g => g.First())
-                .Select(a => new BatchItem(a, CatalogService.PickInstaller(a, cfg?.PreferredArch, cfg?.PreferredLocale)))
+                .Select(a => new BatchItem(a, a.IsStore
+                    ? a.Installers?.FirstOrDefault(i => i.IsStore) ?? new CatalogInstaller { Type = StoreCatalog.InstallerType }
+                    : CatalogService.PickInstaller(a, cfg?.PreferredArch, cfg?.PreferredLocale)))
                 .ToList();
 
         /// <summary>The settings of one package: company defaults, then the installer and the database, then the batch.</summary>
@@ -255,6 +257,7 @@ namespace J365.IntunePSApp.Core
 
         private static async Task RunOneAsync(BatchItem item, AppConfig cfg, BatchOptions o, Action<Action> post, CancellationToken ct)
         {
+            if (item.App?.IsStore == true) { await PublishStoreAsync(item, cfg, o, ct); return; }
             if (item.Installer == null || !item.Installer.IsSupported) { item.Finish(BatchState.Skipped, T("Batch_NoInstaller")); return; }
             try
             {
@@ -350,6 +353,39 @@ namespace J365.IntunePSApp.Core
             catch (OperationCanceledException)
             {
                 item.Finish(BatchState.PublishFailed, T("Ed_PublishCancelled"));
+            }
+            catch (Exception ex)
+            {
+                Log.Error(T("Log_BatchFailed", item.Title, ex.Message));
+                item.Finish(BatchState.PublishFailed, ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// An application of the Microsoft Store: nothing to download or package, Intune installs it from the Store. With the
+        /// publication of the batch it becomes a "Microsoft Store app (new)" of Intune with the same choices.
+        /// </summary>
+        private static async Task PublishStoreAsync(BatchItem item, AppConfig cfg, BatchOptions o, CancellationToken ct)
+        {
+            if (o?.Publish != true) { item.Finish(BatchState.Skipped, T("Batch_StoreNeedsPublish")); return; }
+            item.Update(BatchState.Publishing, T("Batch_StoreReading"), 0);
+            try
+            {
+                var app = await StoreCatalog.GetAsync(item.App.Id, cfg?.PreferredLocale, ct);
+                var r = await StorePublisher.PublishAsync(app, o, text => item.Say(text), ct);
+                item.Publication = r;
+                if (r.IsPublished)
+                {
+                    string text = PublishTexts.Summary(r);
+                    if (r.Assignment?.StartsWith("failed", StringComparison.Ordinal) == true) item.Finish(BatchState.Warning, text);
+                    else item.Finish(BatchState.Published, text);
+                }
+                else if (r.Status == "exists") item.Finish(BatchState.Skipped, T("Batch_StoreExists", app.Name));
+                else item.Finish(BatchState.PublishFailed, r.Status == "cancelled" ? T("Ed_PublishCancelled") : PublishTexts.Summary(r));
+            }
+            catch (OperationCanceledException)
+            {
+                item.Finish(BatchState.Cancelled, T("Batch_CancelledItem"));
             }
             catch (Exception ex)
             {

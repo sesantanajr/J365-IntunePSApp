@@ -73,7 +73,7 @@
                   <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <CheckBox IsChecked="{Binding IsQueued, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,8,0" ToolTip="{l:T Catalog_BatchTip}"
-                          IsEnabled="{Binding IsSupported}" Focusable="False"/>
+                          IsEnabled="{Binding CanDeploy}" Focusable="False"/>
                 <Border Grid.Column="1" Width="40" Height="40" CornerRadius="10" Background="{Binding AvatarColor}">
                   <TextBlock Text="{Binding Initials}" Foreground="White" FontWeight="SemiBold" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </Border>
@@ -83,7 +83,7 @@
                 </StackPanel>
                 <StackPanel Grid.Column="3" VerticalAlignment="Center" HorizontalAlignment="Right">
                   <TextBlock Text="{Binding VersionLabel}" FontSize="12" Foreground="{DynamicResource Ink2}" HorizontalAlignment="Right"/>
-                  <TextBlock Text="{Binding TypesLabel}" FontSize="11" Foreground="{DynamicResource Muted}" HorizontalAlignment="Right"/>
+                  <TextBlock Text="{Binding SourceLabel}" FontSize="11" Foreground="{DynamicResource Muted}" HorizontalAlignment="Right"/>
                 </StackPanel>
               </Grid>
             </DataTemplate>
@@ -103,7 +103,11 @@
               <Grid>
                 <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                 <Border x:Name="DAvatar" Width="64" Height="64" CornerRadius="16">
-                  <TextBlock x:Name="DInitials" Foreground="White" FontSize="22" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                  <Grid>
+                    <TextBlock x:Name="DInitials" Foreground="White" FontSize="22" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <!-- The official logo of an application of the Microsoft Store -->
+                    <Image x:Name="DLogo" Width="52" Height="52" Stretch="Uniform" Visibility="Collapsed" RenderOptions.BitmapScalingMode="HighQuality"/>
+                  </Grid>
                 </Border>
                 <StackPanel Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Center">
                   <TextBlock x:Name="DName" Style="{StaticResource PageTitle}" FontSize="22" TextWrapping="Wrap"/>
@@ -115,6 +119,7 @@
                 <Border Style="{StaticResource Chip}" Background="{DynamicResource Subtle2}"><TextBlock x:Name="DId" Foreground="{DynamicResource Ink2}" FontSize="12" FontFamily="{StaticResource MonoFont}"/></Border>
                 <Border x:Name="DLicenseChip" Style="{StaticResource Chip}" Background="{DynamicResource Subtle2}"><TextBlock x:Name="DLicense" Foreground="{DynamicResource Ink2}" FontSize="12"/></Border>
                 <Border x:Name="DCuratedChip" Style="{StaticResource Chip}" Background="{DynamicResource SuccessSoft}"><TextBlock Text="{l:T Catalog_Curated}" Foreground="{DynamicResource Success}" FontSize="12" FontWeight="SemiBold"/></Border>
+                <Border x:Name="DStoreChip" Style="{StaticResource Chip}" Background="{DynamicResource BrandSoft}" Visibility="Collapsed"><TextBlock Text="{l:T Type_Store}" Foreground="{DynamicResource BrandText}" FontSize="12" FontWeight="SemiBold"/></Border>
               </WrapPanel>
               <TextBlock x:Name="DDescription" Style="{StaticResource Body}" FontSize="14" Margin="0,8,0,0"/>
 
@@ -131,6 +136,14 @@
                 </ListView.View>
               </ListView>
               <TextBlock x:Name="DInstallerInfo" Style="{StaticResource Hint}"/>
+
+              <!-- Microsoft Store: published to Intune as "Microsoft Store app (new)", nothing is packaged -->
+              <Border x:Name="DStore" Background="{DynamicResource BrandSoft}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="10" Padding="14,12" Margin="0,16,0,0" Visibility="Collapsed">
+                <StackPanel>
+                  <TextBlock Text="{l:T Catalog_StoreTitle}" Style="{StaticResource H3}"/>
+                  <TextBlock x:Name="DStoreText" Style="{StaticResource Body}" Margin="0,6,0,0" TextWrapping="Wrap"/>
+                </StackPanel>
+              </Border>
 
               <Border x:Name="DCuration" Background="{DynamicResource Subtle}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="10" Padding="14,12" Margin="0,16,0,0">
                 <StackPanel>
@@ -161,7 +174,7 @@
 
               <StackPanel Orientation="Horizontal" Margin="0,22,0,0">
                 <Button x:Name="BtnPackage" Style="{StaticResource PrimaryButton}" Click="Package_Click">
-                  <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE896;" Style="{StaticResource Icon}" Foreground="White" Margin="0,0,10,0"/><TextBlock Text="{l:T Catalog_DownloadAndPackage}"/></StackPanel>
+                  <StackPanel Orientation="Horizontal"><TextBlock x:Name="BtnPackageIcon" Text="&#xE896;" Style="{StaticResource Icon}" Foreground="White" Margin="0,0,10,0"/><TextBlock x:Name="BtnPackageText" Text="{l:T Catalog_DownloadAndPackage}"/></StackPanel>
                 </Button>
                 <Button x:Name="BtnQueue" Style="{StaticResource SecondaryButton}" Margin="10,0,0,0" Click="Queue_Click">
                   <StackPanel Orientation="Horizontal"><TextBlock x:Name="BtnQueueIcon" Text="&#xE710;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock x:Name="BtnQueueText" Text="{l:T Catalog_BatchAdd}"/></StackPanel>
@@ -170,7 +183,10 @@
                   <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE774;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock Text="{l:T Catalog_Website}"/></StackPanel>
                 </Button>
               </StackPanel>
-              <TextBlock Style="{StaticResource Hint}" Margin="0,12,0,0" Text="{l:T Catalog_DownloadNote}"/>
+              <Button x:Name="BtnSearchStore" Style="{StaticResource GhostButton}" HorizontalAlignment="Left" Margin="-8,10,0,0" Visibility="Collapsed" Click="SearchStore_Click">
+                <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE721;" Style="{StaticResource Icon}" Margin="0,0,8,0"/><TextBlock Text="{l:T Catalog_SearchStore}"/></StackPanel>
+              </Button>
+              <TextBlock x:Name="DNote" Style="{StaticResource Hint}" Margin="0,12,0,0" Text="{l:T Catalog_DownloadNote}"/>
             </StackPanel>
           </ScrollViewer>
         </Grid>

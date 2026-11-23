@@ -195,7 +195,13 @@ namespace J365.IntunePSApp
             var apps = new List<CatalogApp>();
             foreach (var id in ids)
             {
+                // An id of the database, or a product id of the Microsoft Store (9PM860492SZD), published as a Store app.
                 var app = CatalogService.Instance.ById(id);
+                if (app == null && StoreCatalog.IsStoreId(id))
+                {
+                    try { app = StoreCatalog.FindAsync(id, ConfigStore.Current.PreferredLocale, CancellationToken.None).GetAwaiter().GetResult(); }
+                    catch (Exception ex) { Console.WriteLine(ex.Message); return 2; }
+                }
                 if (app == null) { Console.WriteLine(T("Cli_BatchUnknown", id)); return 2; }
                 apps.Add(app);
             }

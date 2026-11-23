@@ -368,6 +368,12 @@ namespace J365.IntunePSApp.Core
         [JsonIgnore] public string TypesLabel => string.Join("  ", (Installers ?? new List<CatalogInstaller>()).Select(i => i.TypeLabel).Distinct().Take(3));
         [JsonIgnore] public bool HasCuration => Extra != null;
         [JsonIgnore] public bool IsSupported => Installers != null && Installers.Any(i => i.IsSupported);
+        /// <summary>An application of the Microsoft Store (found by a live search): Intune installs it from the Store, nothing is packaged.</summary>
+        [JsonIgnore] public bool IsStore { get; set; }
+        /// <summary>Can be packaged, or published from the Store: it may join a batch.</summary>
+        [JsonIgnore] public bool CanDeploy => IsSupported || IsStore;
+        /// <summary>The source shown in the list: the Store, or the types of the installers.</summary>
+        [JsonIgnore] public string SourceLabel => IsStore ? T("Type_Store") : TypesLabel;
         [JsonIgnore] public string VersionLabel => string.IsNullOrEmpty(Version) ? "" : "v" + Version;
         [JsonIgnore] public string AvatarColor => Names.AvatarColor(Id);
     }
@@ -391,6 +397,8 @@ namespace J365.IntunePSApp.Core
         [JsonPropertyName("arp")] public List<ArpEntry> Arp { get; set; }
 
         [JsonIgnore] public bool IsMsi => Type == "msi" || Type == "wix";
+        /// <summary>An installer of the Microsoft Store: Intune installs it, there is nothing to download or package.</summary>
+        [JsonIgnore] public bool IsStore => Type == StoreCatalog.InstallerType;
         [JsonIgnore] public bool IsSupported => Type is "exe" or "msi" or "wix" or "inno" or "nullsoft" or "burn";
         [JsonIgnore] public string TypeLabel => Type switch
         {
@@ -404,6 +412,7 @@ namespace J365.IntunePSApp.Core
             "appx" => "APPX",
             "zip" => "ZIP",
             "portable" => T("Type_Portable"),
+            "msstore" => T("Type_Store"),
             _ => (Type ?? "?").ToUpperInvariant()
         };
         [JsonIgnore] public string ArchLabel => string.IsNullOrEmpty(Arch) ? "—" : Arch;
@@ -413,6 +422,7 @@ namespace J365.IntunePSApp.Core
         {
             get
             {
+                if (IsStore) return T("Silent_Store");
                 var s = CatalogService.SilentArgsFor(this);
                 if (IsMsi) return string.IsNullOrEmpty(s) ? T("Silent_MsiAuto") : "/qn + " + s;
                 return string.IsNullOrEmpty(s) ? T("Silent_Unknown") : s;

@@ -414,5 +414,112 @@ public class Release26Tests
         Assert.False(item.CanOpenInEditor);
     }
 
+    // ------------------------------------------------------------------ Microsoft Store (answers recorded from the Store)
+
+    private const string StoreSearch = @"{""$type"":""x"",""Data"":[{""PackageIdentifier"":""9PM860492SZD"",""PackageName"":""Microsoft PC Manager"",""Publisher"":""Microsoft Corporation"",""Versions"":[{""PackageVersion"":""Unknown""}]},
+        {""PackageIdentifier"":""ULT1MAT3.PCManager"",""PackageName"":""ULT1MAT3 PC Manager"",""Publisher"":""ULT1MAT3""},{""PackageIdentifier"":""9PM860492SZD"",""PackageName"":""Duplicate""}]}";
+
+    private const string StoreManifest = @"{""Data"":{""PackageIdentifier"":""9PM860492SZD"",""Versions"":[{""PackageVersion"":""Unknown"",""DefaultLocale"":{""PackageLocale"":""en"",""Publisher"":""Microsoft Corporation"",
+        ""PackageName"":""Microsoft PC Manager"",""ShortDescription"":""A utility app for your PC."",""PublisherUrl"":""https://pcmanager.microsoft.com/"",""PrivacyUrl"":""https://go.microsoft.com/fwlink/?LinkId=521839""},
+        ""Installers"":[{""MSStoreProductIdentifier"":""9PM860492SZD"",""Architecture"":""x64"",""InstallerType"":""msstore"",""Scope"":""user""},{""Architecture"":""arm64"",""InstallerType"":""msstore"",""Scope"":""user""}]}]}}";
+
+    private const string StoreDisplay = @"{""Products"":[{""LocalizedProperties"":[{""ProductTitle"":""Microsoft PC Manager"",""ShortDescription"":""O Gerenciador do PC da Microsoft é um aplicativo utilitário."",
+        ""PublisherName"":""Microsoft Corporation"",""Images"":[{""ImagePurpose"":""Tile"",""Width"":620,""Height"":300,""Uri"":""//store-images.s-microsoft.com/wide.png""},
+        {""ImagePurpose"":""Logo"",""Width"":88,""Height"":88,""Uri"":""//store-images.s-microsoft.com/small.png""},{""ImagePurpose"":""Logo"",""Width"":300,""Height"":300,""Uri"":""//store-images.s-microsoft.com/logo.png""},
+        {""ImagePurpose"":""BoxArt"",""Width"":2160,""Height"":2160,""Uri"":""//store-images.s-microsoft.com/boxart.png""}]}]}]}";
+
+    [Theory]
+    [InlineData("9PM860492SZD", true)]
+    [InlineData("9pm860492szd", true)]
+    [InlineData("XPDP273C0XHQH2", true)]
+    [InlineData("xp8bt8dw290mpq", true)]
+    [InlineData("9PM860492SZ", false)]
+    [InlineData("XPDP273C0XHQH", false)]
+    [InlineData("7zip.7zip", false)]
+    [InlineData("", false)]
+    public void Product_ids_of_the_Store_are_recognised(string id, bool expected) => Assert.Equal(expected, StoreCatalog.IsStoreId(id));
+
+    [Fact]
+    public void The_Store_search_gives_one_application_per_product_id_and_ignores_ids_of_winget()
+    {
+        var apps = StoreCatalog.ParseSearch(StoreSearch);
+        var app = Assert.Single(apps);
+        Assert.Equal("9PM860492SZD", app.Id);
+        Assert.Equal("Microsoft PC Manager", app.Name);
+        Assert.True(app.IsStore && app.CanDeploy && !app.IsSupported);
+        Assert.True(app.Installers.Single().IsStore);
+        Assert.Equal(T("Type_Store"), app.SourceLabel);
+        Assert.Equal(T("Silent_Store"), app.Installers[0].SilentLabel);
+        // The same product id is the same object in every search: a tick for the batch survives a new search.
+        Assert.Same(app, StoreCatalog.ParseSearch(StoreSearch).Single());
+        Assert.Empty(StoreCatalog.ParseSearch("not json"));
+        Assert.Empty(StoreCatalog.ParseSearch(null));
+    }
+
+    [Fact]
+    public void The_manifest_and_the_catalog_of_the_Store_describe_the_app()
+    {
+        var app = StoreCatalog.ParseManifest(StoreManifest);
+        Assert.Equal("Microsoft PC Manager", app.Name);
+        Assert.Equal("Microsoft Corporation", app.Publisher);
+        Assert.Equal("A utility app for your PC.", app.Description);
+        Assert.Equal(new[] { "x64", "arm64" }, app.Architectures);
+        Assert.True(app.UserOnly);
+        Assert.False(app.IsWin32);
+        // UWP/MSIX apps of the Store are provisioned in the system context, whatever their manifest says.
+        Assert.Equal("system", app.RunAsAccount);
+        StoreCatalog.ApplyDisplay(app, StoreDisplay);
+        Assert.StartsWith("O Gerenciador do PC", app.Description);
+        Assert.Equal("https://store-images.s-microsoft.com/logo.png", app.LogoUrl);   // square, the largest up to 300 px
+        Assert.Null(StoreCatalog.ParseManifest(@"{""Data"":{""PackageIdentifier"":""7zip.7zip"",""Versions"":[{}]}}"));
+        Assert.Null(StoreCatalog.ParseManifest(""));
+
+        var win32 = new StoreApp { Id = "XPDP273C0XHQH2" };
+        Assert.Equal("system", win32.RunAsAccount);                 // no scope stated
+        win32.Scopes.Add("user");
+        Assert.Equal("user", win32.RunAsAccount);                   // a Win32 app of the Store that installs per user only
+        Assert.Equal("BR", StoreCatalog.Market("pt-BR"));
+        Assert.Equal("US", StoreCatalog.Market("en"));
+    }
+
+    [Fact]
+    public void A_Store_app_goes_to_Intune_as_a_WinGet_app_with_its_logo_and_the_toasts_of_the_batch()
+    {
+        var app = StoreCatalog.ParseManifest(StoreManifest);
+        var body = StorePublisher.AppBody(app, "Jornada 365", new byte[] { 0x89, 0x50, 0x4E, 0x47 }, "image/png");
+        Assert.Equal("#microsoft.graph.winGetApp", (string)body["@odata.type"]);
+        Assert.Equal("9PM860492SZD", (string)body["packageIdentifier"]);
+        Assert.Equal("system", (string)body["installExperience"]["runAsAccount"]);
+        Assert.Equal("Microsoft PC Manager", (string)body["displayName"]);
+        Assert.Equal("Jornada 365", (string)body["owner"]);
+        Assert.Equal("https://go.microsoft.com/fwlink/?LinkId=521839", (string)body["privacyInformationUrl"]);
+        Assert.Equal("image/png", (string)body["largeIcon"]["type"]);
+        Assert.Equal("iVBORw==", (string)body["largeIcon"]["value"]);
+        Assert.Null(StorePublisher.AppBody(app, "", null, null)["largeIcon"]);
+
+        var po = new BatchOptions { AssignIntent = "available", AssignTo = "Group", GroupId = "11111111-2222-3333-4444-555555555555" }.PublishOptions(false);
+        var assignment = StorePublisher.AssignmentBody(po, "hideAll")["mobileAppAssignments"][0];
+        Assert.Equal("available", (string)assignment["intent"]);
+        Assert.Equal("#microsoft.graph.groupAssignmentTarget", (string)assignment["target"]["@odata.type"]);
+        Assert.Equal("11111111-2222-3333-4444-555555555555", (string)assignment["target"]["groupId"]);
+        Assert.Equal("#microsoft.graph.winGetAppAssignmentSettings", (string)assignment["settings"]["@odata.type"]);
+        Assert.Equal("hideAll", (string)assignment["settings"]["notifications"]);
+        Assert.Equal("#microsoft.graph.allDevicesAssignmentTarget",
+            (string)StorePublisher.AssignmentBody(new BatchOptions { AssignIntent = "required", AssignTo = "AllDevices" }.PublishOptions(false), "showAll")["mobileAppAssignments"][0]["target"]["@odata.type"]);
+    }
+
+    [Fact]
+    public void A_batch_publishes_Store_apps_instead_of_packaging_them()
+    {
+        var store = StoreCatalog.ParseSearch(StoreSearch).Single();
+        var items = BatchPackager.Plan(new[] { store }, new AppConfig());
+        Assert.True(items[0].Installer.IsStore);
+        Assert.Equal(T("Batch_StoreInstaller"), items[0].InstallerLabel);
+        // Without the publication there is nothing to do with an app of the Store: it is skipped with the reason.
+        BatchPackager.RunAsync(items, new BatchOptions { Publish = false }, System.Threading.CancellationToken.None).GetAwaiter().GetResult();
+        Assert.Equal(BatchState.Skipped, items[0].State);
+        Assert.Equal(T("Batch_StoreNeedsPublish"), items[0].Message);
+    }
+
     private static string T(string key) => Loc.T(key);
 }
