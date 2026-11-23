@@ -907,7 +907,7 @@
   "Settings_CheckNow": "Check now",
   "Settings_UpdateAvailable": "Version {0} is available.",
   "Settings_UpdateTo": "Update to {0} now",
-  "Settings_UpToDate": "You have the latest version (checked on {0}).",
+  "Settings_UpToDate": "You have the latest version, {0} (checked on {1}).",
   "Settings_Installation": "Installation",
   "Settings_InstallPortable": "Running as a portable application: nothing is installed. Optionally install it for your user to get a Start menu shortcut (no administrator rights needed).",
   "Settings_InstallRunning": "Installed for your user in {0}.",
@@ -1468,5 +1468,9 @@
   "Batch_CopyReport": "Copy report",
   "Batch_ReportCopied": "Batch report copied: paste it into a sheet or a ticket.",
   "Batch_ReportHeader": "Application\tVersion\tState\tPackage\tDetails",
-  "Ed_SilentNoBlock": "In silent mode the applications are not blocked during the installation: PSAppDeployToolkit would show a notice to whoever tried to open them."
+  "Ed_SilentNoBlock": "In silent mode the applications are not blocked during the installation: PSAppDeployToolkit would show a notice to whoever tried to open them.",
+  "Settings_UpdateCheckFailed": "Could not check for new versions now: {0}. Try again or download the latest version from GitHub.",
+  "Settings_OpenReleases": "Open the releases on GitHub",
+  "Log_UpdateFromPage": "Latest version read from the releases page of GitHub: {0} (the API did not answer: {1}).",
+  "Log_UpdateCheckFailed": "The check for new versions got no answer: {0}"
 }

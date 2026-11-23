@@ -433,9 +433,13 @@ namespace J365.IntunePSApp.Views
             LogoThumb.Source = MainWindow.LoadBitmap(TxtLogo.Text);
             if (!_working) SetupService.Inspect(_dependencies);
 
-            string newApp = UpdateService.NewAppVersion;
+            // A check that could not read the latest version says so (it is not "up to date"), with the page of the releases.
+            string newApp = UpdateService.NewAppVersion, checkError = UpdateService.LastError;
             UpdateInfoText.Text = newApp != null ? T("Settings_UpdateAvailable", newApp)
-                : ConfigStore.Current.LastUpdateCheck.HasValue ? T("Settings_UpToDate", ConfigStore.Current.LastUpdateCheck.Value.ToString("g", culture)) : "";
+                : checkError != null ? T("Settings_UpdateCheckFailed", checkError)
+                : ConfigStore.Current.LastUpdateCheck.HasValue ? T("Settings_UpToDate", AppInfo.Version, ConfigStore.Current.LastUpdateCheck.Value.ToString("g", culture)) : "";
+            UpdateInfoText.SetResourceReference(TextBlock.ForegroundProperty, checkError != null && newApp == null ? "Warning" : "Muted");
+            BtnReleases.Visibility = checkError != null && newApp == null ? Visibility.Visible : Visibility.Collapsed;
             BtnUpdateNow.Visibility = newApp != null ? Visibility.Visible : Visibility.Collapsed;
             BtnUpdateNowText.Text = newApp != null ? T("Settings_UpdateTo", newApp) : "";
 
@@ -467,6 +471,8 @@ namespace J365.IntunePSApp.Views
             // A newer version: the update itself asks before downloading.
             if (UpdateService.NewAppVersion != null) await MainWindow.Current.UpdateAppAsync();
         }
+
+        private void OpenReleases_Click(object sender, RoutedEventArgs e) => MainWindow.OpenUrl(AppInfo.ReleasesUrl);
 
         private async void UpdateNow_Click(object sender, RoutedEventArgs e)
         {

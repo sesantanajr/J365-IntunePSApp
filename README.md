@@ -3,8 +3,8 @@
 <p align="center"><img src="docs/assets/hero-en.svg" alt="J365 IntunePSApp 2.6 — from installer to Intune, with control at every step" width="100%"></p>
 
 <p align="center"><b>Fewer repetitive tasks. More consistent deployment packages.</b><br>A visual workspace to prepare, customize, test and publish Windows applications.</p>
-<p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v2.6.0/J365-IntunePSApp-2.6.0-win-x64.zip"><img src="docs/assets/download-en.svg" alt="Download J365 IntunePSApp 2.6.0 — Windows x64" width="400"></a></p>
-<p align="center"><a href="#features">Explore the features</a> · <a href="#get-started">Get started</a> · <a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/tag/v2.6.0">Release notes</a></p>
+<p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v2.6.1/J365-IntunePSApp-2.6.1-win-x64.zip"><img src="docs/assets/download-en.svg" alt="Download J365 IntunePSApp 2.6.1 — Windows x64" width="400"></a></p>
+<p align="center"><a href="#features">Explore the features</a> · <a href="#get-started">Get started</a> · <a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/tag/v2.6.1">Release notes</a></p>
 <p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/actions/workflows/build.yml"><img alt="Build and tests" src="https://github.com/sesantanajr/J365-IntunePSApp/actions/workflows/build.yml/badge.svg"></a> <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-315CF5?style=flat-square"></a> <img alt="Windows x64" src="https://img.shields.io/badge/Windows-x64-0A5CA8?style=flat-square"></p>
 
 ## Your next deployment package starts here
@@ -97,6 +97,7 @@ Test locally or in **Windows Sandbox**, where available, with results and logs. 
 - **Truly silent installations:** in **Silent** mode the package shows no dialog and blocks no application and, by default, the assignment created by the publication hides Intune's toast notifications (`hideAll`) and does not restart the device. Notifications can also be chosen per package and as a company default.
 - **Fewer repeated fields:** the switch that uninstalls earlier versions lives on the Uninstall step only; the detection name and version follow the Uninstall and Application steps until changed.
 - **Right icons:** generic installer icons (Inno Setup, WiX Burn and the NSIS stock icons) no longer reach the Company Portal; the icon of the installed program or the initials tile is used instead.
+- **Reliable updates (2.6.1):** "Check now" only says up to date when it reached GitHub, names the version found and, when the GitHub API is blocked, uses the releases page.
 - **Right switches:** switches the analysis finds in the installer itself (NSIS, InstallShield, Advanced Installer, Squirrel) are no longer discarded when the database has none; per-user Inno Setup installers get `/CURRENTUSER`, as winget does (432 applications); and the .NET Desktop Runtime 10 detection matches the name it registers again.
 
 ## Quality as the product evolves
@@ -113,7 +114,7 @@ Existing projects remain readable. Updating the editor does not change existing 
 
 [Changelog](CHANGELOG.md) · [Quality review](docs/QUALITY-25.md) · [Intune publishing](docs/INTUNE-PUBLISH.md) · [Building](docs/BUILDING.md) · [Architecture](docs/ARCHITECTURE.md)
 
-[Contribute](CONTRIBUTING.md) · [Report an issue](https://github.com/sesantanajr/J365-IntunePSApp/issues) · [Security](SECURITY.md) · [SHA256SUMS.txt](https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v2.6.0/SHA256SUMS.txt)
+[Contribute](CONTRIBUTING.md) · [Report an issue](https://github.com/sesantanajr/J365-IntunePSApp/issues) · [Security](SECURITY.md) · [SHA256SUMS.txt](https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v2.6.1/SHA256SUMS.txt)
 
 ---
 

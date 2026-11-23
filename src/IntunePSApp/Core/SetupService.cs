@@ -193,6 +193,12 @@ namespace J365.IntunePSApp.Core
             }
         }
 
+        /// <summary>
+        /// Why the last check could not read the latest version (network, proxy, limit of the API), or null when it could.
+        /// A check that read nothing is never shown as "you have the latest version".
+        /// </summary>
+        public static string LastError { get; private set; }
+
         public static async Task CheckAsync(bool force, CancellationToken ct)
         {
             var cfg = ConfigStore.Current;
@@ -201,20 +207,17 @@ namespace J365.IntunePSApp.Core
                 if (!cfg.CheckForUpdates) return;
                 if (cfg.LastUpdateCheck.HasValue && (DateTime.Now - cfg.LastUpdateCheck.Value).TotalHours < 20) return;
             }
-            string json = await Http.TryGetStringAsync(AppUpdater.ApiUrl, 20, ct);
-            if (json != null)
-            {
-                try
-                {
-                    using var doc = JsonDocument.Parse(json);
-                    string tag = doc.RootElement.GetProperty("tag_name").GetString() ?? "";
-                    if (tag.Length > 0) cfg.LatestAppVersion = tag.TrimStart('v', 'V');
-                }
-                catch { }
-            }
+            // The API of GitHub, then the page of the latest release (AppUpdater.GetLatestAsync): the same answer the update uses.
+            string latest = null, error = null;
+            try { latest = (await AppUpdater.GetLatestAsync(ct)).Version; }
+            catch (Exception ex) when (!ct.IsCancellationRequested) { error = ex.Message; }
+            if (!string.IsNullOrEmpty(latest)) cfg.LatestAppVersion = latest;
+            LastError = string.IsNullOrEmpty(latest) ? error ?? T("Update_ErrNoInfo") : null;
+            if (LastError != null) Log.Warn(T("Log_UpdateCheckFailed", LastError));
             var psadt = await ToolsService.GetLatestPsadtReleaseAsync(ct);
             if (psadt != null) cfg.LatestPsadtVersion = psadt.Value.Version;
-            cfg.LastUpdateCheck = DateTime.Now;
+            // Only a check that read the latest version counts: after a failure the next start asks again.
+            if (LastError == null) cfg.LastUpdateCheck = DateTime.Now;
             ConfigStore.Save();
             Changed?.Invoke();
         }

@@ -2,6 +2,13 @@
 
 All notable changes to J365 IntunePSApp. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.6.1 - 2026-11-23
+
+### Fixed
+
+- **"You have the latest version" after a check that read nothing.** When GitHub could not be reached (proxy, the limit of 60 API requests an hour per address, a timeout), the check still recorded its time and Settings said the application was up to date. A failed check now says why, keeps the automatic check of the next start, and offers the releases page. *Up to date* names the version found.
+- **Updates where the API of GitHub is blocked or limited.** When `api.github.com` does not answer, the latest version is read from the page of the latest release (`github.com/.../releases/latest`, the address the download button uses), and the files are taken by the names every release has; the SHA256 and the version are still checked before the executable is replaced. The requests ask past the caches of the network.
+
 ## 2.6.0 - 2026-11-23
 
 ### Added

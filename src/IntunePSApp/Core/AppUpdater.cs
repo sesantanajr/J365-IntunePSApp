@@ -37,15 +37,54 @@ namespace J365.IntunePSApp.Core
         public static string ApiUrl
             => Environment.GetEnvironmentVariable("J365_UPDATE_API") is { Length: > 0 } url ? url : AppInfo.LatestReleaseApi;
 
+        /// <summary>A mirror set with J365_UPDATE_API answers alone: the pages of GitHub are not asked.</summary>
+        private static bool UsesCustomApi => !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("J365_UPDATE_API"));
+
+        /// <summary>"https://github.com/owner/repo/releases/tag/v2.6.0" → "2.6.0"; null for any other address.</summary>
+        public static string VersionFromReleaseUrl(string url)
+        {
+            var m = Regex.Match(url ?? "", @"/releases/tag/v?(?<v>\d+(\.\d+){1,3})/?(\?.*)?$", RegexOptions.IgnoreCase);
+            return m.Success ? m.Groups["v"].Value : null;
+        }
+
+        /// <summary>A release known by its version only: its files have the names every release of this project uses.</summary>
+        public static Release ReleaseFromVersion(string version)
+        {
+            string zip = $"J365-IntunePSApp-{version}-win-x64.zip", files = $"{AppInfo.RepoUrl}/releases/download/v{version}/";
+            return new Release { Version = version, PageUrl = $"{AppInfo.RepoUrl}/releases/tag/v{version}", ZipName = zip, ZipUrl = files + zip, SumsUrl = files + "SHA256SUMS.txt" };
+        }
+
+        /// <summary>
+        /// The latest version from the page of the latest release (github.com redirects it to the tag): no API, so no limit
+        /// of 60 requests an hour per address, and reachable where a proxy only lets github.com through. Null when unknown.
+        /// </summary>
+        public static async Task<string> LatestVersionFromPageAsync(CancellationToken ct)
+            => VersionFromReleaseUrl(await Http.FinalUrlAsync(AppInfo.ReleasesUrl, 30, ct));
+
         /// <summary>False when this copy cannot replace itself (read-only folder): the release page is offered instead.</summary>
         public static bool CanUpdateInPlace => CanWrite(Path.GetDirectoryName(AppPaths.ExePath));
 
+        /// <summary>
+        /// The latest release: the API of GitHub first (asked past the caches of the network); when it does not answer
+        /// (proxy, the limit of 60 requests an hour, a release whose files are still being attached), the page of the latest
+        /// release, with the file names of the project. Throws, saying why, when neither answers.
+        /// </summary>
         public static async Task<Release> GetLatestAsync(CancellationToken ct)
         {
-            string json = await Http.TryGetStringAsync(ApiUrl, 30, ct);
+            var (json, error) = await Http.GetStringAsync(ApiUrl, 30, ct, noCache: true);
             ct.ThrowIfCancellationRequested();
-            if (json == null) throw new IOException(T("Update_ErrNoInfo"));
-            return ParseRelease(json);
+            if (json != null)
+            {
+                try { return ParseRelease(json); }
+                catch (Exception ex) when (ex is InvalidDataException || ex is JsonException || ex is KeyNotFoundException) { error = ex.Message; }
+            }
+            if (!UsesCustomApi && await LatestVersionFromPageAsync(ct) is string version)
+            {
+                Log.Info(T("Log_UpdateFromPage", version, error ?? ""));
+                return ReleaseFromVersion(version);
+            }
+            ct.ThrowIfCancellationRequested();
+            throw new IOException(T("Update_ErrNoInfo") + (string.IsNullOrEmpty(error) ? "" : $" ({error})"));
         }
 
         /// <summary>Reads a GitHub release (JSON of /releases/latest): version, the win-x64 zip and SHA256SUMS.txt.</summary>

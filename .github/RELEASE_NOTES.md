@@ -1,33 +1,29 @@
-## J365 IntunePSApp 2.6.0
+## J365 IntunePSApp 2.6.1
 
 ### Português
 
-Gere e publique vários aplicativos de uma vez, com instalações realmente silenciosas.
+Correção da verificação de novas versões.
 
-- **Deploy em lote:** marque vários aplicativos no catálogo e gere todos com as mesmas configurações (nome da empresa, proprietário, modo de exibição, notificações do Intune e adiamento). Logo, cores, estilo, idioma e autor vêm do padrão da empresa. Cada instalador é baixado do link oficial, conferido pelo SHA256 e empacotado como no editor, com o andamento de cada aplicativo na tela. Quando um pacote precisaria de uma decisão sua (um `.exe` sem parâmetros silenciosos conhecidos, ou um nome que também corresponde a outros aplicativos), ele é pulado com o motivo, nunca adivinhado. Opcionalmente, cada pacote é **publicado no Intune** assim que é gerado: atualiza o app com o mesmo nome (ou cria), e os apps criados recebem a mesma atribuição (disponível ou obrigatória, para um grupo, todos os usuários ou dispositivos), com confirmação do tenant antes de começar. Itens pulados abrem no editor com o instalador já baixado, e o relatório do lote pode ser copiado como tabela. Também por linha de comando: `--batch id1,id2 --mode Silent --publish --assign required --assign-to Group --group <id>`.
-- **Silencioso sem notificar o usuário:** a publicação criava a atribuição sempre com todas as notificações do Intune. Agora o modo **Silencioso** oculta as notificações (`hideAll`), não reinicia o computador e não bloqueia os aplicativos durante a instalação (o bloqueio mostraria um aviso). As notificações podem ser escolhidas por pacote e como padrão da empresa.
-- **Menos campos repetidos:** a opção de desinstalar versões anteriores fica só na etapa Desinstalação, e o nome e a versão da detecção acompanham as etapas anteriores até serem alterados.
-- **Ícones corretos:** ícones genéricos de instaladores (Inno Setup, WiX Burn e os ícones de fábrica do NSIS) não vão mais para o Portal da Empresa.
-- **Correções:** switches silenciosos que a análise encontra no próprio instalador (NSIS, InstallShield, Advanced Installer, Squirrel) não são mais descartados quando o banco de dados não traz switches; instaladores Inno Setup por usuário recebem `/CURRENTUSER` (432 aplicativos); a detecção do .NET Desktop Runtime 10 volta a funcionar.
+- **"Você tem a versão mais recente" só quando é verdade:** se o GitHub não respondesse (proxy, limite de 60 consultas por hora da API, falta de conexão), a verificação dizia que o aplicativo estava atualizado. Agora ela diz o motivo, tenta de novo na próxima abertura e oferece a página de versões; quando está atualizado, mostra a versão encontrada.
+- **Atualização mesmo com a API do GitHub bloqueada:** se `api.github.com` não responder, a versão mais recente é lida na página de versões do GitHub e os arquivos são baixados pelos nomes de sempre, com a mesma conferência de SHA256 e de versão antes da troca do executável.
 
-Projetos anteriores continuam compatíveis. Atribuições já existentes no Intune mantêm as notificações configuradas nelas; a escolha vale para as atribuições criadas pela publicação. Teste em um grupo piloto antes de ampliar.
+Inclui tudo da 2.6.0: deploy em lote no Intune, modo silencioso sem notificar o usuário, ícones e parâmetros corretos. Veja o [CHANGELOG](https://github.com/sesantanajr/J365-IntunePSApp/blob/main/CHANGELOG.md).
 
 ### English
 
-Generate and publish several applications at once, with truly silent installations.
+Fix of the check for new versions.
 
-- **Batch deploy:** tick several applications in the catalog and generate them all with the same settings (company name, owner, display mode, Intune notifications and deferral). Logo, colors, style, language and author come from the company defaults. Each installer is downloaded from its official link, checked against its SHA256 and packaged as in the editor, with per-application progress. A package that would need your decision (an `.exe` without known silent switches, or a name that also matches other applications) is skipped with the reason, never guessed. Optionally, each package is **published to Intune** as soon as it is generated: the app with the same name is updated (or created), and the apps created get the same assignment (available or required, for a group, all users or all devices), with the tenant confirmed before it starts. Skipped items open in the editor with the installer already downloaded, and the batch report can be copied as a table. Command line: `--batch id1,id2 --mode Silent --publish --assign required --assign-to Group --group <id>`.
-- **Silent without notifying the user:** the publication always created the assignment with every Intune toast. **Silent** mode now hides them (`hideAll`), does not restart the device and does not block the applications during the installation (blocking shows a notice). Notifications can be chosen per package and as a company default.
-- **Fewer repeated fields:** the uninstall-earlier-versions switch lives on the Uninstall step only; the detection name and version follow the earlier steps until changed.
-- **Right icons:** generic installer icons (Inno Setup, WiX Burn and the NSIS stock icons) no longer reach the Company Portal.
-- **Fixes:** silent switches the analysis finds in the installer itself (NSIS, InstallShield, Advanced Installer, Squirrel) are no longer discarded when the database has none; per-user Inno Setup installers get `/CURRENTUSER` (432 applications); the .NET Desktop Runtime 10 detection works again.
+- **"You have the latest version" only when it is true:** when GitHub did not answer (proxy, the limit of 60 API requests an hour, no connection), the check said the application was up to date. It now says why, tries again at the next start and offers the releases page; when up to date, it names the version found.
+- **Updates even when the GitHub API is blocked:** when `api.github.com` does not answer, the latest version is read from the releases page of GitHub and the files are downloaded by their usual names, with the same SHA256 and version checks before the executable is replaced.
 
-Earlier projects remain compatible. Assignments already in Intune keep their own notification setting; the choice applies to assignments created by the publication. Test with a pilot group before widening.
+Includes everything of 2.6.0: batch deploy to Intune, silent mode without notifying the user, right icons and switches. See the [CHANGELOG](https://github.com/sesantanajr/J365-IntunePSApp/blob/main/CHANGELOG.md).
 
 ### Download
 
-- `J365-IntunePSApp-2.6.0-win-x64.zip`: extraia e execute `J365.IntunePSApp.exe` / extract and run the portable application.
-- `J365-IntunePSApp-2.6.0-source.zip`: código-fonte / source code.
+- `J365-IntunePSApp-2.6.1-win-x64.zip`: extraia e execute `J365.IntunePSApp.exe` / extract and run the portable application.
+- `J365-IntunePSApp-2.6.1-source.zip`: código-fonte / source code.
 - `SHA256SUMS.txt`: verificações SHA-256 / SHA-256 checksums.
+
+Já tem o J365 IntunePSApp? Em **Configurações > Geral > Verificar agora** ele baixa e instala esta versão. / Already using it? **Settings > General > Check now** downloads and installs this version.
 
 Baseado no PSAppDeployToolkit. Criado por Sérgio Sant'Ana Junior — Jornada 365.

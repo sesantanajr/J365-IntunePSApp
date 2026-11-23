@@ -907,7 +907,7 @@
   "Settings_CheckNow": "Verificar agora",
   "Settings_UpdateAvailable": "A versão {0} está disponível.",
   "Settings_UpdateTo": "Atualizar para a {0} agora",
-  "Settings_UpToDate": "Você tem a versão mais recente (verificado em {0}).",
+  "Settings_UpToDate": "Você tem a versão mais recente, {0} (verificado em {1}).",
   "Settings_Installation": "Instalação",
   "Settings_InstallPortable": "Executando como aplicativo portátil: nada é instalado. Se quiser, instale para o seu usuário e ganhe o atalho no Menu Iniciar (não precisa de administrador).",
   "Settings_InstallRunning": "Instalado para o seu usuário em {0}.",
@@ -1468,5 +1468,9 @@
   "Batch_CopyReport": "Copiar relatório",
   "Batch_ReportCopied": "Relatório do lote copiado: cole numa planilha ou num chamado.",
   "Batch_ReportHeader": "Aplicativo\tVersão\tEstado\tPacote\tDetalhes",
-  "Ed_SilentNoBlock": "No modo silencioso os aplicativos não são bloqueados durante a instalação: o PSAppDeployToolkit mostraria um aviso a quem tentasse abri-los."
+  "Ed_SilentNoBlock": "No modo silencioso os aplicativos não são bloqueados durante a instalação: o PSAppDeployToolkit mostraria um aviso a quem tentasse abri-los.",
+  "Settings_UpdateCheckFailed": "Não foi possível verificar novas versões agora: {0}. Tente de novo ou baixe a versão mais recente no GitHub.",
+  "Settings_OpenReleases": "Abrir as versões no GitHub",
+  "Log_UpdateFromPage": "Versão mais recente lida na página de versões do GitHub: {0} (a API não respondeu: {1}).",
+  "Log_UpdateCheckFailed": "A verificação de novas versões ficou sem resposta: {0}"
 }

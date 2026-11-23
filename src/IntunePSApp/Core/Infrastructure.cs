@@ -243,6 +243,44 @@ namespace J365.IntunePSApp.Core
             return c;
         }
 
+        /// <summary>
+        /// GET with a per-request timeout: the text, or why there is none ("HTTP 403", "timeout", the failure). With
+        /// <paramref name="noCache"/> a proxy of the network must ask the server again instead of answering from its cache.
+        /// </summary>
+        public static async Task<(string Body, string Error)> GetStringAsync(string url, int timeoutSeconds, CancellationToken ct, bool noCache = false)
+        {
+            try
+            {
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+                using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                if (noCache) request.Headers.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue { NoCache = true };
+                using var resp = await Client.SendAsync(request, cts.Token);
+                if (!resp.IsSuccessStatusCode) return (null, $"HTTP {(int)resp.StatusCode}");
+                return (await resp.Content.ReadAsStringAsync(cts.Token), null);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return (null, "timeout"); }
+            catch (Exception ex) { return (null, ex.GetBaseException().Message); }
+        }
+
+        /// <summary>
+        /// The address a page ends at once its redirections are followed (only the headers are read), or null.
+        /// https://github.com/owner/repo/releases/latest ends at …/releases/tag/v2.6.0.
+        /// </summary>
+        public static async Task<string> FinalUrlAsync(string url, int timeoutSeconds, CancellationToken ct)
+        {
+            try
+            {
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+                using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                request.Headers.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue { NoCache = true };
+                using var resp = await Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+                return resp.IsSuccessStatusCode ? resp.RequestMessage?.RequestUri?.AbsoluteUri : null;
+            }
+            catch { return null; }
+        }
+
         /// <summary>GET with a per-request timeout; returns null when the request fails.</summary>
         public static async Task<string> TryGetStringAsync(string url, int timeoutSeconds, CancellationToken ct)
         {
