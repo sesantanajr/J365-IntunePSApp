@@ -339,6 +339,12 @@ namespace J365.IntunePSApp.Views
                     BatchState.Skipped => T("Batch_NoSilentArgs"),
                     _ => ""
                 }, state is BatchState.Publishing ? 62 : state is BatchState.Building ? 35 : 0);
+                // A sample that got past its build has a package, as a real one would: the summary counts it as generated.
+                if (state is BatchState.Published or BatchState.Done or BatchState.Warning or BatchState.Publishing)
+                {
+                    var app = _items[k].App;
+                    _items[k].Result = new BuildResult { PackageFolder = System.IO.Path.Combine(ConfigStore.Current.OutputFolder ?? "", Names.Safe($"{app?.Name}_{app?.Version}")) };
+                }
             }
             ChkPublish.IsChecked = true;
             UpdateButtons();
