@@ -708,6 +708,9 @@ namespace J365.IntunePSApp.Views
             // A silent package shows no dialog: deferring, the countdown, the messages and the restart prompt do not apply.
             DeferRow.IsEnabled = CountdownRow.IsEnabled = MessagesCard.IsEnabled = RestartCard.IsEnabled = !silent;
             DeferRow.ToolTip = CountdownRow.ToolTip = MessagesCard.ToolTip = RestartCard.ToolTip = silent ? T("Ed_SilentDisabled") : null;
+            // Blocking shows a dialog to whoever starts a blocked application (PSAppDeployToolkit does it in every mode).
+            ChkBlock.IsEnabled = !silent;
+            ChkBlock.ToolTip = silent ? T("Ed_SilentNoBlock") : null;
         }
 
         public static string NotifyLabel(string value) => value switch
@@ -1629,15 +1632,9 @@ namespace J365.IntunePSApp.Views
         }
 
         /// <summary>A publication that went through, or that Intune refused, says how Intune answers this connection.</summary>
-        private static void NoteIntuneAnswer(PublishResult r)
-        {
-            if (r == null) return;
-            if (r.IsPublished) IntuneConnection.NoteIntune(refused: false);
-            else if (IsRefused(r)) IntuneConnection.NoteIntune(refused: true);
-        }
+        private static void NoteIntuneAnswer(PublishResult r) => PublishTexts.NoteAnswer(r);
 
-        private static bool IsRefused(PublishResult r)
-            => r != null && !r.IsPublished && r.Status != "cancelled" && IntuneDiagnosis.IsRefusal(r.Error);
+        private static bool IsRefused(PublishResult r) => PublishTexts.IsRefused(r);
 
         /// <summary>A toast says the outcome; the card below the package keeps the whole text.</summary>
         private static string Brief(string text) => text.Length > 220 ? text.Substring(0, 217).TrimEnd() + "…" : text;
@@ -1728,18 +1725,7 @@ namespace J365.IntunePSApp.Views
         }
 
         /// <summary>The steps of the script (written in English) in the language of the interface.</summary>
-        private static string PublishStepText(string step)
-        {
-            if (step.StartsWith("Signing in", StringComparison.Ordinal)) return T("Publish_StepSignIn");
-            if (step.StartsWith("Looking for an app", StringComparison.Ordinal)) return T("Publish_StepLooking");
-            if (step.StartsWith("Updating the settings", StringComparison.Ordinal)) return T("Publish_StepUpdating");
-            if (step.StartsWith("Preparing the new version", StringComparison.Ordinal)) return T("Publish_StepPreparing");
-            if (step.StartsWith("Creating the app", StringComparison.Ordinal)) return T("Publish_StepCreating");
-            if (step.StartsWith("Uploading", StringComparison.Ordinal)) return T("Publish_StepUploading", Regex.Match(step, @"[\d.,]+ MB").Value);
-            if (step.StartsWith("Waiting for Intune", StringComparison.Ordinal)) return T("Publish_StepCommitting");
-            if (step.StartsWith("Assigning", StringComparison.Ordinal)) return T("Publish_StepAssigning");
-            return step;
-        }
+        private static string PublishStepText(string step) => PublishTexts.StepText(step);
 
         /// <summary>A reopened package shows the outcome of its last publication, when one was recorded.</summary>
         private void ShowLastPublishResult(string intuneFolder)
@@ -1759,19 +1745,7 @@ namespace J365.IntunePSApp.Views
             RefreshPublishStatus();
         }
 
-        private static string PublishSummary(PublishResult r)
-        {
-            if (r.IsPublished)
-            {
-                string text = r.Action == "updated" ? T("Ed_PublishUpdated", r.DisplayName, r.TenantId) : T("Ed_PublishCreated", r.DisplayName, r.TenantId);
-                if (!string.IsNullOrWhiteSpace(r.Assignment)) text += " " + T("Ed_PublishAssigned", r.Assignment);
-                return text;
-            }
-            if (r.Status == "cancelled") return T("Ed_PublishCancelled");
-            // Intune refused: said in the language of the interface (the answer of the script is in English).
-            if (IsRefused(r) && IntuneDiagnosis.ParseScriptError(r.Error) is { } p) return T("Ed_PublishRefused", p.Status);
-            return T("Ed_PublishFailed", r.Error);
-        }
+        private static string PublishSummary(PublishResult r) => PublishTexts.Summary(r);
 
         private void RefreshPublishStatus()
         {

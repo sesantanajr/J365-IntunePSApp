@@ -85,6 +85,7 @@ jobs:
             if (Test-Path "$folder/error.txt") { throw (Get-Content "$folder/error.txt" -Raw) }
             if (-not (Test-Path "$folder/workspace-checks.txt")) { throw 'Workspace regression checks did not complete.' }
             if (-not (Test-Path "$folder/03-editor-2.png")) { throw 'The editor capture is missing.' }
+            if (-not (Test-Path "$folder/02-batch.png")) { throw 'The batch window capture is missing.' }
             if ((Get-Content "$folder/editor-state.txt" -Raw).Trim() -ne 'unsaved=False') { throw 'Navigating changed the project.' }
           }
 

@@ -289,8 +289,9 @@ namespace J365.IntunePSApp.Core
                 L.Add("    {");
                 L.Add("        $saiwParams.Add('CloseProcesses', $adtSession.AppProcessesToClose)");
                 if (s.CloseAppsCountdown > 0 && !silent) L.Add($"        $saiwParams.Add('CloseProcessesCountdown', {Math.Min(s.CloseAppsCountdown, 3000)})");
-                // Blocking execution writes to HKLM, so it is only available when the package runs elevated.
-                if (s.BlockExecution && !userContext) L.Add("        $saiwParams.Add('BlockExecution', $true)");
+                // Blocking execution writes to HKLM, so it is only available when the package runs elevated. A silent package
+                // does not block: PSAppDeployToolkit shows a dialog to whoever starts a blocked application, in any mode.
+                if (s.BlockExecution && !userContext && !silent) L.Add("        $saiwParams.Add('BlockExecution', $true)");
                 L.Add("    }");
                 L.Add("    Show-ADTInstallationWelcome @saiwParams");
                 L.Add("");

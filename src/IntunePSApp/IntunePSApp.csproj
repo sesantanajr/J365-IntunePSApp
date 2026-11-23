@@ -47,6 +47,8 @@
     <!-- Scripts copied to every generated package. -->
     <EmbeddedResource Include="Resources\Publish-ToIntune.ps1" LogicalName="Publish-ToIntune.ps1" />
     <EmbeddedResource Include="Resources\Sandbox-Test.ps1" LogicalName="Sandbox-Test.ps1" />
+    <!-- Fingerprints of the generic icons of setup programs (never used as the icon of an application). -->
+    <EmbeddedResource Include="Resources\GenericSetupIcons.txt" LogicalName="GenericSetupIcons.txt" />
     <!-- Curated knowledge shipped inside the executable (the online database carries a newer copy). -->
     <EmbeddedResource Include="..\..\catalog\curated.json" LogicalName="curated.json" />
   </ItemGroup>

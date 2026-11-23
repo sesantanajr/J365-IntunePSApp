@@ -93,11 +93,11 @@ O teste pode ser executado localmente ou no **Windows Sandbox**, quando disponí
 
 ## Novidades da 2.6
 
-- **Pacotes em lote:** marque vários aplicativos no catálogo e gere todos de uma vez com as mesmas configurações (nome da empresa, proprietário, modo de exibição, notificações e adiamento). Cada instalador é baixado do link oficial, conferido pelo SHA256 e empacotado como no editor. Um `.exe` sem parâmetros silenciosos conhecidos, ou um nome que também corresponde a outros aplicativos, é pulado com o motivo, nunca adivinhado. Também por linha de comando: `--batch id1,id2 --mode Silent`.
-- **Instalação silenciosa de verdade:** no modo **Silencioso** o pacote não mostra janelas e, por padrão, a atribuição criada na publicação oculta as notificações do Intune (`hideAll`) e não reinicia o computador. A escolha de notificações também pode ser feita por pacote e como padrão da empresa.
+- **Deploy em lote:** marque vários aplicativos no catálogo e gere todos de uma vez com as mesmas configurações (nome da empresa, proprietário, modo de exibição, notificações e adiamento). Cada instalador é baixado do link oficial, conferido pelo SHA256 e empacotado como no editor; opcionalmente, cada pacote é publicado no Intune com a mesma atribuição. Um `.exe` sem parâmetros silenciosos conhecidos, ou um nome que também corresponde a outros aplicativos, é pulado com o motivo, nunca adivinhado, e pode ser aberto no editor. Também por linha de comando: `--batch id1,id2 --mode Silent --publish`.
+- **Instalação silenciosa de verdade:** no modo **Silencioso** o pacote não mostra janelas nem bloqueia aplicativos e, por padrão, a atribuição criada na publicação oculta as notificações do Intune (`hideAll`) e não reinicia o computador. A escolha de notificações também pode ser feita por pacote e como padrão da empresa.
 - **Menos campos repetidos:** a opção de desinstalar versões anteriores fica só na etapa Desinstalação; o nome e a versão da detecção acompanham as etapas Desinstalação e Aplicativo até serem alterados.
-- **Ícones corretos:** o ícone genérico de instaladores (computador com CD, usado por Inno Setup e WiX Burn quando o fabricante não define um) não vai mais para o Portal da Empresa; entra o ícone do programa instalado ou o bloco com as iniciais.
-- **Correções do banco de dados:** instaladores Inno Setup por usuário recebem `/CURRENTUSER`, como no winget (432 aplicativos), e a detecção do .NET Desktop Runtime 10 volta a reconhecer o nome que ele registra.
+- **Ícones corretos:** ícones genéricos de instaladores (Inno Setup, WiX Burn e os ícones de fábrica do NSIS) não vão mais para o Portal da Empresa; entra o ícone do programa instalado ou o bloco com as iniciais.
+- **Parâmetros corretos:** switches que a análise encontra no próprio instalador (NSIS, InstallShield, Advanced Installer, Squirrel) não são mais descartados quando o banco de dados não traz switches; instaladores Inno Setup por usuário recebem `/CURRENTUSER`, como no winget (432 aplicativos); e a detecção do .NET Desktop Runtime 10 volta a reconhecer o nome que ele registra.
 
 ## Evolução com qualidade
 

@@ -78,6 +78,25 @@ namespace J365.IntunePSApp
                     win.Close();
                 }
 
+                async Task ShotBatch(System.Collections.Generic.List<CatalogApp> apps)
+                {
+                    var win = new Views.BatchWindow(apps) { Width = 880, Height = 900 };
+                    win.WindowStartupLocation = WindowStartupLocation.Manual;
+                    win.Left = -32000; win.Top = 0;
+                    win.ShowActivated = false;
+                    win.ShowInTaskbar = false;
+                    win.Show();
+                    win.ShowSampleStates();
+                    await Task.Delay(700);
+                    win.UpdateLayout();
+                    var root = (FrameworkElement)VisualTreeHelper.GetChild(win, 0);
+                    var rtb = new RenderTargetBitmap((int)root.ActualWidth, (int)root.ActualHeight, 96, 96, PixelFormats.Pbgra32);
+                    rtb.Render(root);
+                    var enc = new PngBitmapEncoder();
+                    enc.Frames.Add(BitmapFrame.Create(rtb));
+                    using (var fs = File.Create(Path.Combine(dir, "02-batch.png"))) enc.Save(fs);
+                    win.Close();
+                }
                 if (App.HasArg("--snapshot-setup"))
                 {
                     var setup = w.ShowSetupAsync(refresh: false);
@@ -96,6 +115,18 @@ namespace J365.IntunePSApp
                 w.Catalog.FocusSearch(App.Arg("--snapshot-search") ?? "7-Zip");
                 await Task.Delay(900);
                 await Shot("02-catalog");
+
+                // The batch window with sample applications in every state (nothing is downloaded, built or published):
+                // its layout and bindings are rendered by the interface checks of every build.
+                var sampleApps = new[] { ("7zip.7zip", "7-Zip", "26.00", "wix"), ("Notepad++.Notepad++", "Notepad++", "8.8.5", "nullsoft"),
+                    ("VideoLAN.VLC", "VLC media player", "3.0.21", "wix"), ("Git.Git", "Git", "2.56.1", "inno"), ("Mozilla.Firefox", "Mozilla Firefox", "145.0", "nullsoft"),
+                    ("Contoso.Tool", "Contoso Tool", "1.4.0", "exe") }
+                    .Select(a => CatalogService.Instance.ById(a.Item1) ?? new CatalogApp
+                    {
+                        Id = a.Item1, Name = a.Item2, Publisher = a.Item2, Version = a.Item3,
+                        Installers = { new CatalogInstaller { Type = a.Item4, Arch = "x64", Scope = "machine" } }
+                    }).ToList();
+                await ShotBatch(sampleApps);
 
                 w.Navigate("editor");
                 string inst = App.Arg("--snapshot-installer");

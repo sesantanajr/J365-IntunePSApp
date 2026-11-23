@@ -93,11 +93,11 @@ Test locally or in **Windows Sandbox**, where available, with results and logs. 
 
 ## New in 2.6
 
-- **Batch packaging:** tick several applications in the catalog and generate them all at once with the same settings (company name, owner, display mode, notifications and deferral). Each installer is downloaded from its official link, checked against its SHA256 and packaged as in the editor. An `.exe` without known silent switches, or a name that also matches other applications, is skipped with the reason, never guessed. Also from the command line: `--batch id1,id2 --mode Silent`.
-- **Truly silent installations:** in **Silent** mode the package shows no dialog and, by default, the assignment created by the publication hides Intune's toast notifications (`hideAll`) and does not restart the device. Notifications can also be chosen per package and as a company default.
+- **Batch deploy:** tick several applications in the catalog and generate them all at once with the same settings (company name, owner, display mode, notifications and deferral). Each installer is downloaded from its official link, checked against its SHA256 and packaged as in the editor; optionally each package is published to Intune with the same assignment. An `.exe` without known silent switches, or a name that also matches other applications, is skipped with the reason, never guessed, and can be opened in the editor. Also from the command line: `--batch id1,id2 --mode Silent --publish`.
+- **Truly silent installations:** in **Silent** mode the package shows no dialog and blocks no application and, by default, the assignment created by the publication hides Intune's toast notifications (`hideAll`) and does not restart the device. Notifications can also be chosen per package and as a company default.
 - **Fewer repeated fields:** the switch that uninstalls earlier versions lives on the Uninstall step only; the detection name and version follow the Uninstall and Application steps until changed.
-- **Right icons:** the generic setup icon (a computer with a CD, used by Inno Setup and WiX Burn when the vendor sets none) no longer reaches the Company Portal; the icon of the installed program or the initials tile is used instead.
-- **Database fixes:** per-user Inno Setup installers get `/CURRENTUSER`, as winget does (432 applications), and the .NET Desktop Runtime 10 detection matches the name it registers again.
+- **Right icons:** generic installer icons (Inno Setup, WiX Burn and the NSIS stock icons) no longer reach the Company Portal; the icon of the installed program or the initials tile is used instead.
+- **Right switches:** switches the analysis finds in the installer itself (NSIS, InstallShield, Advanced Installer, Squirrel) are no longer discarded when the database has none; per-user Inno Setup installers get `/CURRENTUSER`, as winget does (432 applications); and the .NET Desktop Runtime 10 detection matches the name it registers again.
 
 ## Quality as the product evolves
 

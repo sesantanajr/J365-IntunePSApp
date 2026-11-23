@@ -205,10 +205,23 @@ namespace J365.IntunePSApp
             if (Arg("--notifications") is string notifications) o.IntuneNotifications = notifications;
             if (Arg("--out") is string output) o.OutputRoot = output;
             o.NativePackager = HasArg("--native");
+            // --publish: each package goes to Intune with the connection of this computer (the certificate connects without
+            // anyone; a user connection needs a session opened in the application before).
+            o.Publish = HasArg("--publish");
+            if (Arg("--if-exists") is string ifExists) o.IfExists = ifExists;
+            if (Arg("--assign") is string assign) o.AssignIntent = assign;
+            if (Arg("--assign-to") is string assignTo) o.AssignTo = assignTo;
+            if (Arg("--group") is string group) o.GroupId = group;
+            if (o.Publish)
+            {
+                if (IntuneConnection.NeedsSetup) { Console.WriteLine(T("Batch_PublishNotConnected")); return 2; }
+                if (IntuneSubscription.Blocks) { Console.WriteLine(T("Ed_PublishCalloutNoPlan", IntuneConnection.Account, IntuneConnection.TenantLabel)); return 2; }
+                if (IntunePublisher.Check(o.PublishOptions(IntuneConnection.UsesCertificate)) is string problem) { Console.WriteLine(T(problem)); return 2; }
+            }
             var items = BatchPackager.Plan(apps, ConfigStore.Current);
             BatchPackager.RunAsync(items, o, CancellationToken.None).GetAwaiter().GetResult();
             Console.WriteLine();
-            foreach (var i in items) Console.WriteLine($"  {i.StateLabel,-14} {i.Title}  {i.Message}  {i.PackageFolder}".TrimEnd());
+            foreach (var i in items) Console.WriteLine($"  {i.StateLabel,-18} {i.Title}  {i.Message}  {i.PackageFolder}".TrimEnd());
             return items.All(i => i.Succeeded) ? 0 : 1;
         }
 

@@ -330,6 +330,10 @@ namespace J365.IntunePSApp.Core
             return (b + " " + (i.Custom ?? "")).Trim();
         }
 
+        /// <summary>The switches of a command line, a quoted part kept with its switch (/v"/qn REBOOT=ReallySuppress").</summary>
+        internal static List<string> Switches(string text)
+            => Regex.Matches(text ?? "", "(?:[^\\s\"]+|\"[^\"]*\")+").Select(m => m.Value).ToList();
+
         /// <summary>
         /// What is left of an msiexec command line once the interface, restart and log switches are removed:
         /// the properties and anything else the manifest asks for.
@@ -394,7 +398,18 @@ namespace J365.IntunePSApp.Core
             string arpName = null, arpVersion = null;
             if (inst != null)
             {
-                info.InstallArgs = SilentArgsFor(inst);
+                // A plain "exe" row that states no silent switch says nothing about the installer, but the file itself may:
+                // the analysis recognises NSIS, Inno Setup, InstallShield, Advanced Installer and Squirrel stubs. Their
+                // switches are kept, with the custom switches of the row (a third of the rows without switches, sampled in 2.6).
+                string args = SilentArgsFor(inst);
+                string detected = info.Type == "EXE" ? InstallerAnalyzer.DefaultInstallSwitches(info.Technology) : "";
+                if (string.Equals(inst.Type, "exe", StringComparison.OrdinalIgnoreCase) && string.IsNullOrWhiteSpace(inst.Silent) && detected.Length > 0)
+                {
+                    string custom = (inst.Custom ?? "").Trim();
+                    var missing = Switches(detected).Where(t => !Switches(custom).Contains(t, StringComparer.OrdinalIgnoreCase));
+                    args = (string.Join(" ", missing) + " " + custom).Trim();
+                }
+                info.InstallArgs = args;
                 var ua = UninstallArgsFor(inst);
                 if (!string.IsNullOrEmpty(ua)) info.UninstallExeArgs = ua;
                 if (info.Type == "EXE") info.Technology = TechnologyFor(inst) ?? (info.Technology == InstallerAnalyzer.TechUnknown ? InstallerAnalyzer.TechVendor : info.Technology);

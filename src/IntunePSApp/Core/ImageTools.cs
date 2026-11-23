@@ -331,18 +331,57 @@ namespace J365.IntunePSApp.Core
         internal static readonly byte[] GenericSetupThumbnail = Convert.FromBase64String(
             "////////////////////////4eHht7e5sK+0sK+0r6+0sK+0sK+0s7O1kZGRwcHB////////////////////////ysrJhofBO2u/NXvDSoXDPYXDN2u/hojDoqKiiYmJ////////////////////////ysrJgIPBWNL3ff3/ff3/Wtr9IKLXgYLAoqKiiYmJ////////////////+Pj4+Pj4xcXEgYTBeO/3fP3/Wtn9H6faAZHJgYLAoqKiiYmJ////////////3t7ex8fHvr6+V1dWf4K+du73Wtr9H6jaA5jOInDqgIDCoqKiiYmJ+Pj4+Pj429vbc3NzYmJiSklKTk5NhojBKXa+KGO3D1WqGEq2Izq/hobCoqKiiYmJsLCwxMTEwsLCiYmJSUhJlpWYSkpK0NDTzs3Tzs3Tzs3Tzs7Tzs7T0tLVmpqah4eH9fX1hISEfn5+RkZGmZibm5qdLi4uTU1NSkpLSkpKTExMT09PT09PT09PXV1dU1NT+Pj4yMjI+fn5gICAmpmcm5qdYWJjnbaou72Lqal4l5eVqqqqurq6u7u72NjYSEhI+Pj4ysrK////goKClJOVjo+RP5SsXaim6O2LzMxqrKypiomKQUFBZGRksLCwb29v+Pj4ysrK/v7+gYGBjIuMio6NUtfMQam/jL6XvL2LsK+x39/fXl5ehoaGkJCQ9PT0+Pj4wMDA6OjoeHh4i4uLkpKSrMe6fLyxVn19eXl3y8vMqqqqdnZ28/Pz////////+Pj4v7+/6OjoeHh4i4qLlpaWvr2+sK+wfX17gIWDtbW1qampf39/8/Pz////////+Pj4v7+/6OjoeHh4iIiIbm5usrKyvLy7zdOaOLSyu+3X3OHfm5ub+fn5////////+Pj4ubm54ODgdHR0cHBwzc3Nq6urwsK14uWcUcvKMLW0h8qryMrJ////////////+Pj4kZGRj4+Pj4+P8/Pz////1tbWpqaan598Wol+XISQysvK////////////////");
 
-        /// <summary>Average difference (0-255 per channel) under which an icon is the generic setup icon (it measured up to 9).</summary>
+        /// <summary>
+        /// Average difference (0-255 per channel) under which an icon is a generic setup icon. The same icon measured up to 9
+        /// across renderings; the icons of applications sampled in 2.6 measured at least 41 from every reference.
+        /// </summary>
         internal const double GenericSetupMaxDistance = 24;
 
-        /// <summary>True when the image (a PNG written by this class) is the generic icon of setup programs.</summary>
-        public static bool IsGenericSetupIcon(string png)
+        /// <summary>
+        /// Every reference: the icon above, then the stock icons of NSIS and the default icon of Inno Setup
+        /// (Resources/GenericSetupIcons.txt, one "name, tab, base64 thumbnail" per line).
+        /// </summary>
+        internal static readonly Lazy<List<(string Name, byte[] Thumbnail)>> GenericSetupIcons = new(() =>
+        {
+            var list = new List<(string, byte[])> { ("setup-classic", GenericSetupThumbnail) };
+            try
+            {
+                using var stream = typeof(ImageTools).Assembly.GetManifestResourceStream("GenericSetupIcons.txt");
+                if (stream == null) return list;
+                using var reader = new StreamReader(stream);
+                string line;
+                while ((line = reader.ReadLine()) != null)
+                {
+                    if (line.StartsWith("#", StringComparison.Ordinal)) continue;
+                    var parts = line.Split('\t');
+                    if (parts.Length != 2) continue;
+                    try
+                    {
+                        var bytes = Convert.FromBase64String(parts[1].Trim());
+                        if (bytes.Length == GenericSetupThumbnail.Length) list.Add((parts[0].Trim(), bytes));
+                    }
+                    catch (FormatException) { }
+                }
+            }
+            catch { }
+            return list;
+        });
+
+        /// <summary>True when the image (a PNG written by this class) is a generic icon of setup programs.</summary>
+        public static bool IsGenericSetupIcon(string png) => GenericSetupIconName(png) != null;
+
+        /// <summary>The reference a generic setup icon matched ("nsis-modern-install"), or null for any other image.</summary>
+        public static string GenericSetupIconName(string png)
         {
             try
             {
                 using var img = LoadImage(png);
-                return ThumbnailDistance(Thumbnail(img), GenericSetupThumbnail) < GenericSetupMaxDistance;
+                var thumbnail = Thumbnail(img);
+                foreach (var (name, reference) in GenericSetupIcons.Value)
+                    if (ThumbnailDistance(thumbnail, reference) < GenericSetupMaxDistance) return name;
+                return null;
             }
-            catch { return false; }
+            catch { return null; }
         }
 
         /// <summary>16x16 RGB thumbnail on white (the image is drawn at 256 px first, as Windows extracts icons).</summary>

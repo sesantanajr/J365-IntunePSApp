@@ -93,6 +93,47 @@
         </StackPanel>
         <TextBlock x:Name="DefaultsHint" Style="{StaticResource Hint}" TextWrapping="Wrap"/>
         <CheckBox x:Name="ChkSaveDefaults" Style="{StaticResource Switch}" Content="{l:T Batch_SaveDefaults}" Margin="0,10,0,0"/>
+
+        <!-- Deploy: each package published to Intune as soon as it is generated -->
+        <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Margin="0,14,0,0" Padding="0,12,0,0">
+          <StackPanel>
+            <CheckBox x:Name="ChkPublish" Style="{StaticResource Switch}" Content="{l:T Batch_Publish}" FontWeight="SemiBold" Checked="Publish_Changed" Unchecked="Publish_Changed"/>
+            <TextBlock x:Name="PublishConnection" Style="{StaticResource Hint}" TextWrapping="Wrap"/>
+            <StackPanel x:Name="PublishPanel" Visibility="Collapsed">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*"/>
+                  <ColumnDefinition Width="18"/>
+                  <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                  <TextBlock Text="{l:T Batch_IfExists}" Style="{StaticResource Label}"/>
+                  <ComboBox x:Name="CmbIfExists">
+                    <ComboBoxItem Tag="Update" Content="{l:T Batch_IfExistsUpdate}"/>
+                    <ComboBoxItem Tag="CreateNew" Content="{l:T Batch_IfExistsNew}"/>
+                    <ComboBoxItem Tag="Fail" Content="{l:T Batch_IfExistsSkip}"/>
+                  </ComboBox>
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                  <TextBlock Text="{l:T Publish_Assign}" Style="{StaticResource Label}"/>
+                  <ComboBox x:Name="CmbAssign" SelectionChanged="Assign_Changed">
+                    <ComboBoxItem Tag="none|AllUsers" Content="{l:T Publish_AssignNone}"/>
+                    <ComboBoxItem Tag="available|Group" Content="{l:T Publish_AssignAvailableGroup}"/>
+                    <ComboBoxItem Tag="available|AllUsers" Content="{l:T Publish_AssignAvailableAll}"/>
+                    <ComboBoxItem Tag="required|Group" Content="{l:T Publish_AssignRequiredGroup}"/>
+                    <ComboBoxItem Tag="required|AllUsers" Content="{l:T Publish_AssignRequiredUsers}"/>
+                    <ComboBoxItem Tag="required|AllDevices" Content="{l:T Publish_AssignRequiredDevices}"/>
+                  </ComboBox>
+                </StackPanel>
+              </Grid>
+              <StackPanel x:Name="GroupPanel" Visibility="Collapsed">
+                <TextBlock Text="{l:T Publish_Group}" Style="{StaticResource Label}"/>
+                <TextBox x:Name="TxtGroup" FontFamily="{StaticResource MonoFont}"/>
+              </StackPanel>
+              <TextBlock Text="{l:T Batch_PublishHint}" Style="{StaticResource Hint}" TextWrapping="Wrap"/>
+            </StackPanel>
+          </StackPanel>
+        </Border>
       </StackPanel>
     </Border>
 
@@ -119,6 +160,8 @@
                 <ProgressBar Value="{Binding Percent, Mode=OneWay}" Maximum="100" Height="4" Margin="0,6,0,0"
                              Visibility="{Binding IsRunning, Converter={StaticResource Visible}}"/>
                 <TextBlock Text="{Binding Message}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                <Button Style="{StaticResource GhostButton}" Content="{l:T Batch_OpenInEditor}" Tag="{Binding}" Click="OpenInEditor_Click" HorizontalAlignment="Left"
+                        Margin="-8,2,0,0" Visibility="{Binding CanOpenInEditor, Converter={StaticResource Visible}}"/>
               </StackPanel>
               <TextBlock Grid.Column="2" Text="{Binding StateLabel}" Style="{StaticResource StateText}" VerticalAlignment="Top" Margin="0,2,4,0"/>
             </Grid>
@@ -130,6 +173,7 @@
     <!-- Actions -->
     <DockPanel Grid.Row="3" Margin="0,16,0,0" LastChildFill="False">
       <Button x:Name="BtnOpenFolder" DockPanel.Dock="Left" Style="{StaticResource GhostButton}" Content="{l:T Batch_OpenPackages}" Click="OpenPackages_Click" Visibility="Collapsed" Margin="-8,0,0,0"/>
+      <Button x:Name="BtnReport" DockPanel.Dock="Left" Style="{StaticResource GhostButton}" Content="{l:T Batch_CopyReport}" Click="CopyReport_Click" Visibility="Collapsed"/>
       <TextBlock x:Name="Summary" DockPanel.Dock="Left" Style="{StaticResource MutedText}" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="420" Margin="8,0,0,0"/>
       <Button x:Name="BtnStart" DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Click="Start_Click" MinWidth="150" Margin="8,0,0,0" IsDefault="True"/>
       <Button x:Name="BtnClose" DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Click="Close_Click" MinWidth="96"/>

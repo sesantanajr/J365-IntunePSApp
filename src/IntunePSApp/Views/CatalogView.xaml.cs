@@ -87,7 +87,7 @@ namespace J365.IntunePSApp.Views
             foreach (var a in _queue.ToList()) a.IsQueued = false;
         }
 
-        private void Batch_Click(object sender, RoutedEventArgs e)
+        private async void Batch_Click(object sender, RoutedEventArgs e)
         {
             if (_queue.Count == 0) return;
             var main = MainWindow.Current;
@@ -99,6 +99,12 @@ namespace J365.IntunePSApp.Views
             foreach (var a in w.Built) a.IsQueued = false;
             main.Packages?.Refresh();
             main.Home?.Refresh();
+            // A skipped application finished by hand: the editor opens with the installer the batch downloaded.
+            if (w.OpenInEditor is BatchItem open)
+            {
+                main.Navigate("editor");
+                await main.Editor.LoadFromCatalogAsync(open.InstallerFile, open.App, open.Installer);
+            }
         }
 
         public void Refresh()

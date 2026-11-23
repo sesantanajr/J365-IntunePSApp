@@ -29,6 +29,10 @@ namespace J365.IntunePSApp.Core
             [TechUnknown] = ("", ""),
         };
 
+        /// <summary>Silent install switches of an installer technology ("" when unknown).</summary>
+        public static string DefaultInstallSwitches(string technology)
+            => technology != null && TechDefaults.TryGetValue(technology, out var d) ? d.Install : "";
+
         /// <summary>Signatures found in the installer stub, checked in order (first match wins).</summary>
         private static readonly (string Tech, string[] Markers)[] TechSignatures =
         {

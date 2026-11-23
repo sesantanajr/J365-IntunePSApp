@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using J365.IntunePSApp.Core;
@@ -13,7 +14,9 @@ namespace J365.IntunePSApp.Views
 {
     /// <summary>
     /// Packages several applications of the database with the same settings (company, display mode, Intune toasts,
-    /// deferral). Each one is downloaded, checked, analysed and built as the editor does; the list shows how far each got.
+    /// deferral) and, when asked, publishes each package to Intune with the same assignment: a deploy of several
+    /// applications at once. Each one is downloaded, checked, analysed and built as the editor does; the list shows how
+    /// far each got, and a skipped one opens in the editor.
     /// </summary>
     public partial class BatchWindow : DialogWindow, ILocalized
     {
@@ -21,8 +24,11 @@ namespace J365.IntunePSApp.Views
         private CancellationTokenSource _cts;
         private bool _running, _closeWhenDone;
 
-        /// <summary>Applications whose package was generated (the catalog takes them out of its selection).</summary>
+        /// <summary>Applications whose package was generated (and published, when asked): the catalog takes them out of its selection.</summary>
         public IReadOnlyList<CatalogApp> Built => _items.Where(i => i.Succeeded).Select(i => i.App).ToList();
+
+        /// <summary>A skipped or failed application the user chose to finish in the editor (the window closed for it).</summary>
+        public BatchItem OpenInEditor { get; private set; }
 
         public BatchWindow(IEnumerable<CatalogApp> apps)
         {
@@ -38,21 +44,31 @@ namespace J365.IntunePSApp.Views
             SelectTag(CmbNotify, o.IntuneNotifications);
             ChkDefer.IsChecked = o.AllowDefer;
             TxtDeferTimes.Text = o.DeferTimes.ToString();
+            SelectTag(CmbIfExists, o.IfExists);
+            SelectTag(CmbAssign, "none|AllUsers");
             ChkDefer.Checked += (s, e) => UpdateHints();
             ChkDefer.Unchecked += (s, e) => UpdateHints();
             Closing += OnClosing;
             Loc.Instance.LanguageChanged += OnLanguageChanged;
-            Closed += (s, e) => Loc.Instance.LanguageChanged -= OnLanguageChanged;
+            IntuneConnection.Changed += OnConnectionChanged;
+            Closed += (s, e) =>
+            {
+                Loc.Instance.LanguageChanged -= OnLanguageChanged;
+                IntuneConnection.Changed -= OnConnectionChanged;
+            };
             OnLanguageChanged();
         }
 
+        private void OnConnectionChanged() => Dispatcher.BeginInvoke(new Action(UpdatePublish));
+
         public void OnLanguageChanged()
         {
-            SettingsView.RefreshSelection(CmbMode, CmbNotify);
+            SettingsView.RefreshSelection(CmbMode, CmbNotify, CmbIfExists, CmbAssign);
             Title = T("Batch_Title");
             Heading.Text = T("Batch_Heading", _items.Count);
             foreach (var i in _items) i.Changed();
             UpdateHints();
+            UpdatePublish();
             UpdateButtons();
         }
 
@@ -66,24 +82,22 @@ namespace J365.IntunePSApp.Views
 
         private void Mode_Changed(object sender, SelectionChangedEventArgs e) { if (IsLoaded) UpdateHints(); }
 
+        private void Publish_Changed(object sender, RoutedEventArgs e) { UpdatePublish(); UpdateButtons(); }
+
+        private void Assign_Changed(object sender, SelectionChangedEventArgs e) { if (IsLoaded) UpdatePublish(); }
+
         private void UpdateHints()
         {
             if (ModeHint == null) return;
             string mode = TagOf(CmbMode);
             bool silent = mode == "Silent";
             var probe = new PackageSettings { DeployMode = mode, IntuneNotifications = TagOf(CmbNotify) };
-            string notify = PackageBuilder.IntuneNotifications(probe) switch
-            {
-                "hideAll" => T("Opt_NotifyHideAll"),
-                "showReboot" => T("Opt_NotifyReboot"),
-                _ => T("Opt_NotifyShowAll")
-            };
             ModeHint.Text = (silent ? T("Ed_ModeHintSilent") : mode switch
             {
                 "Interactive" => T("Ed_ModeHintInteractive"),
                 "WhenNeeded" => T("Ed_ModeHintWhenNeeded"),
                 _ => T("Ed_ModeHintAuto")
-            }) + " " + T("Ed_NotifyEffective", notify);
+            }) + " " + T("Ed_NotifyEffective", EditorView.NotifyLabel(PackageBuilder.IntuneNotifications(probe)));
             // A silent package has nothing to defer: the switch would only suggest a dialog.
             DeferPanel.IsEnabled = !silent && !_running;
             TxtDeferTimes.IsEnabled = ChkDefer.IsChecked == true;
@@ -92,29 +106,86 @@ namespace J365.IntunePSApp.Views
             ListTitle.Text = T("Batch_ListTitle", _items.Count);
         }
 
+        /// <summary>The publication: the connection it will use, or what to do first; the group only for a group assignment.</summary>
+        private void UpdatePublish()
+        {
+            if (PublishPanel == null) return;
+            bool publish = ChkPublish.IsChecked == true;
+            PublishPanel.Visibility = publish ? Visibility.Visible : Visibility.Collapsed;
+            GroupPanel.Visibility = publish && TagOf(CmbAssign).EndsWith("|Group", StringComparison.Ordinal) ? Visibility.Visible : Visibility.Collapsed;
+            bool ready = IntuneConnection.IsSignedIn && !IntuneConnection.NeedsSetup;
+            PublishConnection.Text = !ready ? T("Batch_PublishNotConnected")
+                : IntuneSubscription.Blocks ? T("Ed_PublishCalloutNoPlan", IntuneConnection.Account, IntuneConnection.TenantLabel)
+                : T("Batch_PublishConnection", IntuneConnection.Account, IntuneConnection.TenantLabel);
+            PublishConnection.SetResourceReference(TextBlock.ForegroundProperty, ready && !IntuneSubscription.Blocks ? "Muted" : "Warning");
+        }
+
         private void UpdateButtons()
         {
             int pending = _items.Count(i => !i.Succeeded && i.Installer != null);
-            BtnStart.Content = _running ? T("Batch_Running") : _items.Any(i => i.IsFinished) && pending > 0 ? T("Batch_Retry", pending) : T("Batch_Start", pending);
+            bool publish = ChkPublish.IsChecked == true;
+            BtnStart.Content = _running ? T("Batch_Running")
+                : _items.Any(i => i.IsFinished) && pending > 0 ? T("Batch_Retry", pending)
+                : publish ? T("Batch_StartPublish", pending) : T("Batch_Start", pending);
             BtnStart.IsEnabled = !_running && pending > 0;
             BtnClose.Content = _running ? T("Common_Cancel") : T("Common_Close");
             SettingsCard.IsEnabled = !_running;
-            BtnOpenFolder.Visibility = _items.Any(i => i.Succeeded) && !_running ? Visibility.Visible : Visibility.Collapsed;
-            int ok = _items.Count(i => i.State == BatchState.Done), warn = _items.Count(i => i.State == BatchState.Warning);
-            int skipped = _items.Count(i => i.State == BatchState.Skipped), failed = _items.Count(i => i.State is BatchState.Failed or BatchState.Cancelled);
-            Summary.Text = !_items.Any(i => i.IsFinished) ? T("Batch_SummaryReady", _items.Count(i => i.Installer != null))
-                : T("Batch_Summary", ok + warn, _items.Count, warn, skipped, failed);
+            BtnOpenFolder.Visibility = _items.Any(i => i.Built) && !_running ? Visibility.Visible : Visibility.Collapsed;
+            BtnReport.Visibility = _items.Any(i => i.IsFinished) && !_running ? Visibility.Visible : Visibility.Collapsed;
+            if (!_items.Any(i => i.IsFinished))
+            {
+                Summary.Text = T("Batch_SummaryReady", _items.Count(i => i.Installer != null));
+                return;
+            }
+            int built = _items.Count(i => i.Built), warn = _items.Count(i => i.State == BatchState.Warning);
+            int skipped = _items.Count(i => i.State == BatchState.Skipped), failed = _items.Count(i => i.State is BatchState.Failed or BatchState.Cancelled or BatchState.PublishFailed);
+            int published = _items.Count(i => i.State == BatchState.Published);
+            Summary.Text = T("Batch_Summary", built, _items.Count, warn, skipped, failed) + (published > 0 ? "  ·  " + T("Batch_SummaryPublished", published) : "");
         }
 
-        private BatchOptions Options() => new BatchOptions
+        private BatchOptions Options()
         {
-            CompanyName = TxtCompany.Text.Trim(),
-            Owner = TxtOwner.Text.Trim(),
-            DeployMode = TagOf(CmbMode),
-            IntuneNotifications = TagOf(CmbNotify),
-            AllowDefer = ChkDefer.IsChecked == true,
-            DeferTimes = int.TryParse(TxtDeferTimes.Text.Trim(), out int n) ? n : 3,
-        };
+            var assign = TagOf(CmbAssign).Split('|');
+            return new BatchOptions
+            {
+                CompanyName = TxtCompany.Text.Trim(),
+                Owner = TxtOwner.Text.Trim(),
+                DeployMode = TagOf(CmbMode),
+                IntuneNotifications = TagOf(CmbNotify),
+                AllowDefer = ChkDefer.IsChecked == true,
+                DeferTimes = int.TryParse(TxtDeferTimes.Text.Trim(), out int n) ? n : 3,
+                Publish = ChkPublish.IsChecked == true,
+                IfExists = TagOf(CmbIfExists),
+                AssignIntent = assign[0],
+                AssignTo = assign.Length > 1 ? assign[1] : "AllUsers",
+                GroupId = TxtGroup.Text.Trim(),
+            };
+        }
+
+        /// <summary>
+        /// Before a batch that publishes: the connection (set up, signed in), a tenant that has Intune, a PowerShell that
+        /// may run the script, a valid group, and an explicit yes with the tenant and the assignment spelled out.
+        /// </summary>
+        private async Task<bool> ReadyToPublishAsync(BatchOptions o)
+        {
+            if (IntuneConnection.NeedsSetup && !ConnectWindow.Run(this)) return false;
+            if (!IntuneConnection.IsSignedIn)
+            {
+                try { await IntuneConnectUi.SignInAsync(null, CancellationToken.None); }
+                catch (OperationCanceledException) { return false; }
+                catch (Exception ex) { Ui.Error(T("Auth_Failed", ex.Message)); return false; }
+            }
+            UpdatePublish();
+            if (!IntuneConnection.IsSignedIn || IntuneConnection.NeedsSetup) { Ui.Warn(T("Batch_PublishNotConnected")); return false; }
+            if (IntuneSubscription.Blocks) { Ui.Warn(T("Ed_PublishCalloutNoPlan", IntuneConnection.Account, IntuneConnection.TenantLabel)); return false; }
+            if (await Task.Run(() => PowerShellPolicy.IsRestricted)) { Ui.Warn(T("Err_PowerShellRestricted")); return false; }
+            if (IntunePublisher.Check(o.PublishOptions(IntuneConnection.UsesCertificate)) is string problem) { Ui.Warn(T(problem)); return false; }
+            int count = _items.Count(i => !i.Succeeded && i.Installer != null);
+            string assignment = (CmbAssign.SelectedItem as ComboBoxItem)?.Content as string ?? "";
+            string ifExists = (CmbIfExists.SelectedItem as ComboBoxItem)?.Content as string ?? "";
+            return Ui.Confirm(T("Batch_ConfirmPublish", count, IntuneConnection.TenantLabel, assignment, ifExists), T("Batch_PublishNow"), T("Common_Cancel"),
+                danger: o.AssignIntent == "required");
+        }
 
         private async void Start_Click(object sender, RoutedEventArgs e)
         {
@@ -122,6 +193,7 @@ namespace J365.IntunePSApp.Views
             var o = Options();
             if (o.AllowDefer && (o.DeferTimes < 1 || o.DeferTimes > 99)) { Ui.Warn(T("Val_DeferTimes")); return; }
             if (MainWindow.Current?.Editor?.IsBuilding == true) { Ui.Warn(T("Ed_BusyBuilding")); return; }
+            if (o.Publish && !await ReadyToPublishAsync(o)) return;
             if (ChkSaveDefaults.IsChecked == true)
             {
                 var cfg = ConfigStore.Current;
@@ -158,9 +230,10 @@ namespace J365.IntunePSApp.Views
                 main?.SetTaskbarProgress(null);
                 UpdateButtons();
                 UpdateHints();
+                UpdatePublish();
             }
-            int built = _items.Count(i => i.Succeeded);
-            main?.Toast(T("Batch_Toast", built, _items.Count), built == _items.Count ? "ok" : "warn");
+            int done = _items.Count(i => i.Succeeded);
+            main?.Toast(T("Batch_Toast", done, _items.Count), done == _items.Count ? "ok" : "warn");
             if (_closeWhenDone) Close();
         }
 
@@ -169,7 +242,7 @@ namespace J365.IntunePSApp.Views
         {
             if (e.PropertyName != nameof(BatchItem.Percent)) return;
             if (sender is BatchItem current && current.IsRunning) Items.ScrollIntoView(current);
-            double done = _items.Sum(i => i.IsFinished ? 100 : i.State == BatchState.Building ? 50 + i.Percent / 2 : i.IsRunning ? i.Percent / 2 : 0);
+            double done = _items.Sum(i => i.IsFinished ? 100 : i.State is BatchState.Building or BatchState.Publishing ? 50 + i.Percent / 2 : i.IsRunning ? i.Percent / 2 : 0);
             MainWindow.Current?.SetTaskbarProgress(_items.Count == 0 ? 0 : done / (_items.Count * 100d));
             UpdateButtons();
         }
@@ -183,7 +256,8 @@ namespace J365.IntunePSApp.Views
         private void OnClosing(object sender, System.ComponentModel.CancelEventArgs e)
         {
             if (!_running) return;
-            // The package being built is removed by the builder when cancelled; the window closes once it stopped.
+            // The package being built is removed by the builder when cancelled, a publication stops at a safe point; the
+            // window closes once everything stopped.
             e.Cancel = true;
             if (Ui.Confirm(T("Batch_ConfirmCancel"), T("Batch_CancelBatch"), T("Common_No"), danger: true))
             {
@@ -192,10 +266,45 @@ namespace J365.IntunePSApp.Views
             }
         }
 
+        private void OpenInEditor_Click(object sender, RoutedEventArgs e)
+        {
+            if (_running || (sender as FrameworkElement)?.Tag is not BatchItem item || !item.CanOpenInEditor) return;
+            OpenInEditor = item;
+            Close();
+        }
+
+        private void CopyReport_Click(object sender, RoutedEventArgs e)
+        {
+            Ui.CopyText(BatchPackager.Report(_items));
+            MainWindow.Current?.Toast(T("Batch_ReportCopied"), "ok");
+        }
+
         private void OpenPackages_Click(object sender, RoutedEventArgs e)
         {
-            var folder = _items.Where(i => i.Succeeded && !string.IsNullOrEmpty(i.PackageFolder)).Select(i => System.IO.Path.GetDirectoryName(i.PackageFolder)).FirstOrDefault();
+            var folder = _items.Where(i => i.Built && !string.IsNullOrEmpty(i.PackageFolder)).Select(i => System.IO.Path.GetDirectoryName(i.PackageFolder)).FirstOrDefault();
             Ui.OpenPath(folder ?? ConfigStore.Current.OutputFolder);
+        }
+
+        /// <summary>Capture mode: sample items in every state, nothing is downloaded or built.</summary>
+        internal void ShowSampleStates()
+        {
+            var states = new[] { BatchState.Published, BatchState.Done, BatchState.Warning, BatchState.Publishing, BatchState.Building, BatchState.Skipped, BatchState.Waiting };
+            for (int k = 0; k < _items.Count; k++)
+            {
+                var state = states[k % states.Length];
+                _items[k].Update(state, state switch
+                {
+                    BatchState.Published => T("Ed_PublishCreated", _items[k].App?.Name, "contoso.onmicrosoft.com"),
+                    BatchState.Done => T("Batch_Built", (_items[k].App?.Name ?? "app") + ".intunewin"),
+                    BatchState.Warning => T("Batch_GuessedName", (_items[k].App?.Name ?? "App") + "*"),
+                    BatchState.Publishing => T("Publish_StepUploading", "48.2 MB"),
+                    BatchState.Building => T("Log_CreatingIntuneWin"),
+                    BatchState.Skipped => T("Batch_NoSilentArgs"),
+                    _ => ""
+                }, state is BatchState.Publishing ? 62 : state is BatchState.Building ? 35 : 0);
+            }
+            ChkPublish.IsChecked = true;
+            UpdateButtons();
         }
     }
 }

@@ -69,6 +69,8 @@ public class Release26Tests
         Assert.DoesNotContain("PersistPrompt", script);
         Assert.DoesNotContain("CustomText", script);
         Assert.DoesNotContain("CloseProcessesCountdown", script);
+        // PSAppDeployToolkit shows a dialog to whoever starts a blocked application, in every mode: a silent package does not block.
+        Assert.DoesNotContain("BlockExecution", script);
         Assert.DoesNotContain("Show-ADTInstallationPrompt", script);
         Assert.DoesNotContain("Show-ADTInstallationRestartPrompt", script);
         // The applications in use are still closed (silently, by the toolkit) before the installation.
@@ -181,6 +183,80 @@ public class Release26Tests
         Assert.False(ImageTools.IsGenericSetupIcon(Path.Combine(tmp.Path, "missing.png")));
     }
 
+    [Fact]
+    public void A_plain_exe_row_without_switches_keeps_the_switches_found_in_the_file()
+    {
+        // NSIS recognised in the file, the row of the database only has custom switches.
+        var app = new CatalogApp { Id = "Contoso.Electron", Name = "Contoso Electron", Version = "1.0" };
+        var row = new CatalogInstaller { Type = "exe", Arch = "x64", Scope = "machine", Custom = "--no-desktop" };
+        var nsis = new InstallerInfo { Type = "EXE", Technology = "NSIS", InstallArgs = "/S", UninstallExeArgs = "/S", AppName = "Contoso Electron" };
+        CatalogService.Apply(nsis, app, row, "download");
+        Assert.Equal("/S --no-desktop", nsis.InstallArgs);
+        Assert.Equal("/S", nsis.UninstallExeArgs);
+        Assert.Equal("NSIS", nsis.Technology);
+
+        // Squirrel without anything in the row.
+        var squirrel = new InstallerInfo { Type = "EXE", Technology = "Squirrel", InstallArgs = "--silent", AppName = "Contoso Electron" };
+        CatalogService.Apply(squirrel, app, new CatalogInstaller { Type = "exe", Arch = "x64" }, "download");
+        Assert.Equal("--silent", squirrel.InstallArgs);
+
+        // A switch the row already gives is not doubled (quoted parts stay whole).
+        var installShield = new InstallerInfo { Type = "EXE", Technology = "InstallShield", InstallArgs = "/s /v\"/qn REBOOT=ReallySuppress\"", AppName = "Contoso" };
+        CatalogService.Apply(installShield, app, new CatalogInstaller { Type = "exe", Custom = "/s" }, "download");
+        Assert.Equal("/v\"/qn REBOOT=ReallySuppress\" /s", installShield.InstallArgs);
+
+        // Nothing recognised: the row decides, as before.
+        var unknown = new InstallerInfo { Type = "EXE", Technology = InstallerAnalyzer.TechUnknown, InstallArgs = "", AppName = "Contoso" };
+        CatalogService.Apply(unknown, app, row, "download");
+        Assert.Equal("--no-desktop", unknown.InstallArgs);
+
+        // A row that states its switches wins over the file.
+        var stated = new InstallerInfo { Type = "EXE", Technology = "NSIS", InstallArgs = "/S", AppName = "Contoso" };
+        CatalogService.Apply(stated, app, new CatalogInstaller { Type = "exe", Silent = "--silent-install" }, "download");
+        Assert.Equal("--silent-install", stated.InstallArgs);
+    }
+
+    [Fact]
+    public void Every_reference_of_a_generic_setup_icon_is_recognised()
+    {
+        var references = ImageTools.GenericSetupIcons.Value;
+        Assert.True(references.Count >= 20, "references: " + references.Count);
+        Assert.Contains(references, r => r.Name == "nsis-modern-install");
+        Assert.Contains(references, r => r.Name == "inno-SetupClassicIcon");
+        using var tmp = new TempFolder();
+        foreach (var (name, thumbnail) in references)
+        {
+            string png = Path.Combine(tmp.Path, name + ".png");
+            using (var small = new System.Drawing.Bitmap(16, 16))
+            {
+                for (int y = 0, i = 0; y < 16; y++)
+                    for (int x = 0; x < 16; x++, i += 3) small.SetPixel(x, y, System.Drawing.Color.FromArgb(thumbnail[i], thumbnail[i + 1], thumbnail[i + 2]));
+                using var big = new System.Drawing.Bitmap(256, 256);
+                using (var g = System.Drawing.Graphics.FromImage(big))
+                {
+                    g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.NearestNeighbor;
+                    g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.Half;
+                    g.DrawImage(small, 0, 0, 256, 256);
+                }
+                big.Save(png, System.Drawing.Imaging.ImageFormat.Png);
+            }
+            Assert.NotNull(ImageTools.GenericSetupIconName(png));
+        }
+    }
+
+    // ------------------------------------------------------------------ publication texts
+
+    [Fact]
+    public void Steps_of_the_publication_are_said_in_the_language_of_the_interface()
+    {
+        Assert.Equal(T("Publish_StepSignIn"), PublishTexts.StepText("Signing in to Microsoft Graph..."));
+        Assert.Equal(T("Publish_StepLooking"), PublishTexts.StepText("Looking for the app to update..."));
+        Assert.Equal(Loc.T("Publish_StepUploading", "12.5 MB"), PublishTexts.StepText("Uploading 12.5 MB..."));
+        Assert.Equal("Something new", PublishTexts.StepText("Something new"));
+        Assert.Equal(T("Ed_PublishCancelled"), PublishTexts.Summary(new PublishResult { Status = "cancelled" }));
+        Assert.Equal("", PublishTexts.Summary(null));
+    }
+
     // ------------------------------------------------------------------ batch packaging
 
     private static CatalogApp App(string id, params CatalogInstaller[] installers) => new CatalogApp
@@ -273,6 +349,68 @@ public class Release26Tests
         }
         finally { CatalogApp.QueuedChanged -= Handler; }
         Assert.Equal(2, raised);
+    }
+
+    [Fact]
+    public void The_publication_of_a_batch_uses_the_connection_and_valid_choices()
+    {
+        var o = new BatchOptions { Publish = true, IfExists = "whatever", AssignIntent = "required", AssignTo = "Group", GroupId = " 11111111-2222-3333-4444-555555555555 " };
+        var po = o.PublishOptions(certificate: false);
+        Assert.Equal("Update", po.IfExists);                       // unknown: update the app with the same name (created when none)
+        Assert.Equal("required", po.AssignIntent);
+        Assert.Equal("Group", po.AssignTo);
+        Assert.Equal("11111111-2222-3333-4444-555555555555", po.GroupId);
+        Assert.Equal("", po.CertificateThumbprint);
+        Assert.Equal(IntuneConnection.TenantId, po.TenantId);
+        Assert.Equal("none", new BatchOptions { AssignIntent = "everyone" }.PublishOptions(false).AssignIntent);
+        Assert.Equal("CreateNew", new BatchOptions { IfExists = "CreateNew" }.PublishOptions(false).IfExists);
+        Assert.False(BatchOptions.FromConfig(new AppConfig()).Publish);
+    }
+
+    [Fact]
+    public void Lines_of_the_publishing_script_move_the_item_of_the_batch()
+    {
+        var item = new BatchItem(App("Contoso.Pub", new CatalogInstaller { Type = "msi", Arch = "x64" }), null);
+        item.Update(BatchState.Publishing, "", 0);
+        BatchPackager.OnPublishLine(item, "> Uploading 48.2 MB...");
+        Assert.Equal(Loc.T("Publish_StepUploading", "48.2 MB"), item.Message);
+        BatchPackager.OnPublishLine(item, "  42 %");
+        Assert.Equal(42, item.Percent);
+        Assert.Equal(Loc.T("Publish_StepUploading", "48.2 MB"), item.Message);
+        BatchPackager.OnPublishLine(item, "OK Uploaded");
+        Assert.Equal(Loc.T("Publish_StepUploading", "48.2 MB"), item.Message);
+        item.Finish(BatchState.Published, "done");
+        BatchPackager.OnPublishLine(item, "> Signing in...");      // after the end, lines change nothing
+        Assert.Equal("done", item.Message);
+        Assert.True(item.Succeeded);
+        Assert.Equal(100, item.Percent);
+    }
+
+    [Fact]
+    public void The_batch_report_has_one_line_per_application_and_no_broken_cells()
+    {
+        var a = new BatchItem(App("Contoso.A", new CatalogInstaller { Type = "msi", Arch = "x64" }), null);
+        var b = new BatchItem(App("Contoso.B", new CatalogInstaller { Type = "exe", Arch = "x64" }), null);
+        a.Finish(BatchState.Done, "ok");
+        b.Finish(BatchState.Skipped, "line one\nline\ttwo");
+        var lines = BatchPackager.Report(new[] { a, b }).Split("\r\n", System.StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(3, lines.Length);
+        Assert.Equal(T("Batch_ReportHeader"), lines[0]);
+        Assert.All(lines, l => Assert.Equal(4, l.Count(c => c == '\t')));
+        Assert.Contains("line one line two", lines[2]);
+    }
+
+    [Fact]
+    public void Only_a_skipped_or_failed_application_with_its_installer_opens_in_the_editor()
+    {
+        using var tmp = new TempFolder();
+        var item = new BatchItem(App("Contoso.Open", new CatalogInstaller { Type = "exe", Arch = "x64" }), null);
+        item.Finish(BatchState.Skipped, "no switches");
+        Assert.False(item.CanOpenInEditor);                       // nothing downloaded
+        item.InstallerFile = tmp.File("setup.exe", "x");
+        Assert.True(item.CanOpenInEditor);
+        item.Finish(BatchState.Done, "built");
+        Assert.False(item.CanOpenInEditor);
     }
 
     private static string T(string key) => Loc.T(key);

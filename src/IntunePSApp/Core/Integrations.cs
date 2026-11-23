@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using static J365.IntunePSApp.Localization.Loc;
 
 namespace J365.IntunePSApp.Core
 {
@@ -257,6 +258,53 @@ namespace J365.IntunePSApp.Core
         public string Utc { get; set; }
 
         public bool IsPublished => string.Equals(Status, "published", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>What a publication says, in the language of the interface (the script itself writes English).</summary>
+    public static class PublishTexts
+    {
+        /// <summary>A step announced by the script ("> Signing in to Microsoft Graph...").</summary>
+        public static string StepText(string step)
+        {
+            step ??= "";
+            if (step.StartsWith("Signing in", StringComparison.Ordinal)) return T("Publish_StepSignIn");
+            if (step.StartsWith("Looking for an app", StringComparison.Ordinal) || step.StartsWith("Looking for the app", StringComparison.Ordinal)) return T("Publish_StepLooking");
+            if (step.StartsWith("Updating the settings", StringComparison.Ordinal)) return T("Publish_StepUpdating");
+            if (step.StartsWith("Preparing the new version", StringComparison.Ordinal)) return T("Publish_StepPreparing");
+            if (step.StartsWith("Creating the app", StringComparison.Ordinal)) return T("Publish_StepCreating");
+            if (step.StartsWith("Uploading", StringComparison.Ordinal)) return T("Publish_StepUploading", Regex.Match(step, @"[\d.,]+ MB").Value);
+            if (step.StartsWith("Waiting for Intune", StringComparison.Ordinal)) return T("Publish_StepCommitting");
+            if (step.StartsWith("Assigning", StringComparison.Ordinal)) return T("Publish_StepAssigning");
+            return step;
+        }
+
+        /// <summary>Intune refused the publication (no subscription, no permission): the answer says how Intune treats the connection.</summary>
+        public static bool IsRefused(PublishResult r)
+            => r != null && !r.IsPublished && r.Status != "cancelled" && IntuneDiagnosis.IsRefusal(r.Error);
+
+        /// <summary>A publication that went through, or that Intune refused, says how Intune answers this connection.</summary>
+        public static void NoteAnswer(PublishResult r)
+        {
+            if (r == null) return;
+            if (r.IsPublished) IntuneConnection.NoteIntune(refused: false);
+            else if (IsRefused(r)) IntuneConnection.NoteIntune(refused: true);
+        }
+
+        /// <summary>The outcome of a publication in one sentence.</summary>
+        public static string Summary(PublishResult r)
+        {
+            if (r == null) return "";
+            if (r.IsPublished)
+            {
+                string text = r.Action == "updated" ? T("Ed_PublishUpdated", r.DisplayName, r.TenantId) : T("Ed_PublishCreated", r.DisplayName, r.TenantId);
+                if (!string.IsNullOrWhiteSpace(r.Assignment)) text += " " + T("Ed_PublishAssigned", r.Assignment);
+                return text;
+            }
+            if (r.Status == "cancelled") return T("Ed_PublishCancelled");
+            // Intune refused: said in the language of the interface (the answer of the script is in English).
+            if (IsRefused(r) && IntuneDiagnosis.ParseScriptError(r.Error) is { } p) return T("Ed_PublishRefused", p.Status);
+            return T("Ed_PublishFailed", r.Error);
+        }
     }
 
     /// <summary>
