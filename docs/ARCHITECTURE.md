@@ -42,7 +42,8 @@ Everything a package needs is in `PackageSettings`, saved as `project.json` next
 | `AppUpdater.cs` | Updates the application while it is open: reads the latest GitHub release, downloads the zip, checks it against `SHA256SUMS.txt`, puts the new executable in place of the running one and restarts. |
 | `InstallService.cs` | Optional per-user installation (also over an installed copy that is open), shortcuts, uninstall. |
 | `Integrations.cs` | Windows Sandbox: state of the Windows feature (ready, open, turned off, not in this edition), enabling it with DISM, the `.wsb` configuration and the result of the test. Launcher of the publishing script. |
-| `Native.cs`, `ImageTools.cs` | P/Invoke (MSI, WinVerifyTrust, icons) and image work: the icon of an installer, of the program an `.msi` installs (read from its cabinet with `expand.exe`) or of the copy installed on the computer. |
+| `Native.cs`, `ImageTools.cs` | P/Invoke (MSI, WinVerifyTrust, icons) and image work: the icon of an installer, of the program an `.msi` installs (read from its cabinet with `expand.exe`) or of the copy installed on the computer. The generic icon of setup programs is recognised by a 16x16 thumbnail and never used. |
+| `BatchPackager.cs` | Batch packaging of several applications of the database with shared settings. |
 
 ## How a package is generated
 
@@ -70,7 +71,15 @@ Two guards around it (2.4): at the start of *Pre-Install*, a version newer than 
 
 ## Display modes
 
-PSAppDeployToolkit 4.1 resolves `-DeployMode Auto` at the start of the session: silent with nobody signed in, during OOBE/ESP, and also when `AppProcessesToClose` lists applications and none of them is running. That last rule made the branded dialogs disappear for most deployments. The *Automatic* mode of the application writes `NoProcessDetection = $true` in `$adtSession` (passed to `Open-ADTSession`), so the dialogs are shown whenever a user is signed in; *Discreet* keeps the toolkit's rule; *Interactive* and *Silent* go on the command line.
+PSAppDeployToolkit 4.1 resolves `-DeployMode Auto` at the start of the session: silent with nobody signed in, during OOBE/ESP, and also when `AppProcessesToClose` lists applications and none of them is running. That last rule made the branded dialogs disappear for most deployments. The *Automatic* mode of the application writes `NoProcessDetection = $true` in `$adtSession` (passed to `Open-ADTSession`), so the dialogs are shown whenever a user is signed in; *Discreet* keeps the toolkit's rule; *Interactive* and *Silent* go on the command line. A silent package also leaves out what it never shows (deferral, countdown, messages, restart prompt) and, by default, hides the toasts of Intune.
+
+## Batch packaging (2.6)
+
+`Core/BatchPackager.cs` packages several applications of the database with the same `BatchOptions` (company, owner, display mode, Intune notifications, deferral). `Plan` picks the installer the editor would choose (`CatalogService.PickInstaller`); `RunAsync` handles one application after the other: download and SHA256 check, `InstallerAnalyzer.Analyze`, `CatalogService.Apply`, company defaults (`AppConfig.NewPackage`) plus the batch options, `PackageBuilder.Validate`, then `PackageBuilder.BuildAsync` (the same build gate as the editor). `Blockers` skips what needs a person: validation errors, an `.exe` without silent switches, and a program name that also matches other applications of the database. `Views/BatchWindow` shows each `BatchItem`; the catalog keeps the ticked applications (`CatalogApp.IsQueued`). `--batch` runs the same from the command line.
+
+## Intune notifications and restarts
+
+`PackageBuilder.IntuneNotifications` gives the toasts of the assignment (`showAll`, `showReboot`, `hideAll`): the choice of the package, or `hideAll` for a silent package and `showAll` otherwise. `PackageBuilder.RestartBehavior` is `suppress` for a silent package and `basedOnReturnCode` otherwise. Both go to `intune-app.json` (`notifications`, `restartBehavior`), which `Publish-ToIntune.ps1` reads when it creates the app and its assignment.
 
 ## Updating the application
 

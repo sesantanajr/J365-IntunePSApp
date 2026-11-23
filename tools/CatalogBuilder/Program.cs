@@ -135,6 +135,18 @@ public static class Program
         var known = new HashSet<string>(apps.Select(a => a.Id), StringComparer.OrdinalIgnoreCase);
         foreach (var id in curated.Keys.Where(k => !known.Contains(k)).OrderBy(k => k))
             Console.WriteLine($"  [warning] curated.json: \"{id}\" is not a package of the source any more.");
+        // A curated name that no longer matches what the installers register in "Installed apps" breaks the detection and
+        // the removal of earlier versions of every package of that application (.NET 10 dropped the " - " of its name).
+        foreach (var app in apps.Where(a => !string.IsNullOrWhiteSpace(a.Extra?.NamePattern)))
+        {
+            var names = (app.Installers ?? new List<CatalogInstaller>()).SelectMany(i => i.Arp ?? new List<ArpEntry>())
+                .Select(e => e.DisplayName).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            if (names.Count == 0) continue;
+            var rx = new System.Text.RegularExpressions.Regex("^" + System.Text.RegularExpressions.Regex.Escape(app.Extra.NamePattern.Replace("`[", "[").Replace("`]", "]"))
+                .Replace(@"\*", ".*").Replace(@"\?", ".") + "$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (!names.Any(rx.IsMatch))
+                Console.WriteLine($"  [warning] curated.json: \"{app.Id}\" namePattern \"{app.Extra.NamePattern}\" matches none of the registered names ({string.Join("; ", names.Take(3))}).");
+        }
 
         var catalog = new CatalogFile
         {

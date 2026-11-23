@@ -88,6 +88,8 @@ namespace J365.IntunePSApp.Core
         public string UninstallCommandLine { get; set; }
         public string InstallExperience { get; set; }
         public string RestartBehavior { get; set; } = "basedOnReturnCode";
+        /// <summary>Toasts of the assignment: showAll, showReboot or hideAll (silent packages hide them).</summary>
+        public string Notifications { get; set; } = "showAll";
         public int MaximumInstallationTimeInMinutes { get; set; } = 60;
         public bool AllowAvailableUninstall { get; set; } = true;
         public string Architecture { get; set; }
@@ -107,6 +109,25 @@ namespace J365.IntunePSApp.Core
             var m = Regex.Match(code ?? "", @"^W(\d+)_(\w+)$");
             return m.Success ? $"Windows {m.Groups[1].Value} {m.Groups[2].Value}" : code ?? "";
         }
+
+        /// <summary>Values Intune accepts for the toasts of an assignment (win32LobAppAssignmentSettings.notifications).</summary>
+        public static readonly string[] NotificationOptions = { "showAll", "showReboot", "hideAll" };
+
+        /// <summary>
+        /// Toasts Intune shows on the device for the assignment: the choice of the package, or (automatic) none for a
+        /// silent package, so the user is not told about the installation at all, and every toast otherwise.
+        /// </summary>
+        public static string IntuneNotifications(PackageSettings s)
+        {
+            string chosen = NotificationOptions.FirstOrDefault(o => string.Equals(o, s?.IntuneNotifications, StringComparison.OrdinalIgnoreCase));
+            return chosen ?? (s?.DeployMode == "Silent" ? "hideAll" : "showAll");
+        }
+
+        /// <summary>
+        /// Device restart behavior of the app in Intune. A silent package never makes Intune restart the device or ask
+        /// for it ("suppress"): a restart the installer needs happens at the next restart of the user.
+        /// </summary>
+        public static string RestartBehavior(PackageSettings s) => s?.DeployMode == "Silent" ? "suppress" : "basedOnReturnCode";
 
         /// <summary>Architecture value understood by the Intune requirement rule (x86 installers also run on x64).</summary>
         public static string IntuneArchitecture(PackageSettings s) => s.AppArch switch { "x64" => "x64", "arm64" => "arm64", _ => "x64x86" };
@@ -174,6 +195,9 @@ namespace J365.IntunePSApp.Core
             if (!ScriptGenerator.IsCodeList(s.ExtraSuccessCodes)) v.Errors.Add(T("Val_SuccessCodes"));
             // PSAppDeployToolkit only shows the welcome dialog when there is something to decide: a deferral or an open application.
             if (!string.IsNullOrWhiteSpace(s.WelcomeMessage) && !s.AllowDefer && s.ProcessesToClose.Count == 0) v.Warnings.Add(T("Val_Warn_WelcomeNotShown"));
+            // Silent: the messages and the restart prompt typed for this package are never shown.
+            if (ScriptGenerator.IsSilent(s) && (s.RestartPrompt || new[] { s.WelcomeMessage, s.ProgressMessage, s.CompletionMessage }.Any(m => !string.IsNullOrWhiteSpace(m))))
+                v.Warnings.Add(T("Val_Warn_SilentHidesDialogs"));
 
             var extraNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var f in s.ExtraFiles)
@@ -487,6 +511,8 @@ namespace J365.IntunePSApp.Core
                 InstallCommandLine = r.InstallCommand,
                 UninstallCommandLine = r.UninstallCommand,
                 InstallExperience = s.InstallBehavior == "User" ? "user" : "system",
+                RestartBehavior = RestartBehavior(s),
+                Notifications = IntuneNotifications(s),
                 Architecture = IntuneArchitecture(s),
                 MinimumSupportedWindowsRelease = string.IsNullOrEmpty(s.MinimumOs) ? MinimumOsOptions[0] : s.MinimumOs,
             };

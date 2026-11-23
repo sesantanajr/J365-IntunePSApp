@@ -156,7 +156,7 @@
             </Border>
             <CheckBox x:Name="ChkIncludeFolder" Style="{StaticResource Switch}" Content="{l:T Ed_IncludeFolder}" Margin="0,4,0,0"/>
 
-            <!-- Versions already installed on the device (same setting as the switch of step 5) -->
+            <!-- Versions already installed on the device: what the package does (set on step 5, not repeated here) -->
             <Border Style="{StaticResource Section}" Margin="0,18,0,0">
               <StackPanel>
                 <StackPanel Orientation="Horizontal">
@@ -165,9 +165,8 @@
                   </Border>
                   <TextBlock Text="{l:T Ed_ExistingTitle}" Style="{StaticResource H2}" VerticalAlignment="Center"/>
                 </StackPanel>
-                <CheckBox x:Name="ChkRemovePrevQuick" Style="{StaticResource Switch}" Content="{l:T Ed_RemovePrev}" FontWeight="SemiBold" Margin="0,14,0,0"
-                          Checked="RemovePrev_Changed" Unchecked="RemovePrev_Changed"/>
-                <TextBlock x:Name="ExistingFlow" Style="{StaticResource Hint}" Margin="52,6,0,0"/>
+                <TextBlock x:Name="ExistingFlow" Style="{StaticResource Hint}" Margin="0,10,0,0"/>
+                <Button Style="{StaticResource GhostButton}" Content="{l:T Ed_ExistingChange}" Click="GoUninstall_Click" HorizontalAlignment="Left" Margin="-8,4,0,0"/>
               </StackPanel>
             </Border>
           </StackPanel>
@@ -263,17 +262,25 @@
                   <ComboBoxItem Tag="Interactive" Content="{l:T Opt_ModeInteractiveLong}"/>
                 </ComboBox>
                 <TextBlock x:Name="ModeHint" Style="{StaticResource Hint}"/>
+                <TextBlock Text="{l:T Ed_IntuneNotify}" Style="{StaticResource Label}"/>
+                <ComboBox x:Name="CmbNotify" SelectionChanged="Mode_Changed">
+                  <ComboBoxItem Tag="" Content="{l:T Opt_NotifyAuto}"/>
+                  <ComboBoxItem Tag="showAll" Content="{l:T Opt_NotifyShowAll}"/>
+                  <ComboBoxItem Tag="showReboot" Content="{l:T Opt_NotifyReboot}"/>
+                  <ComboBoxItem Tag="hideAll" Content="{l:T Opt_NotifyHideAll}"/>
+                </ComboBox>
+                <TextBlock x:Name="NotifyHint" Style="{StaticResource Hint}"/>
               </StackPanel>
             </Border>
             <Border Style="{StaticResource Section}">
               <StackPanel>
                 <TextBlock Text="{l:T Ed_CloseDefer}" Style="{StaticResource H2}"/>
-                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                <StackPanel x:Name="DeferRow" Orientation="Horizontal" Margin="0,12,0,0">
                   <CheckBox x:Name="ChkDefer" Style="{StaticResource Switch}" Content="{l:T Ed_DeferUpTo}" Margin="0,4,0,0" Checked="Preview_Changed" Unchecked="Preview_Changed"/>
                   <TextBox x:Name="TxtDeferTimes" Width="64" Margin="10,0,8,0" HorizontalContentAlignment="Center" TextChanged="Preview_Changed"/>
                   <TextBlock Text="{l:T Ed_Times}" VerticalAlignment="Center"/>
                 </StackPanel>
-                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                <StackPanel x:Name="CountdownRow" Orientation="Horizontal" Margin="0,12,0,0">
                   <TextBlock Text="{l:T Ed_CloseAfter}" VerticalAlignment="Center"/>
                   <TextBox x:Name="TxtCountdown" Width="76" Margin="10,0,8,0" HorizontalContentAlignment="Center" TextChanged="Preview_Changed"/>
                   <TextBlock Text="{l:T Ed_Seconds}" VerticalAlignment="Center"/>
@@ -283,7 +290,7 @@
                 <CheckBox x:Name="ChkDisk" Style="{StaticResource Switch}" Content="{l:T Opt_CheckDisk}"/>
               </StackPanel>
             </Border>
-            <Border Style="{StaticResource Section}">
+            <Border x:Name="MessagesCard" Style="{StaticResource Section}">
               <StackPanel>
                 <TextBlock Text="{l:T Ed_Messages}" Style="{StaticResource H2}"/>
                 <TextBlock Text="{l:T Ed_MsgWelcome}" Style="{StaticResource Label}"/>
@@ -295,7 +302,7 @@
                 <TextBlock Style="{StaticResource Hint}" Text="{l:T Ed_MessagesHint}"/>
               </StackPanel>
             </Border>
-            <Border Style="{StaticResource Section}">
+            <Border x:Name="RestartCard" Style="{StaticResource Section}">
               <StackPanel>
                 <TextBlock Text="{l:T Ed_Restart}" Style="{StaticResource H2}"/>
                 <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
@@ -466,6 +473,7 @@
                 <StackPanel x:Name="PnlDetName">
                   <TextBlock Text="{l:T Ed_DetName}" Style="{StaticResource Label}"/>
                   <TextBox x:Name="TxtDetName"/>
+                  <TextBlock Style="{StaticResource Hint}" Text="{l:T Ed_DetNameFollows}"/>
                 </StackPanel>
                 <StackPanel x:Name="PnlDetCode">
                   <TextBlock Text="{l:T Ed_DetCode}" Style="{StaticResource Label}"/>
@@ -480,6 +488,7 @@
                   <CheckBox x:Name="ChkDetVersion" Style="{StaticResource Switch}" Content="{l:T Ed_DetVersion}" Margin="0,4,0,0" Checked="Det_Changed" Unchecked="Det_Changed"/>
                   <TextBox x:Name="TxtDetVersion" Width="180" Margin="10,0,0,0"/>
                 </StackPanel>
+                <TextBlock Style="{StaticResource Hint}" Text="{l:T Ed_DetVersionFollows}"/>
                 <CheckBox x:Name="ChkDetMark" Style="{StaticResource Switch}" Content="{l:T Ed_DetMark}" Margin="0,16,0,0" Checked="Det_Changed" Unchecked="Det_Changed"/>
                 <TextBlock x:Name="DetMarkHint" Style="{StaticResource Hint}"/>
                 <StackPanel Orientation="Horizontal" Margin="0,18,0,0">

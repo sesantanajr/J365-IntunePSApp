@@ -320,7 +320,13 @@ namespace J365.IntunePSApp.Core
                     _ => ""
                 };
             }
-            if (i.Type == "inno" && i.Scope == "machine" && (b + " " + i.Custom).IndexOf("/ALLUSERS", StringComparison.OrdinalIgnoreCase) < 0) b += " /ALLUSERS";
+            // Inno Setup installers that offer both install modes take the one of the row on the command line, as winget does:
+            // without /CURRENTUSER a per-user row starts in administrative mode, which fails (or asks for elevation) when
+            // the package runs in the user context. Installers with a single mode ignore the switch.
+            string given = b + " " + i.Custom;
+            bool hasMode = given.IndexOf("/ALLUSERS", StringComparison.OrdinalIgnoreCase) >= 0 || given.IndexOf("/CURRENTUSER", StringComparison.OrdinalIgnoreCase) >= 0;
+            if (i.Type == "inno" && !hasMode && i.Scope == "machine") b += " /ALLUSERS";
+            else if (i.Type == "inno" && !hasMode && i.Scope == "user") b += " /CURRENTUSER";
             return (b + " " + (i.Custom ?? "")).Trim();
         }
 

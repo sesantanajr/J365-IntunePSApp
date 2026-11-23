@@ -237,6 +237,9 @@ namespace J365.IntunePSApp.Core
         /// </summary>
         public static bool IsAutoWithDialogs(string mode) => mode is not ("WhenNeeded" or "Interactive" or "Silent");
 
+        /// <summary>The package never shows anything to the user (the toolkit's Silent mode, and Intune's toasts hidden by default).</summary>
+        public static bool IsSilent(PackageSettings s) => s?.DeployMode == "Silent";
+
         private static string Function(string name, List<string> body)
         {
             var L = new List<string> { $"function {name}", "{", "    [CmdletBinding()]", "    param", "    (", "    )", "" };
@@ -265,21 +268,27 @@ namespace J365.IntunePSApp.Core
             bool userContext = s.InstallBehavior == "User";
             Mark(L, "Pre-Install", "\"Pre-$($adtSession.DeploymentType)\"");
             L.AddRange(KeepNewerLines(s));
+            // A silent package shows nothing: no deferral, no message, no countdown (the toolkit closes the applications
+            // in use without a dialog). Writing them anyway would only suggest a dialog that never appears.
+            bool silent = IsSilent(s);
             bool hasProc = s.ProcessesToClose.Count > 0;
-            bool hasMsg = !string.IsNullOrWhiteSpace(s.WelcomeMessage);
-            if (hasProc || s.AllowDefer || hasMsg)
+            bool allowDefer = s.AllowDefer && !silent;
+            bool hasMsg = !silent && !string.IsNullOrWhiteSpace(s.WelcomeMessage);
+            if (hasProc || allowDefer || hasMsg)
             {
-                L.Add("    ## Welcome dialog: closes the applications in use, lets the user defer and checks the free disk space.");
+                L.Add(silent
+                    ? "    ## Silent package: the applications in use are closed without a dialog and the free disk space is checked."
+                    : "    ## Welcome dialog: closes the applications in use, lets the user defer and checks the free disk space.");
                 L.Add("    $saiwParams = @{");
-                L.Add("        PersistPrompt = $true");
+                if (!silent) L.Add("        PersistPrompt = $true");
                 if (s.CheckDiskSpace) L.Add("        CheckDiskSpace = $true");
-                if (s.AllowDefer) { L.Add("        AllowDefer = $true"); L.Add($"        DeferTimes = {Math.Clamp(s.DeferTimes, 1, 99)}"); }
+                if (allowDefer) { L.Add("        AllowDefer = $true"); L.Add($"        DeferTimes = {Math.Clamp(s.DeferTimes, 1, 99)}"); }
                 if (hasMsg) L.Add("        CustomText = $true");
                 L.Add("    }");
                 L.Add("    if ($adtSession.AppProcessesToClose.Count -gt 0)");
                 L.Add("    {");
                 L.Add("        $saiwParams.Add('CloseProcesses', $adtSession.AppProcessesToClose)");
-                if (s.CloseAppsCountdown > 0) L.Add($"        $saiwParams.Add('CloseProcessesCountdown', {Math.Min(s.CloseAppsCountdown, 3000)})");
+                if (s.CloseAppsCountdown > 0 && !silent) L.Add($"        $saiwParams.Add('CloseProcessesCountdown', {Math.Min(s.CloseAppsCountdown, 3000)})");
                 // Blocking execution writes to HKLM, so it is only available when the package runs elevated.
                 if (s.BlockExecution && !userContext) L.Add("        $saiwParams.Add('BlockExecution', $true)");
                 L.Add("    }");
@@ -313,13 +322,18 @@ namespace J365.IntunePSApp.Core
             AddActions(L, s, "PostInstall");
             // Written after the post-install actions: a failed action leaves no mark, so Intune tries again.
             if (s.DetectionRequireMark) L.AddRange(WriteMarkLines(s));
-            if (!string.IsNullOrWhiteSpace(s.CompletionMessage))
+            if (silent && (!string.IsNullOrWhiteSpace(s.CompletionMessage) || s.RestartPrompt))
+            {
+                L.Add("    ## Silent package: no completion message and no restart prompt (a restart the installer needs is left to the user).");
+                L.Add("");
+            }
+            else if (!string.IsNullOrWhiteSpace(s.CompletionMessage))
             {
                 L.Add("    ## Message shown when the installation finishes.");
                 L.Add($"    Show-ADTInstallationPrompt -Message {Lit(s.CompletionMessage)} -ButtonRightText 'OK' -Icon 'Information' -NoWait");
                 L.Add("");
             }
-            if (s.RestartPrompt)
+            if (s.RestartPrompt && !silent)
             {
                 int cd = Math.Clamp(s.RestartCountdown, 60, 86400);
                 L.Add("    ## Asks the user to restart the computer.");
@@ -372,10 +386,12 @@ namespace J365.IntunePSApp.Core
         {
             var L = new List<string>();
             Mark(L, "Pre-Uninstall", "\"Pre-$($adtSession.DeploymentType)\"");
-            L.Add("    ## Asks the user to close the application when it is open (closes automatically after 60 seconds).");
+            L.Add(IsSilent(s)
+                ? "    ## Silent package: the application is closed without a dialog when it is open."
+                : "    ## Asks the user to close the application when it is open (closes automatically after 60 seconds).");
             L.Add("    if ($adtSession.AppProcessesToClose.Count -gt 0)");
             L.Add("    {");
-            L.Add("        Show-ADTInstallationWelcome -CloseProcesses $adtSession.AppProcessesToClose -CloseProcessesCountdown 60");
+            L.Add(CloseProcessesLine(s));
             L.Add("    }");
             L.Add("");
             L.Add("    ## Progress dialog.");
@@ -400,7 +416,7 @@ namespace J365.IntunePSApp.Core
             Mark(L, "Pre-Repair", "\"Pre-$($adtSession.DeploymentType)\"");
             L.Add("    if ($adtSession.AppProcessesToClose.Count -gt 0)");
             L.Add("    {");
-            L.Add("        Show-ADTInstallationWelcome -CloseProcesses $adtSession.AppProcessesToClose -CloseProcessesCountdown 60");
+            L.Add(CloseProcessesLine(s));
             L.Add("    }");
             L.Add("    Show-ADTInstallationProgress");
             L.Add("");
@@ -418,6 +434,11 @@ namespace J365.IntunePSApp.Core
             if (s.DetectionRequireMark) L.AddRange(WriteMarkLines(s));
             return L;
         }
+
+        /// <summary>Closing the applications in use before an uninstallation or a repair (no countdown for a silent package).</summary>
+        private static string CloseProcessesLine(PackageSettings s) => IsSilent(s)
+            ? "        Show-ADTInstallationWelcome -CloseProcesses $adtSession.AppProcessesToClose"
+            : "        Show-ADTInstallationWelcome -CloseProcesses $adtSession.AppProcessesToClose -CloseProcessesCountdown 60";
 
         private static string InstallCommand(PackageSettings s, string installerRel, string action)
         {

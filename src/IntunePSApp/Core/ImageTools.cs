@@ -113,7 +113,8 @@ namespace J365.IntunePSApp.Core
             try
             {
                 var fi = new FileInfo(installerPath);
-                string id = $"{fi.Name.ToLowerInvariant()}|{fi.Length}|{fi.LastWriteTimeUtc.Ticks}|v2";
+                // v3: the generic icon of setup programs is no longer taken as the icon of the application (2.6).
+                string id = $"{fi.Name.ToLowerInvariant()}|{fi.Length}|{fi.LastWriteTimeUtc.Ticks}|v3";
                 string hash = Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(System.Text.Encoding.UTF8.GetBytes(id))).ToLowerInvariant();
                 png = Path.Combine(AppPaths.IconCache, hash + ".png");
                 none = Path.Combine(AppPaths.IconCache, hash + ".none");
@@ -142,7 +143,7 @@ namespace J365.IntunePSApp.Core
         /// <summary>Icon of an installer: the resources of an .exe; for an .msi the product icon, else the icon of the program it installs.</summary>
         public static bool SaveInstallerIcon(string installerPath, string destination)
         {
-            if (!Path.GetExtension(installerPath).Equals(".msi", StringComparison.OrdinalIgnoreCase)) return SaveExeIcon(installerPath, destination);
+            if (!Path.GetExtension(installerPath).Equals(".msi", StringComparison.OrdinalIgnoreCase)) return SaveAppExeIcon(installerPath, destination);
             return SaveMsiTableIcon(installerPath, destination) || SaveMsiProgramIcon(installerPath, destination);
         }
 
@@ -157,7 +158,7 @@ namespace J365.IntunePSApp.Core
             try
             {
                 File.WriteAllBytes(temp, icon.Value.Data);
-                return SaveExeIcon(temp, destination);
+                return SaveAppExeIcon(temp, destination);
             }
             catch { return false; }
             finally { try { File.Delete(temp); } catch { } }
@@ -194,7 +195,7 @@ namespace J365.IntunePSApp.Core
                     }
                     if (cab == null) continue;
                     string exe = ExpandFromCabinet(cab, f.Key, work);
-                    if (exe != null && SaveExeIcon(exe, destination)) return true;
+                    if (exe != null && SaveAppExeIcon(exe, destination)) return true;
                 }
                 return false;
             }
@@ -245,7 +246,8 @@ namespace J365.IntunePSApp.Core
                     var (file, index) = ParseIconLocation(p.DisplayIcon);
                     if (file.Length == 0 || !File.Exists(file)) continue;
                     string ext = Path.GetExtension(file).ToLowerInvariant();
-                    bool ok = ext == ".exe" || ext == ".dll" ? SaveExeIcon(file, destination, index) : SaveIconFromFile(file, destination);
+                    // Inno Setup points DisplayIcon at its uninstaller, which carries the icon of the setup program.
+                    bool ok = ext == ".exe" || ext == ".dll" ? SaveAppExeIcon(file, destination, index) : SaveIconFromFile(file, destination) && !RejectGeneric(destination);
                     if (ok) return true;
                 }
             }
@@ -317,6 +319,88 @@ namespace J365.IntunePSApp.Core
             path.CloseFigure();
             return path;
         }
+
+        // ------------------------------------------------------------------ generic setup icon
+
+        /// <summary>
+        /// The default icon of setup programs, a computer with a CD: Inno Setup (SetupClassicIcon) and the WiX Burn
+        /// bootstrapper use it when the vendor gives none (WinMerge, .NET runtimes, Visual C++ Redistributable...). It says
+        /// nothing about the application, so it never becomes the icon of the Company Portal. The reference is a 16x16 RGB
+        /// thumbnail on white, measured from those installers; other icons of applications measured at least 63 from it.
+        /// </summary>
+        internal static readonly byte[] GenericSetupThumbnail = Convert.FromBase64String(
+            "////////////////////////4eHht7e5sK+0sK+0r6+0sK+0sK+0s7O1kZGRwcHB////////////////////////ysrJhofBO2u/NXvDSoXDPYXDN2u/hojDoqKiiYmJ////////////////////////ysrJgIPBWNL3ff3/ff3/Wtr9IKLXgYLAoqKiiYmJ////////////////+Pj4+Pj4xcXEgYTBeO/3fP3/Wtn9H6faAZHJgYLAoqKiiYmJ////////////3t7ex8fHvr6+V1dWf4K+du73Wtr9H6jaA5jOInDqgIDCoqKiiYmJ+Pj4+Pj429vbc3NzYmJiSklKTk5NhojBKXa+KGO3D1WqGEq2Izq/hobCoqKiiYmJsLCwxMTEwsLCiYmJSUhJlpWYSkpK0NDTzs3Tzs3Tzs3Tzs7Tzs7T0tLVmpqah4eH9fX1hISEfn5+RkZGmZibm5qdLi4uTU1NSkpLSkpKTExMT09PT09PT09PXV1dU1NT+Pj4yMjI+fn5gICAmpmcm5qdYWJjnbaou72Lqal4l5eVqqqqurq6u7u72NjYSEhI+Pj4ysrK////goKClJOVjo+RP5SsXaim6O2LzMxqrKypiomKQUFBZGRksLCwb29v+Pj4ysrK/v7+gYGBjIuMio6NUtfMQam/jL6XvL2LsK+x39/fXl5ehoaGkJCQ9PT0+Pj4wMDA6OjoeHh4i4uLkpKSrMe6fLyxVn19eXl3y8vMqqqqdnZ28/Pz////////+Pj4v7+/6OjoeHh4i4qLlpaWvr2+sK+wfX17gIWDtbW1qampf39/8/Pz////////+Pj4v7+/6OjoeHh4iIiIbm5usrKyvLy7zdOaOLSyu+3X3OHfm5ub+fn5////////+Pj4ubm54ODgdHR0cHBwzc3Nq6urwsK14uWcUcvKMLW0h8qryMrJ////////////+Pj4kZGRj4+Pj4+P8/Pz////1tbWpqaan598Wol+XISQysvK////////////////");
+
+        /// <summary>Average difference (0-255 per channel) under which an icon is the generic setup icon (it measured up to 9).</summary>
+        internal const double GenericSetupMaxDistance = 24;
+
+        /// <summary>True when the image (a PNG written by this class) is the generic icon of setup programs.</summary>
+        public static bool IsGenericSetupIcon(string png)
+        {
+            try
+            {
+                using var img = LoadImage(png);
+                return ThumbnailDistance(Thumbnail(img), GenericSetupThumbnail) < GenericSetupMaxDistance;
+            }
+            catch { return false; }
+        }
+
+        /// <summary>16x16 RGB thumbnail on white (the image is drawn at 256 px first, as Windows extracts icons).</summary>
+        internal static byte[] Thumbnail(Image src)
+        {
+            using var big = new Bitmap(256, 256, PixelFormat.Format32bppArgb);
+            using (var g = Graphics.FromImage(big))
+            {
+                g.Clear(Color.White);
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                g.DrawImage(src, 0, 0, 256, 256);
+            }
+            // Two steps of 4x: each one averages its area, as a thumbnail should.
+            using var mid = Reduce(big, 64);
+            using var small = Reduce(mid, 16);
+            var bytes = new byte[16 * 16 * 3];
+            int i = 0;
+            for (int y = 0; y < 16; y++)
+                for (int x = 0; x < 16; x++)
+                {
+                    var c = small.GetPixel(x, y);
+                    bytes[i++] = c.R; bytes[i++] = c.G; bytes[i++] = c.B;
+                }
+            return bytes;
+        }
+
+        private static Bitmap Reduce(Image src, int size)
+        {
+            var bmp = new Bitmap(size, size, PixelFormat.Format24bppRgb);
+            using var g = Graphics.FromImage(bmp);
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            using var attributes = new ImageAttributes();
+            attributes.SetWrapMode(WrapMode.TileFlipXY);   // no dark border from outside the image
+            g.DrawImage(src, new Rectangle(0, 0, size, size), 0, 0, src.Width, src.Height, GraphicsUnit.Pixel, attributes);
+            return bmp;
+        }
+
+        internal static double ThumbnailDistance(byte[] a, byte[] b)
+        {
+            if (a == null || b == null || a.Length != b.Length || a.Length == 0) return double.MaxValue;
+            long sum = 0;
+            for (int i = 0; i < a.Length; i++) sum += Math.Abs(a[i] - b[i]);
+            return (double)sum / a.Length;
+        }
+
+        /// <summary>Removes a PNG that holds the generic setup icon. True when it was one.</summary>
+        private static bool RejectGeneric(string png)
+        {
+            if (!IsGenericSetupIcon(png)) return false;
+            try { File.Delete(png); } catch { }
+            return true;
+        }
+
+        /// <summary>The icon of a program that stands for the application: never the generic icon of setup programs.</summary>
+        private static bool SaveAppExeIcon(string exePath, string destination, int index = 0)
+            => SaveExeIcon(exePath, destination, index) && !RejectGeneric(destination);
 
         public static bool SaveExeIcon(string exePath, string destination, int index = 0)
         {

@@ -1,0 +1,138 @@
+<v:DialogWindow x:Class="J365.IntunePSApp.Views.BatchWindow"
+                xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                xmlns:l="clr-namespace:J365.IntunePSApp.Localization"
+                xmlns:v="clr-namespace:J365.IntunePSApp.Views"
+                Title="J365 IntunePSApp" Width="880" Height="760" MinWidth="560" MinHeight="480">
+  <v:DialogWindow.Resources>
+    <BooleanToVisibilityConverter x:Key="Visible"/>
+    <Style x:Key="StateText" TargetType="TextBlock">
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
+      <Style.Triggers>
+        <DataTrigger Binding="{Binding State}" Value="Downloading"><Setter Property="Foreground" Value="{DynamicResource Brand}"/></DataTrigger>
+        <DataTrigger Binding="{Binding State}" Value="Analyzing"><Setter Property="Foreground" Value="{DynamicResource Brand}"/></DataTrigger>
+        <DataTrigger Binding="{Binding State}" Value="Building"><Setter Property="Foreground" Value="{DynamicResource Brand}"/></DataTrigger>
+        <DataTrigger Binding="{Binding State}" Value="Done"><Setter Property="Foreground" Value="{DynamicResource Success}"/></DataTrigger>
+        <DataTrigger Binding="{Binding State}" Value="Warning"><Setter Property="Foreground" Value="{DynamicResource Warning}"/></DataTrigger>
+        <DataTrigger Binding="{Binding State}" Value="Skipped"><Setter Property="Foreground" Value="{DynamicResource Warning}"/></DataTrigger>
+        <DataTrigger Binding="{Binding State}" Value="Failed"><Setter Property="Foreground" Value="{DynamicResource Danger}"/></DataTrigger>
+      </Style.Triggers>
+    </Style>
+  </v:DialogWindow.Resources>
+
+  <Grid Margin="28,22,28,22">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+      <RowDefinition Height="Auto"/>
+    </Grid.RowDefinitions>
+
+    <!-- Header -->
+    <DockPanel>
+      <Border Style="{StaticResource IconTile}" Width="50" Height="50" CornerRadius="15" VerticalAlignment="Top">
+        <TextBlock Text="&#xE8F1;" Style="{StaticResource Icon}" FontSize="22" Foreground="{DynamicResource Brand}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+      </Border>
+      <StackPanel Margin="16,0,0,0" VerticalAlignment="Center">
+        <TextBlock x:Name="Heading" Style="{StaticResource H2}" TextWrapping="Wrap"/>
+        <TextBlock Text="{l:T Batch_Intro}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+      </StackPanel>
+    </DockPanel>
+
+    <!-- Settings shared by every package -->
+    <Border x:Name="SettingsCard" Grid.Row="1" Style="{StaticResource Card}" Padding="20,16" Margin="0,18,0,14">
+      <StackPanel>
+        <TextBlock Text="{l:T Batch_SharedTitle}" Style="{StaticResource H3}"/>
+        <Grid Margin="0,4,0,0">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="18"/>
+            <ColumnDefinition Width="*"/>
+          </Grid.ColumnDefinitions>
+          <StackPanel>
+            <TextBlock Text="{l:T Settings_CompanyName}" Style="{StaticResource Label}"/>
+            <TextBox x:Name="TxtCompany"/>
+          </StackPanel>
+          <StackPanel Grid.Column="2">
+            <TextBlock Text="{l:T Ed_Owner}" Style="{StaticResource Label}"/>
+            <TextBox x:Name="TxtOwner"/>
+          </StackPanel>
+        </Grid>
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="18"/>
+            <ColumnDefinition Width="*"/>
+          </Grid.ColumnDefinitions>
+          <StackPanel>
+            <TextBlock Text="{l:T Settings_Mode}" Style="{StaticResource Label}"/>
+            <ComboBox x:Name="CmbMode" SelectionChanged="Mode_Changed">
+              <ComboBoxItem Tag="Auto" Content="{l:T Opt_ModeAutoLong}"/>
+              <ComboBoxItem Tag="WhenNeeded" Content="{l:T Opt_ModeWhenNeededLong}"/>
+              <ComboBoxItem Tag="Silent" Content="{l:T Opt_ModeSilentLong}"/>
+              <ComboBoxItem Tag="Interactive" Content="{l:T Opt_ModeInteractiveLong}"/>
+            </ComboBox>
+          </StackPanel>
+          <StackPanel Grid.Column="2">
+            <TextBlock Text="{l:T Ed_IntuneNotify}" Style="{StaticResource Label}"/>
+            <ComboBox x:Name="CmbNotify" SelectionChanged="Mode_Changed">
+              <ComboBoxItem Tag="" Content="{l:T Opt_NotifyAuto}"/>
+              <ComboBoxItem Tag="showAll" Content="{l:T Opt_NotifyShowAll}"/>
+              <ComboBoxItem Tag="showReboot" Content="{l:T Opt_NotifyReboot}"/>
+              <ComboBoxItem Tag="hideAll" Content="{l:T Opt_NotifyHideAll}"/>
+            </ComboBox>
+          </StackPanel>
+        </Grid>
+        <TextBlock x:Name="ModeHint" Style="{StaticResource Hint}" TextWrapping="Wrap"/>
+        <StackPanel x:Name="DeferPanel" Orientation="Horizontal" Margin="0,10,0,0">
+          <CheckBox x:Name="ChkDefer" Style="{StaticResource Switch}" Content="{l:T Ed_DeferUpTo}" VerticalAlignment="Center"/>
+          <TextBox x:Name="TxtDeferTimes" Width="56" Margin="10,0,8,0" VerticalAlignment="Center" HorizontalContentAlignment="Center"/>
+          <TextBlock Text="{l:T Ed_Times}" Style="{StaticResource Body}" VerticalAlignment="Center"/>
+        </StackPanel>
+        <TextBlock x:Name="DefaultsHint" Style="{StaticResource Hint}" TextWrapping="Wrap"/>
+        <CheckBox x:Name="ChkSaveDefaults" Style="{StaticResource Switch}" Content="{l:T Batch_SaveDefaults}" Margin="0,10,0,0"/>
+      </StackPanel>
+    </Border>
+
+    <!-- Applications -->
+    <DockPanel Grid.Row="2">
+      <TextBlock x:Name="ListTitle" DockPanel.Dock="Top" Style="{StaticResource Overline}" Margin="2,0,0,8"/>
+      <ListBox x:Name="Items" BorderThickness="1" BorderBrush="{DynamicResource Line}" Background="Transparent"
+               ScrollViewer.HorizontalScrollBarVisibility="Disabled" HorizontalContentAlignment="Stretch"
+               VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.ScrollUnit="Pixel">
+        <ListBox.ItemTemplate>
+          <DataTemplate>
+            <Grid Margin="4,6">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+              </Grid.ColumnDefinitions>
+              <Border Width="34" Height="34" CornerRadius="9" Background="{Binding AvatarColor}" VerticalAlignment="Top">
+                <TextBlock Text="{Binding Initials}" Foreground="White" FontWeight="SemiBold" FontSize="12.5" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+              </Border>
+              <StackPanel Grid.Column="1" Margin="12,0,10,0">
+                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="13.5" Foreground="{DynamicResource Ink}" TextTrimming="CharacterEllipsis"/>
+                <TextBlock Text="{Binding InstallerLabel}" Style="{StaticResource MutedText}" FontSize="12"/>
+                <ProgressBar Value="{Binding Percent, Mode=OneWay}" Maximum="100" Height="4" Margin="0,6,0,0"
+                             Visibility="{Binding IsRunning, Converter={StaticResource Visible}}"/>
+                <TextBlock Text="{Binding Message}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+              </StackPanel>
+              <TextBlock Grid.Column="2" Text="{Binding StateLabel}" Style="{StaticResource StateText}" VerticalAlignment="Top" Margin="0,2,4,0"/>
+            </Grid>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </DockPanel>
+
+    <!-- Actions -->
+    <DockPanel Grid.Row="3" Margin="0,16,0,0" LastChildFill="False">
+      <Button x:Name="BtnOpenFolder" DockPanel.Dock="Left" Style="{StaticResource GhostButton}" Content="{l:T Batch_OpenPackages}" Click="OpenPackages_Click" Visibility="Collapsed" Margin="-8,0,0,0"/>
+      <TextBlock x:Name="Summary" DockPanel.Dock="Left" Style="{StaticResource MutedText}" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="420" Margin="8,0,0,0"/>
+      <Button x:Name="BtnStart" DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Click="Start_Click" MinWidth="150" Margin="8,0,0,0" IsDefault="True"/>
+      <Button x:Name="BtnClose" DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Click="Close_Click" MinWidth="96"/>
+    </DockPanel>
+  </Grid>
+</v:DialogWindow>

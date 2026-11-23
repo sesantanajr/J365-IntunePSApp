@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -26,7 +27,7 @@ namespace J365.IntunePSApp
         public static bool HasArg(string name) => Args.Any(a => string.Equals(a, name, StringComparison.OrdinalIgnoreCase));
 
         /// <summary>Command-line switches that run without opening the main window.</summary>
-        private static readonly string[] CliSwitches = { "--help", "-h", "/?", "--version", "--build", "--setup", "--update-catalog", "--sandbox", "--install", "--uninstall", "--update" };
+        private static readonly string[] CliSwitches = { "--help", "-h", "/?", "--version", "--build", "--setup", "--update-catalog", "--sandbox", "--install", "--uninstall", "--update", "--batch" };
 
         protected override void OnStartup(StartupEventArgs e)
         {
@@ -182,6 +183,35 @@ namespace J365.IntunePSApp
             return 0;
         }
 
+        /// <summary>
+        /// --batch id1,id2,... [--mode Auto|WhenNeeded|Silent|Interactive] [--notifications showAll|showReboot|hideAll]
+        /// [--company "Name"] [--out folder] [--native]: packages several applications of the database with the same settings.
+        /// Exit code 0 when every package was generated, 1 otherwise (each line says why).
+        /// </summary>
+        private static int CliBatch()
+        {
+            var ids = (Arg("--batch") ?? "").Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (ids.Length == 0 || !CatalogService.Instance.IsLoaded) { Console.WriteLine(T("Cli_BatchUsage")); return 2; }
+            var apps = new List<CatalogApp>();
+            foreach (var id in ids)
+            {
+                var app = CatalogService.Instance.ById(id);
+                if (app == null) { Console.WriteLine(T("Cli_BatchUnknown", id)); return 2; }
+                apps.Add(app);
+            }
+            var o = BatchOptions.FromConfig(ConfigStore.Current);
+            if (Arg("--company") is string company) o.CompanyName = company;
+            if (Arg("--mode") is string mode) o.DeployMode = mode;
+            if (Arg("--notifications") is string notifications) o.IntuneNotifications = notifications;
+            if (Arg("--out") is string output) o.OutputRoot = output;
+            o.NativePackager = HasArg("--native");
+            var items = BatchPackager.Plan(apps, ConfigStore.Current);
+            BatchPackager.RunAsync(items, o, CancellationToken.None).GetAwaiter().GetResult();
+            Console.WriteLine();
+            foreach (var i in items) Console.WriteLine($"  {i.StateLabel,-14} {i.Title}  {i.Message}  {i.PackageFolder}".TrimEnd());
+            return items.All(i => i.Succeeded) ? 0 : 1;
+        }
+
         private static int RunCliWork()
         {
             Log.Entry += en => Console.WriteLine($"[{en.TimeLabel}] {en.Text}");
@@ -203,6 +233,8 @@ namespace J365.IntunePSApp
                     Console.WriteLine(T("Log_CatalogUpdated", CatalogService.Instance.Apps.Count));
                     return 0;
                 }
+
+                if (HasArg("--batch")) return CliBatch();
 
                 string input = Arg("--build");
                 if (string.IsNullOrWhiteSpace(input) || !File.Exists(input)) { Console.WriteLine(T("Cli_BuildUsage")); return 2; }

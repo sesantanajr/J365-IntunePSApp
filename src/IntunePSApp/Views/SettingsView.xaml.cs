@@ -375,6 +375,7 @@ namespace J365.IntunePSApp.Views
             SelectTag(CmbLanguage, c.Language);
             ChkImeLogs.IsChecked = c.LogsInIntuneFolder;
             SelectTag(CmbMode, c.DeployMode);
+            SelectTag(CmbNotify, c.IntuneNotifications);
             TxtDefer.Text = c.DeferTimes.ToString();
             TxtCountdown.Text = c.CloseAppsCountdown.ToString();
             ChkDefer.IsChecked = c.AllowDefer;
@@ -399,7 +400,7 @@ namespace J365.IntunePSApp.Views
         public void OnLanguageChanged()
         {
             _loading = true;
-            RefreshSelection(CmbUiLanguage, CmbStyle, CmbLanguage, CmbMode, CmbArch);
+            RefreshSelection(CmbUiLanguage, CmbStyle, CmbLanguage, CmbMode, CmbNotify, CmbArch);
             _loading = false;
             foreach (var d in _dependencies) d.RefreshTexts();
             UpdateInfo();
@@ -555,6 +556,7 @@ namespace J365.IntunePSApp.Views
             c.Language = TagOf(CmbLanguage);
             c.LogsInIntuneFolder = ChkImeLogs.IsChecked == true;
             c.DeployMode = TagOf(CmbMode);
+            c.IntuneNotifications = TagOf(CmbNotify);
             c.DeferTimes = int.TryParse(TxtDefer.Text, out var d) ? Math.Clamp(d, 1, 99) : 3;
             c.CloseAppsCountdown = int.TryParse(TxtCountdown.Text, out var cd) ? Math.Clamp(cd, 0, 3000) : 300;
             c.AllowDefer = ChkDefer.IsChecked == true;

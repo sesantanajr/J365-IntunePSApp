@@ -1,9 +1,9 @@
 <p align="center"><strong>English</strong> · <a href="README.pt-BR.md">Português (Brasil)</a></p>
 
-<p align="center"><img src="docs/assets/hero-en.svg" alt="J365 IntunePSApp 2.5.1 — from installer to Intune, with control at every step" width="100%"></p>
+<p align="center"><img src="docs/assets/hero-en.svg" alt="J365 IntunePSApp 2.6 — from installer to Intune, with control at every step" width="100%"></p>
 
 <p align="center"><b>Fewer repetitive tasks. More consistent deployment packages.</b><br>A visual workspace to prepare, customize, test and publish Windows applications.</p>
-<p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v2.5.1/J365-IntunePSApp-2.5.1-win-x64.zip"><img src="docs/assets/download-en.svg" alt="Download J365 IntunePSApp 2.5.1 — Windows x64" width="400"></a></p>
+<p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v2.6.0/J365-IntunePSApp-2.6.0-win-x64.zip"><img src="docs/assets/download-en.svg" alt="Download J365 IntunePSApp 2.5.1 — Windows x64" width="400"></a></p>
 <p align="center"><a href="#features">Explore the features</a> · <a href="#get-started">Get started</a> · <a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/tag/v2.5.1">Release notes</a></p>
 <p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/actions/workflows/build.yml"><img alt="Build and tests" src="https://github.com/sesantanajr/J365-IntunePSApp/actions/workflows/build.yml/badge.svg"></a> <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-315CF5?style=flat-square"></a> <img alt="Windows x64" src="https://img.shields.io/badge/Windows-x64-0A5CA8?style=flat-square"></p>
 
@@ -90,6 +90,14 @@ Test locally or in **Windows Sandbox**, where available, with results and logs. 
 1. Use the download button at the top and extract the ZIP.
 2. Open **`J365.IntunePSApp.exe`** and complete tool preparation. The runtime is included; no .NET SDK is required.
 3. Select an installer or catalog application, configure the project and review before building. Validate in a pilot group before distribution.
+
+## New in 2.6
+
+- **Batch packaging:** tick several applications in the catalog and generate them all at once with the same settings (company name, owner, display mode, notifications and deferral). Each installer is downloaded from its official link, checked against its SHA256 and packaged as in the editor. An `.exe` without known silent switches, or a name that also matches other applications, is skipped with the reason, never guessed. Also from the command line: `--batch id1,id2 --mode Silent`.
+- **Truly silent installations:** in **Silent** mode the package shows no dialog and, by default, the assignment created by the publication hides Intune's toast notifications (`hideAll`) and does not restart the device. Notifications can also be chosen per package and as a company default.
+- **Fewer repeated fields:** the switch that uninstalls earlier versions lives on the Uninstall step only; the detection name and version follow the Uninstall and Application steps until changed.
+- **Right icons:** the generic setup icon (a computer with a CD, used by Inno Setup and WiX Burn when the vendor sets none) no longer reaches the Company Portal; the icon of the installed program or the initials tile is used instead.
+- **Database fixes:** per-user Inno Setup installers get `/CURRENTUSER`, as winget does (432 applications), and the .NET Desktop Runtime 10 detection matches the name it registers again.
 
 ## Quality as the product evolves
 

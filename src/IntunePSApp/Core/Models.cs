@@ -73,7 +73,14 @@ namespace J365.IntunePSApp.Core
         /// <summary>Icon shown in Intune and in the Company Portal. Empty: the icon of the installer, or a tile with the initials.</summary>
         public string AppIconPath { get; set; } = "";
         // User experience
-        public string DeployMode { get; set; } = "Auto";      // Auto | Silent | Interactive
+        public string DeployMode { get; set; } = "Auto";      // Auto | WhenNeeded | Silent | Interactive
+        /// <summary>
+        /// Toast notifications Intune shows for the assignment of the app: "showAll", "showReboot" or "hideAll".
+        /// Null (automatic): hidden for a silent package, all shown otherwise (<see cref="PackageBuilder.IntuneNotifications"/>).
+        /// Left out of project.json while automatic, so the revision record of a package generated before 2.6 still matches.
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string IntuneNotifications { get; set; }
         public List<string> ProcessesToClose { get; set; } = new List<string>();
         public int CloseAppsCountdown { get; set; } = 300;
         public bool AllowDefer { get; set; } = true;
@@ -164,6 +171,7 @@ namespace J365.IntunePSApp.Core
         public string Author { get; set; } = "";
         // Experience defaults
         public string DeployMode { get; set; } = "Auto";
+        public string IntuneNotifications { get; set; } = "";
         public bool AllowDefer { get; set; } = true;
         public int DeferTimes { get; set; } = 3;
         public int CloseAppsCountdown { get; set; } = 300;
@@ -218,6 +226,7 @@ namespace J365.IntunePSApp.Core
                 LogsInIntuneFolder = LogsInIntuneFolder,
                 Author = Author,
                 DeployMode = DeployMode,
+                IntuneNotifications = string.IsNullOrWhiteSpace(IntuneNotifications) ? null : IntuneNotifications,
                 AllowDefer = AllowDefer,
                 DeferTimes = DeferTimes,
                 CloseAppsCountdown = CloseAppsCountdown,
@@ -312,8 +321,28 @@ namespace J365.IntunePSApp.Core
         [JsonPropertyName("apps")] public List<CatalogApp> Apps { get; set; } = new List<CatalogApp>();
     }
 
-    public class CatalogApp
+    public class CatalogApp : System.ComponentModel.INotifyPropertyChanged
     {
+        public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;
+        private bool _isQueued;
+
+        /// <summary>Chosen in the catalog for batch packaging (several applications with the same settings).</summary>
+        [JsonIgnore]
+        public bool IsQueued
+        {
+            get => _isQueued;
+            set
+            {
+                if (_isQueued == value) return;
+                _isQueued = value;
+                PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(IsQueued)));
+                QueuedChanged?.Invoke(this);
+            }
+        }
+
+        /// <summary>Raised when any application of the catalog is added to or removed from the batch.</summary>
+        public static event Action<CatalogApp> QueuedChanged;
+
         [JsonPropertyName("id")] public string Id { get; set; }
         [JsonPropertyName("n")] public string Name { get; set; }
         [JsonPropertyName("p")] public string Publisher { get; set; }

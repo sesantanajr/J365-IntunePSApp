@@ -20,11 +20,85 @@ namespace J365.IntunePSApp.Views
         private int _searchVersion;
         private int _lastCount;
         private string _lastQuery = "";
+        /// <summary>Applications ticked for batch packaging, in the order they were chosen.</summary>
+        private readonly List<CatalogApp> _queue = new List<CatalogApp>();
 
         public CatalogView()
         {
             InitializeComponent();
             _debounce.Tick += async (s, e) => { _debounce.Stop(); await RunSearchAsync(); };
+            CatalogApp.QueuedChanged += OnQueuedChanged;
+        }
+
+        // ------------------------------------------------------------------ batch
+
+        private void OnQueuedChanged(CatalogApp app)
+        {
+            if (app.IsQueued && !_queue.Contains(app)) _queue.Add(app);
+            else if (!app.IsQueued) _queue.Remove(app);
+            UpdateBatchBar();
+        }
+
+        private void UpdateBatchBar()
+        {
+            BatchBar.Visibility = _queue.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            BatchCount.Text = T("Catalog_BatchCount", _queue.Count);
+            BatchNames.Text = string.Join(", ", _queue.Select(a => a.Name));
+            BatchNames.ToolTip = string.Join("\n", _queue.Select(a => $"{a.Name} {a.Version}"));
+            UpdateQueueButton();
+        }
+
+        private void UpdateQueueButton()
+        {
+            bool queued = _current?.IsQueued == true;
+            BtnQueue.IsEnabled = _current?.IsSupported == true;
+            BtnQueueText.Text = queued ? T("Catalog_BatchRemove") : T("Catalog_BatchAdd");
+            BtnQueueIcon.Text = queued ? "\uE738" : "\uE710";
+        }
+
+        /// <summary>
+        /// A new copy of the database replaces every application object: the ticks move to the new objects of the same ids
+        /// (an application that left the database leaves the selection).
+        /// </summary>
+        private void SyncQueue()
+        {
+            var c = CatalogService.Instance;
+            if (_queue.Count == 0 || !c.IsLoaded || _queue.All(a => ReferenceEquals(c.ById(a.Id), a))) return;
+            var ids = _queue.Select(a => a.Id).ToList();
+            _queue.Clear();
+            foreach (var id in ids)
+            {
+                var app = c.ById(id);
+                if (app == null) continue;
+                if (app.IsQueued) _queue.Add(app);
+                else app.IsQueued = true;   // adds it through OnQueuedChanged
+            }
+            UpdateBatchBar();
+        }
+
+        private void Queue_Click(object sender, RoutedEventArgs e)
+        {
+            if (_current == null || !_current.IsSupported) return;
+            _current.IsQueued = !_current.IsQueued;
+        }
+
+        private void BatchClear_Click(object sender, RoutedEventArgs e)
+        {
+            foreach (var a in _queue.ToList()) a.IsQueued = false;
+        }
+
+        private void Batch_Click(object sender, RoutedEventArgs e)
+        {
+            if (_queue.Count == 0) return;
+            var main = MainWindow.Current;
+            if (main.Editor?.IsBuilding == true) { main.Toast(T("Ed_BusyBuilding"), "warn"); return; }
+            var w = new BatchWindow(_queue.ToList());
+            Ui.SetOwner(w);
+            w.ShowDialog();
+            // What was generated leaves the selection; what was skipped or failed stays ticked, to be opened in the editor.
+            foreach (var a in w.Built) a.IsQueued = false;
+            main.Packages?.Refresh();
+            main.Home?.Refresh();
         }
 
         public void Refresh()
@@ -38,11 +112,13 @@ namespace J365.IntunePSApp.Views
                 ? T("Catalog_Subtitle", c.Apps.Count.ToString("N0", culture), c.Generated?.ToLocalTime().ToString("g", culture) ?? "?")
                 : T("Catalog_SubtitleEmpty");
             if (loaded && Results.Items.Count == 0) _ = RunSearchAsync();
+            SyncQueue();
         }
 
         public void OnLanguageChanged()
         {
             Refresh();
+            UpdateBatchBar();
             UpdateResultInfo();
             // Rebind so the localized labels of the rows (type, scope, silent switches) are read again.
             var selected = DInstallers.SelectedItem;
@@ -109,6 +185,7 @@ namespace J365.IntunePSApp.Views
             _current = a;
             NoSelection.Visibility = a == null ? Visibility.Visible : Visibility.Collapsed;
             Details.Visibility = a == null ? Visibility.Collapsed : Visibility.Visible;
+            UpdateQueueButton();
             if (a == null) return;
             DAvatar.Background = Ui.Hex(a.AvatarColor);
             DInitials.Text = a.Initials;

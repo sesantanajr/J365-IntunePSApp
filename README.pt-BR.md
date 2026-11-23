@@ -1,9 +1,9 @@
 <p align="center"><a href="README.md">English</a> · <strong>Português (Brasil)</strong></p>
 
-<p align="center"><img src="docs/assets/hero-pt-BR.svg" alt="J365 IntunePSApp 2.5.1 — do instalador ao Intune, com controle em cada etapa" width="100%"></p>
+<p align="center"><img src="docs/assets/hero-pt-BR.svg" alt="J365 IntunePSApp 2.6 — do instalador ao Intune, com controle em cada etapa" width="100%"></p>
 
 <p align="center"><b>Menos tarefas repetitivas. Mais consistência nos seus pacotes.</b><br>Uma interface visual para preparar, personalizar, testar e publicar aplicativos Windows.</p>
-<p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v2.5.1/J365-IntunePSApp-2.5.1-win-x64.zip"><img src="docs/assets/download-pt-BR.svg" alt="Baixar J365 IntunePSApp 2.5.1 — Windows x64" width="400"></a></p>
+<p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v2.6.0/J365-IntunePSApp-2.6.0-win-x64.zip"><img src="docs/assets/download-pt-BR.svg" alt="Baixar J365 IntunePSApp 2.5.1 — Windows x64" width="400"></a></p>
 <p align="center"><a href="#recursos">Conheça os recursos</a> · <a href="#comecar">Como começar</a> · <a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/tag/v2.5.1">Notas da versão</a></p>
 <p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/actions/workflows/build.yml"><img alt="Build and tests" src="https://github.com/sesantanajr/J365-IntunePSApp/actions/workflows/build.yml/badge.svg"></a> <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-315CF5?style=flat-square"></a> <img alt="Windows x64" src="https://img.shields.io/badge/Windows-x64-0A5CA8?style=flat-square"></p>
 
@@ -90,6 +90,14 @@ O teste pode ser executado localmente ou no **Windows Sandbox**, quando disponí
 1. Use o botão de download no topo e extraia o ZIP para uma pasta.
 2. Abra **`J365.IntunePSApp.exe`** e conclua a preparação das ferramentas. O runtime está incluído; não é necessário instalar o SDK .NET.
 3. Escolha um instalador ou aplicativo do catálogo, configure o projeto e revise antes de gerar. Valide em um grupo piloto antes de distribuir.
+
+## Novidades da 2.6
+
+- **Pacotes em lote:** marque vários aplicativos no catálogo e gere todos de uma vez com as mesmas configurações (nome da empresa, proprietário, modo de exibição, notificações e adiamento). Cada instalador é baixado do link oficial, conferido pelo SHA256 e empacotado como no editor. Um `.exe` sem parâmetros silenciosos conhecidos, ou um nome que também corresponde a outros aplicativos, é pulado com o motivo, nunca adivinhado. Também por linha de comando: `--batch id1,id2 --mode Silent`.
+- **Instalação silenciosa de verdade:** no modo **Silencioso** o pacote não mostra janelas e, por padrão, a atribuição criada na publicação oculta as notificações do Intune (`hideAll`) e não reinicia o computador. A escolha de notificações também pode ser feita por pacote e como padrão da empresa.
+- **Menos campos repetidos:** a opção de desinstalar versões anteriores fica só na etapa Desinstalação; o nome e a versão da detecção acompanham as etapas Desinstalação e Aplicativo até serem alterados.
+- **Ícones corretos:** o ícone genérico de instaladores (computador com CD, usado por Inno Setup e WiX Burn quando o fabricante não define um) não vai mais para o Portal da Empresa; entra o ícone do programa instalado ou o bloco com as iniciais.
+- **Correções do banco de dados:** instaladores Inno Setup por usuário recebem `/CURRENTUSER`, como no winget (432 aplicativos), e a detecção do .NET Desktop Runtime 10 volta a reconhecer o nome que ele registra.
 
 ## Evolução com qualidade
 

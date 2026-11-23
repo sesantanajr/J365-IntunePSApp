@@ -77,7 +77,7 @@ namespace J365.IntunePSApp.Views
         public void OnLanguageChanged()
         {
             _loading = true;
-            SettingsView.RefreshSelection(CmbArch, CmbBehavior, CmbMode, CmbStyle, CmbLanguage);
+            SettingsView.RefreshSelection(CmbArch, CmbBehavior, CmbMode, CmbNotify, CmbStyle, CmbLanguage);
             _loading = false;
             BuildSwatches();
             BuildQuickActions();
@@ -127,6 +127,7 @@ namespace J365.IntunePSApp.Views
                 ChkWaitChildren.IsChecked = s.WaitForChildProcesses;
                 TxtExtraCodes.Text = s.ExtraSuccessCodes;
                 SelectTag(CmbMode, s.DeployMode);
+                SelectTag(CmbNotify, s.IntuneNotifications);
                 ChkDefer.IsChecked = s.AllowDefer;
                 TxtDeferTimes.Text = s.DeferTimes.ToString();
                 TxtCountdown.Text = s.CloseAppsCountdown.ToString();
@@ -140,7 +141,6 @@ namespace J365.IntunePSApp.Views
                 _actions.Clear(); foreach (var a in s.Actions) _actions.Add(a);
                 _extraFiles.Clear(); foreach (var f in s.ExtraFiles) _extraFiles.Add(f);
                 ChkRemovePrev.IsChecked = s.RemovePreviousVersions;
-                ChkRemovePrevQuick.IsChecked = s.RemovePreviousVersions;
                 ChkKeepNewer.IsChecked = s.KeepNewerVersion;
                 TxtPattern.Text = s.UninstallPattern;
                 TxtUninstallArgs.Text = s.UninstallExeArgs;
@@ -153,6 +153,8 @@ namespace J365.IntunePSApp.Views
                 ChkDetVersion.IsChecked = s.DetectionCheckVersion;
                 TxtDetVersion.Text = s.DetectionVersion;
                 ChkDetMark.IsChecked = s.DetectionRequireMark;
+                _followedPattern = s.UninstallPattern ?? "";
+                _followedVersion = s.AppVersion ?? "";
                 TxtCompany.Text = s.CompanyName;
                 TxtLogo.Text = s.LogoPath;
                 TxtAccent.Text = s.AccentColor;
@@ -336,6 +338,7 @@ namespace J365.IntunePSApp.Views
             s.WaitForChildProcesses = ChkWaitChildren.IsChecked == true;
             s.ExtraSuccessCodes = TxtExtraCodes.Text.Trim();
             s.DeployMode = TagOf(CmbMode);
+            s.IntuneNotifications = TagOf(CmbNotify) is { Length: > 0 } notify ? notify : null;
             s.AllowDefer = ChkDefer.IsChecked == true;
             s.DeferTimes = Int(TxtDeferTimes.Text, 3);
             s.CloseAppsCountdown = Int(TxtCountdown.Text, 300);
@@ -631,21 +634,34 @@ namespace J365.IntunePSApp.Views
 
         // ------------------------------------------------------------------ versions already installed
 
-        /// <summary>The switch exists on step 1 (where it is seen first) and on step 5 (with its details): both show the same setting.</summary>
+        /// <summary>The switch is on step 5 (with its details); step 1 only says what it does and links there.</summary>
         private void RemovePrev_Changed(object sender, RoutedEventArgs e)
         {
-            if (_loading || !(sender is CheckBox changed)) return;
-            _loading = true;
-            try
-            {
-                ChkRemovePrev.IsChecked = changed.IsChecked;
-                ChkRemovePrevQuick.IsChecked = changed.IsChecked;
-            }
-            finally { _loading = false; }
+            if (_loading) return;
             UpdateExistingFlow();
         }
 
-        private void Pattern_Changed(object sender, TextChangedEventArgs e) { if (!_loading) UpdateExistingFlow(); }
+        private void GoUninstall_Click(object sender, RoutedEventArgs e) => GoStep(4);
+
+        // The name and the version of the detection are the ones of the Uninstall and Application steps until they are
+        // changed on the Detection step: typing them once is enough (both were asked twice before 2.6).
+        private string _followedPattern = "", _followedVersion = "";
+
+        private void Pattern_Changed(object sender, TextChangedEventArgs e)
+        {
+            if (_loading) return;
+            string now = TxtPattern.Text.Trim();
+            if (TxtDetName.Text.Trim().Length == 0 || string.Equals(TxtDetName.Text.Trim(), _followedPattern, StringComparison.Ordinal)) TxtDetName.Text = now;
+            _followedPattern = now;
+            UpdateExistingFlow();
+        }
+
+        private void FollowVersion()
+        {
+            string now = TxtVersion.Text.Trim();
+            if (TxtDetVersion.Text.Trim().Length == 0 || string.Equals(TxtDetVersion.Text.Trim(), _followedVersion, StringComparison.Ordinal)) TxtDetVersion.Text = now;
+            _followedVersion = now;
+        }
 
         /// <summary>Spells out the order on the device: close the app, uninstall what is there, install the new version.</summary>
         private void UpdateExistingFlow()
@@ -685,7 +701,21 @@ namespace J365.IntunePSApp.Views
             string ext = Path.GetExtension(_s?.InstallerPath ?? "").ToLowerInvariant();
             InstallArgsHint.Text = ext switch { ".msi" => T("Ed_ArgsHintMsi"), ".exe" => T("Ed_ArgsHintExe"), _ => T("Ed_ArgsHintNone") };
             ModeHint.Text = TagOf(CmbMode) switch { "Silent" => T("Ed_ModeHintSilent"), "Interactive" => T("Ed_ModeHintInteractive"), "WhenNeeded" => T("Ed_ModeHintWhenNeeded"), _ => T("Ed_ModeHintAuto") };
+            var probe = new PackageSettings { DeployMode = TagOf(CmbMode), IntuneNotifications = TagOf(CmbNotify) };
+            bool silent = ScriptGenerator.IsSilent(probe);
+            NotifyHint.Text = T("Ed_NotifyEffective", NotifyLabel(PackageBuilder.IntuneNotifications(probe)))
+                + (silent ? " " + T("Ed_SilentRestartHint") : "");
+            // A silent package shows no dialog: deferring, the countdown, the messages and the restart prompt do not apply.
+            DeferRow.IsEnabled = CountdownRow.IsEnabled = MessagesCard.IsEnabled = RestartCard.IsEnabled = !silent;
+            DeferRow.ToolTip = CountdownRow.ToolTip = MessagesCard.ToolTip = RestartCard.ToolTip = silent ? T("Ed_SilentDisabled") : null;
         }
+
+        public static string NotifyLabel(string value) => value switch
+        {
+            "hideAll" => T("Opt_NotifyHideAll"),
+            "showReboot" => T("Opt_NotifyReboot"),
+            _ => T("Opt_NotifyShowAll")
+        };
 
         private void Mode_Changed(object sender, SelectionChangedEventArgs e) { if (!_loading) { UpdateHints(); UpdatePreview(); } }
 
@@ -698,6 +728,7 @@ namespace J365.IntunePSApp.Views
             if (_loading) return;
             // The generated tile carries the initials of the name.
             if (sender == TxtName && _appIconKind == ImageTools.IconGenerated) RefreshAppIcon();
+            if (sender == TxtVersion) FollowVersion();
             UpdatePreview();
             if (sender == TxtName || sender == TxtVersion) UpdateHeader();
         }
@@ -928,7 +959,8 @@ namespace J365.IntunePSApp.Views
                 Number(s => s.CloseAppsCountdown, v => TxtCountdown.Text = v.ToString());
                 Flag(s => s.BlockExecution, v => ChkBlock.IsChecked = v);
                 Flag(s => s.CheckDiskSpace, v => ChkDisk.IsChecked = v);
-                Flag(s => s.RemovePreviousVersions, v => { ChkRemovePrev.IsChecked = v; ChkRemovePrevQuick.IsChecked = v; });
+                Text(s => s.IntuneNotifications, v => SelectTag(CmbNotify, v));
+                Flag(s => s.RemovePreviousVersions, v => ChkRemovePrev.IsChecked = v);
                 Text(s => s.WelcomeMessage, v => TxtWelcome.Text = v);
                 Text(s => s.CompletionMessage, v => TxtCompletion.Text = v);
             }
@@ -1195,7 +1227,8 @@ namespace J365.IntunePSApp.Views
                 Tuple.Create(T("Ed_PrivacyUrl"), string.IsNullOrWhiteSpace(s.PrivacyUrl) ? "—" : s.PrivacyUrl),
                 Tuple.Create(T("Rev_Installer"), string.IsNullOrEmpty(s.InstallerPath) ? "—" : $"{Path.GetFileName(s.InstallerPath)}  ({s.InstallerType}) {s.InstallArgs}"),
                 Tuple.Create(T("Ed_InstallFor"), (s.InstallBehavior == "User" ? T("Rev_V_User") : T("Rev_V_System")) + "  ·  " + PackageBuilder.MinimumOsLabel(s.MinimumOs) + "+"),
-                Tuple.Create(T("Rev_Experience"), mode + (s.ProcessesToClose.Count > 0 ? T("Rev_V_Closes", string.Join(", ", s.ProcessesToClose)) : "") + (s.AllowDefer ? T("Rev_V_Defer", s.DeferTimes) : "")),
+                Tuple.Create(T("Rev_Experience"), mode + (s.ProcessesToClose.Count > 0 ? T("Rev_V_Closes", string.Join(", ", s.ProcessesToClose)) : "") + (s.AllowDefer && !ScriptGenerator.IsSilent(s) ? T("Rev_V_Defer", s.DeferTimes) : "")),
+                Tuple.Create(T("Ed_IntuneNotify"), NotifyLabel(PackageBuilder.IntuneNotifications(s)) + (PackageBuilder.RestartBehavior(s) == "suppress" ? T("Rev_V_NoRestart") : "")),
                 Tuple.Create(T("Rev_Previous"), s.RemovePreviousVersions ? T("Rev_V_Removes", s.UninstallPattern) : T("Rev_V_Keeps")),
                 Tuple.Create(T("Rev_Actions"), s.Actions.Count == 0 ? T("Rev_V_None") : string.Join("; ", s.Actions.Select(a => a.TypeLabel))),
                 Tuple.Create(T("Rev_Detection"), s.DetectionMethod switch { "File" => s.DetectionFilePath, "ProductCode" => s.MsiProductCode, _ => s.DetectionNamePattern } + (s.DetectionCheckVersion ? $"  ≥ {s.DetectionVersion}" : "") + (s.DetectionRequireMark ? T("Rev_V_Mark") : "")),

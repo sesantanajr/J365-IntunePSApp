@@ -48,7 +48,7 @@ namespace J365.IntunePSApp.Core
             rows.Add((g3, T("Sum_F_InstallTime"), "60"));
             rows.Add((g3, T("Sum_F_AllowUninstall"), T("Common_Yes")));
             rows.Add((g3, T("Sum_F_InstallBehavior"), s.InstallBehavior == "User" ? T("Sum_V_User") : T("Sum_V_System")));
-            rows.Add((g3, T("Sum_F_RestartBehavior"), T("Sum_V_RestartBehavior")));
+            rows.Add((g3, T("Sum_F_RestartBehavior"), PackageBuilder.RestartBehavior(s) == "suppress" ? T("Sum_V_RestartSuppress") : T("Sum_V_RestartBehavior")));
             rows.Add((g3, T("Sum_F_ReturnCodes"), T("Sum_V_ReturnCodes")));
             rows.Add((g4, T("Sum_F_Architecture"), arch));
             rows.Add((g4, T("Sum_F_MinOs"), PackageBuilder.MinimumOsLabel(s.MinimumOs)));
@@ -59,6 +59,12 @@ namespace J365.IntunePSApp.Core
             rows.Add((g5, T("Sum_F_WhatChecks"), det));
             if (s.InstallerType == "MSI" && !string.IsNullOrWhiteSpace(s.MsiProductCode) && s.MsiProductCode.StartsWith("{"))
                 rows.Add((g5, T("Sum_F_MsiAlt"), T("Sum_V_MsiAlt", s.MsiProductCode, s.AppVersion) + (s.DetectionRequireMark ? T("Sum_V_MsiAltNoMark") : "")));
+            rows.Add((g6, T("Sum_F_Notifications"), PackageBuilder.IntuneNotifications(s) switch
+            {
+                "hideAll" => T("Sum_V_NotifyHideAll"),
+                "showReboot" => T("Sum_V_NotifyReboot"),
+                _ => T("Sum_V_NotifyShowAll")
+            }));
             rows.Add((g6, T("Sum_F_Suggestion"), T("Sum_V_Suggestion")));
             return rows;
         }

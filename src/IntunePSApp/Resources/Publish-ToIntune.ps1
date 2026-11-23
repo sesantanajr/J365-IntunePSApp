@@ -634,6 +634,9 @@ try
 
     $restart = [string]$app.restartBehavior
     if (@('allow', 'basedOnReturnCode', 'suppress', 'force') -notcontains $restart) { $restart = 'basedOnReturnCode' }
+    # Toasts of the assignment: a silent package asks for none (hideAll), so the user is not told about the installation.
+    $notifications = [string]$app.notifications
+    if (@('showAll', 'showReboot', 'hideAll') -notcontains $notifications) { $notifications = 'showAll' }
     $maximumMinutes = 60
     if ([int]$app.maximumInstallationTimeInMinutes -ge 1 -and [int]$app.maximumInstallationTimeInMinutes -le 1440) { $maximumMinutes = [int]$app.maximumInstallationTimeInMinutes }
 
@@ -662,6 +665,8 @@ try
     Write-Host ('  Detection       : ' + $app.detectionScript)
     Write-Host ('  Icon            : ' + $iconLabel)
     Write-Host ('  Assignment      : ' + $assignmentLabel)
+    if ($AssignIntent -ne 'none') { Write-Host ('  Notifications   : ' + $notifications) }
+    Write-Host ('  Device restart  : ' + $restart)
     Write-Host ''
 
     if ($ValidateOnly)
@@ -958,7 +963,7 @@ try
             if ($AssignTo -eq 'AllDevices') { $target = @{ '@odata.type' = '#microsoft.graph.allDevicesAssignmentTarget' } }
             if ($AssignTo -eq 'Group') { $target = [ordered]@{ '@odata.type' = '#microsoft.graph.groupAssignmentTarget'; groupId = $GroupId } }
             $settings = [ordered]@{
-                '@odata.type' = '#microsoft.graph.win32LobAppAssignmentSettings'; notifications = 'showAll'
+                '@odata.type' = '#microsoft.graph.win32LobAppAssignmentSettings'; notifications = $notifications
                 restartSettings = $null; installTimeSettings = $null
             }
             # Delivery optimization is not available in the national clouds.

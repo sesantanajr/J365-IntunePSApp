@@ -65,7 +65,7 @@
     "Microsoft.VCRedist.2015+.x64": { "namePattern": "Microsoft Visual C++ 2015-20?? Redistributable (x64)*", "removePrevious": false, "notes": "Bibliotecas compartilhadas: não remova versões anteriores.", "notesEn": "Shared libraries: do not remove previous versions." },
     "Microsoft.VCRedist.2015+.x86": { "namePattern": "Microsoft Visual C++ 2015-20?? Redistributable (x86)*", "removePrevious": false, "notes": "Bibliotecas compartilhadas: não remova versões anteriores.", "notesEn": "Shared libraries: do not remove previous versions." },
     "Microsoft.DotNet.DesktopRuntime.8": { "namePattern": "Microsoft Windows Desktop Runtime - 8.*", "removePrevious": false },
-    "Microsoft.DotNet.DesktopRuntime.10": { "namePattern": "Microsoft Windows Desktop Runtime - 10.*", "removePrevious": false },
+    "Microsoft.DotNet.DesktopRuntime.10": { "namePattern": "Microsoft Windows Desktop Runtime*10.*", "removePrevious": false },
     "Microsoft.OneDrive": { "processes": ["OneDrive"], "namePattern": "Microsoft OneDrive", "checkVersion": false, "removePrevious": false, "notes": "O OneDrive se atualiza sozinho.", "notesEn": "OneDrive updates itself." },
     "Microsoft.EdgeWebView2Runtime": { "namePattern": "Microsoft Edge WebView2 Runtime", "checkVersion": false, "removePrevious": false, "notes": "Componente compartilhado que se atualiza sozinho.", "notesEn": "Shared component that updates itself." },
     "Microsoft.RemoteDesktopClient": { "processes": ["msrdcw", "msrdc"], "namePattern": "Remote Desktop" },

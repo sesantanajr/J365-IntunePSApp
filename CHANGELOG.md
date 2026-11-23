@@ -2,6 +2,24 @@
 
 All notable changes to J365 IntunePSApp. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.6.0 - 2026-11-23
+
+### Added
+
+- **Batch packaging.** Tick several applications in the catalog (or use *Add to batch* on the details) and generate their packages at once with the same settings: company name, owner, display mode, Intune notifications and deferral. Logo, colors, dialog style, language and author come from the company defaults. Each installer is downloaded from its official link, checked against its SHA256, analysed and built as in the editor; the window shows the state and progress of each application and can be cancelled. A package that would need a decision is skipped with the reason instead of guessed: an `.exe` whose silent switches the database does not know, or a program name that also matches other applications of the database (they would be uninstalled). Notes are kept for the person who publishes: detection names estimated from the database and dependencies not included. Command line: `--batch id1,id2 [--mode Silent] [--notifications hideAll] [--company <name>] [--out <folder>] [--native]`.
+- **Intune notifications per package and as a company default** (*Automatic*, *Show all*, *Restarts only*, *Hide all*). *Automatic* hides them for silent packages.
+
+### Changed
+
+- **Silent mode no longer notifies the user.** The assignment created by the publication used `notifications = showAll` for every package, so Intune still announced silent installations. It now follows the package (`hideAll` for silent packages by default), and a silent package sets the device restart behavior to *No specific action*. The generated script of a silent package no longer writes deferral, countdown, messages or restart prompt (they were never shown), and the Experience step disables them in silent mode. The manual instructions list the restart behavior and the end user notifications.
+- **Fewer repeated fields.** The switch that uninstalls earlier versions was shown on step 1 and on step 5; it now lives on the Uninstall step, and step 1 explains the order with a link there. The detection name and the minimum version follow the Uninstall and Application steps until they are changed on the Detection step.
+
+### Fixed
+
+- **Generic installer icons.** Inno Setup and WiX Burn installers without an icon of their own (WinMerge, .NET runtimes, Visual C++ Redistributable) carry the generic setup icon, which went to Intune and the Company Portal. It is recognised now (installer, MSI icon table, programs read from the cabinet, installed copy) and the icon of the installed program or the initials tile is used instead. The icon cache is renewed.
+- **Per-user Inno Setup installers** get `/CURRENTUSER`, as winget does: without it, an installer that offers both modes started in administrative mode and failed (or asked for elevation) in the user context. 432 applications of the database pick such a row.
+- **.NET Desktop Runtime 10** registers "Microsoft Windows Desktop Runtime 10.x (x64)" (without the " - " of earlier versions): its curated name matched nothing, so the detection never found it. The database builder now warns when a curated name matches none of the names the installers register.
+
 ## 2.5.1 - 2026-11-20
 
 - Track the settings used to generate each new package; block publishing/testing stale output after edits, saving and reopening.

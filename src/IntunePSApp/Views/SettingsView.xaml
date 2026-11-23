@@ -267,6 +267,14 @@
                 <StackPanel Grid.Column="2"><TextBlock Text="{l:T Settings_Deferrals}" Style="{StaticResource Label}"/><TextBox x:Name="TxtDefer" TextChanged="Brand_Changed"/></StackPanel>
                 <StackPanel Grid.Column="4"><TextBlock Text="{l:T Settings_Countdown}" Style="{StaticResource Label}"/><TextBox x:Name="TxtCountdown" TextChanged="Brand_Changed"/></StackPanel>
               </Grid>
+              <TextBlock Text="{l:T Ed_IntuneNotify}" Style="{StaticResource Label}"/>
+              <ComboBox x:Name="CmbNotify" MaxWidth="520" HorizontalAlignment="Left" MinWidth="320">
+                <ComboBoxItem Tag="" Content="{l:T Opt_NotifyAuto}"/>
+                <ComboBoxItem Tag="showAll" Content="{l:T Opt_NotifyShowAll}"/>
+                <ComboBoxItem Tag="showReboot" Content="{l:T Opt_NotifyReboot}"/>
+                <ComboBoxItem Tag="hideAll" Content="{l:T Opt_NotifyHideAll}"/>
+              </ComboBox>
+              <TextBlock Text="{l:T Settings_NotifyHint}" Style="{StaticResource Hint}"/>
               <CheckBox x:Name="ChkDefer" Style="{StaticResource Switch}" Content="{l:T Opt_AllowDefer}" Margin="0,18,0,0" Checked="Brand_Changed" Unchecked="Brand_Changed"/>
               <CheckBox x:Name="ChkBlock" Style="{StaticResource Switch}" Content="{l:T Opt_BlockExecution}"/>
               <CheckBox x:Name="ChkDisk" Style="{StaticResource Switch}" Content="{l:T Opt_CheckDisk}"/>
