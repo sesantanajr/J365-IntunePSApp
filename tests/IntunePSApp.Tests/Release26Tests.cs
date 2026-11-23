@@ -50,7 +50,8 @@ public class Release26Tests
     {
         string script = PackageBuilder.EmbeddedText("Publish-ToIntune.ps1");
         Assert.Contains("notifications = $notifications", script);
-        Assert.DoesNotContain("notifications = 'showAll'", script);
+        // The assignment used to hard-code every toast; "showAll" now only remains as the fallback of an unknown value.
+        Assert.DoesNotContain("win32LobAppAssignmentSettings'; notifications = 'showAll'", script);
         Assert.Contains("$notifications = [string]$app.notifications", script);
         Ps.AssertParses(script);
     }
