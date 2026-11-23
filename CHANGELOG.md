@@ -2,6 +2,14 @@
 
 All notable changes to J365 IntunePSApp. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.6.1 - 2026-11-23
+
+The 2.6.0 published first (commit 52a670f) did not have the applications of the Microsoft Store nor the fixes of the update check, which were added to 2.6.0 when it was published again. A copy of the first 2.6.0 does not see a release with the same number as an update: 2.6.1 is that same content with a new number, so **Settings > General > Check now** offers it.
+
+- **Applications of the Microsoft Store:** live search by name or product id (`9PM860492SZD`, Microsoft PC Manager), published to Intune as *Microsoft Store app (new)*, alone, in a batch or with `--batch <product id> --publish`.
+- **Nothing seems missing:** the count of matches hidden by "Only supported", and *Search this app in the Microsoft Store* for an application that cannot be packaged.
+- **Update check:** a check that could not reach GitHub says why instead of "up to date"; the releases page is used when the GitHub API is blocked or limited.
+
 ## 2.6.0 - 2026-11-23
 
 ### Added
