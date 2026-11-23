@@ -11,7 +11,7 @@
     <RootNamespace>J365.IntunePSApp</RootNamespace>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>2.6.1</Version>
+    <Version>2.6.2</Version>
     <Authors>Sérgio Sant'Ana Junior</Authors>
     <Company>Jornada 365</Company>
     <Product>J365 IntunePSApp</Product>

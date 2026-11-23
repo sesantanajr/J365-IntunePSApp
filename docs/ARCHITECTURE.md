@@ -143,6 +143,6 @@ The outer file is a zip stored without compression. The HMAC covers IV + ciphert
 
 It holds `config.json`, `catalog\`, `tools\` (PSADT templates, IntuneWinAppUtil), `downloads\`, `branding\`, `logs\` and, in portable mode, `Packages\`.
 
-## Project consistency in 2.5.1
+## Project consistency (since 2.5.1)
 
-`Core/PackageRevision.cs` fingerprints normalized package settings, excluding the output location, and persists `build-revision.json` for new builds. The editor distinguishes saved state from built state; changing settings blocks publish/test actions until rebuilding. Corrupt or mismatched revision records prevent reopening an old result. Legacy packages without a record remain readable. `PackageDirectory` reserves output paths across processes; a process-wide semaphore protects the shared build log and tool state. See [quality review](QUALITY-25.md).
+`Core/PackageRevision.cs` fingerprints normalized package settings, excluding the output location, and persists `build-revision.json` for new builds. The editor distinguishes saved state from built state; changing settings blocks publish/test actions until rebuilding. Corrupt or mismatched revision records prevent reopening an old result. Legacy packages without a record remain readable. `PackageDirectory` reserves output paths across processes; a process-wide semaphore protects the shared build log and tool state. See the [quality review](QUALITY.md).

@@ -80,7 +80,7 @@ namespace J365.IntunePSApp
 
                 async Task ShotBatch(System.Collections.Generic.List<CatalogApp> apps)
                 {
-                    var win = new Views.BatchWindow(apps) { Width = 880, Height = 900 };
+                    var win = new Views.BatchWindow(apps) { Width = 1120, Height = 780 };
                     win.WindowStartupLocation = WindowStartupLocation.Manual;
                     win.Left = -32000; win.Top = 0;
                     win.ShowActivated = false;

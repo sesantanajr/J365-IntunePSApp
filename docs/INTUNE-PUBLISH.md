@@ -130,6 +130,14 @@ powershell -ExecutionPolicy Bypass -File .\Publish-ToIntune.ps1 -TenantId contos
 
 Afterwards: open the link (or the [Intune admin center](https://intune.microsoft.com) > *Apps > Windows*), review the app and assign it to a pilot group before a broad deployment.
 
+## Several applications at once, and apps of the Microsoft Store (2.6)
+
+**Batch deploy.** In the catalog, tick several applications (or *Add to batch*) and choose *Batch package*. One window sets what every package shares (company, owner, display mode, Intune notifications, deferral) and, with *Publish each package to Intune*, what to do with an app of the same name (*update it as a new version*, *create another*, *do not publish*) and the assignment of the apps it creates. The tenant and the assignment are confirmed before anything starts. Each package is published as soon as it is generated, inside the application, with the connection of this computer; a publication that fails is tried again alone. An application that needs a decision (an `.exe` without known silent switches, a name that also matches other applications) is skipped with the reason and opens in the editor. Command line: `J365.IntunePSApp.exe --batch 7zip.7zip,VideoLAN.VLC --mode Silent --publish --assign required --assign-to Group --group <group id>`.
+
+**Apps of the Microsoft Store.** The catalog searches the Microsoft Store live (name or product id, for example `9PM860492SZD` for Microsoft PC Manager). These apps are not packaged: they are created in Intune as **Microsoft Store app (new)** (Graph `winGetApp`), which Intune installs from the Store and keeps current, with the description of the Store and its official logo. UWP/MSIX apps install in the system context; a Win32 app of the Store that only installs per user, in the user context. An app with the same product id already in Intune is kept, refreshed (texts and logo; its assignments stay) or created again, as chosen. The same connection permission is used (`DeviceManagementApps.ReadWrite.All`).
+
+**Notifications and restarts.** Assignments created by the publication use the notifications of the package: *Automatic* hides Intune's toasts for silent packages (`hideAll`) and shows them otherwise; a silent package also sets the device restart behavior to *No specific action*. Assignments that already exist in Intune keep their own settings.
+
 ## Troubleshooting
 
 | Message | What to check |
@@ -278,6 +286,14 @@ powershell -ExecutionPolicy Bypass -File .\Publish-ToIntune.ps1 -TenantId contos
 7. Grava o `publish-result.json` na mesma pasta: situação (`published`, `failed`, `cancelled`), ID do app, link para o centro de administração ou o erro. Códigos de saída: `0` publicado ou validado, `1` falhou, `2` cancelado.
 
 Depois: abra o link (ou o [centro de administração do Intune](https://intune.microsoft.com) > *Aplicativos > Windows*), revise o aplicativo e atribua a um grupo piloto antes de uma implantação ampla.
+
+## Vários aplicativos de uma vez e apps da Microsoft Store (2.6)
+
+**Deploy em lote.** No catálogo, marque vários aplicativos (ou *Adicionar ao lote*) e escolha *Gerar em lote*. Uma janela define o que todos os pacotes compartilham (empresa, proprietário, modo de exibição, notificações do Intune, adiamento) e, com *Publicar cada pacote no Intune*, o que fazer com um app de mesmo nome (*atualizar como nova versão*, *criar outro*, *não publicar*) e a atribuição dos apps criados. O tenant e a atribuição são confirmados antes de começar. Cada pacote é publicado assim que é gerado, dentro do aplicativo, com a conexão deste computador; uma publicação que falha é tentada de novo sozinha. Um aplicativo que precisa de decisão (um `.exe` sem parâmetros silenciosos conhecidos, um nome que também corresponde a outros aplicativos) é pulado com o motivo e abre no editor. Linha de comando: `J365.IntunePSApp.exe --batch 7zip.7zip,VideoLAN.VLC --mode Silent --publish --assign required --assign-to Group --group <id do grupo>`.
+
+**Apps da Microsoft Store.** O catálogo pesquisa a Microsoft Store ao vivo (nome ou ID do produto, por exemplo `9PM860492SZD` para o Microsoft PC Manager). Esses apps não são empacotados: são criados no Intune como **Microsoft Store app (new)** (Graph `winGetApp`), que o Intune instala pela Store e mantém atualizado, com a descrição da Store e o logo oficial. Apps UWP/MSIX instalam no contexto do sistema; um app Win32 da Store que só instala por usuário, no contexto do usuário. Um app com o mesmo ID já existente no Intune é mantido, atualizado (textos e logo; as atribuições ficam) ou criado de novo, conforme a escolha. A permissão da conexão é a mesma (`DeviceManagementApps.ReadWrite.All`).
+
+**Notificações e reinicialização.** As atribuições criadas pela publicação usam as notificações do pacote: *Automático* oculta as notificações do Intune em pacotes silenciosos (`hideAll`) e mostra nos demais; um pacote silencioso também define o comportamento de reinicialização como *Nenhuma ação específica*. Atribuições que já existem no Intune mantêm a configuração delas.
 
 ## Solução de problemas
 

@@ -1,10 +1,10 @@
 <p align="center"><strong>English</strong> · <a href="README.pt-BR.md">Português (Brasil)</a></p>
 
-<p align="center"><img src="docs/assets/hero-en.svg" alt="J365 IntunePSApp 2.6.1 — from installer to Intune, with control at every step" width="100%"></p>
+<p align="center"><img src="docs/assets/hero-en.svg" alt="J365 IntunePSApp 2.6.2 — from installer to Intune, with control at every step" width="100%"></p>
 
 <p align="center"><b>Fewer repetitive tasks. More consistent deployment packages.</b><br>A visual workspace to prepare, customize, test and publish Windows applications.</p>
-<p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v2.6.1/J365-IntunePSApp-2.6.1-win-x64.zip"><img src="docs/assets/download-en.svg" alt="Download J365 IntunePSApp 2.6.1 — Windows x64" width="400"></a></p>
-<p align="center"><a href="#features">Explore the features</a> · <a href="#get-started">Get started</a> · <a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/tag/v2.6.1">Release notes</a></p>
+<p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v2.6.2/J365-IntunePSApp-2.6.2-win-x64.zip"><img src="docs/assets/download-en.svg" alt="Download J365 IntunePSApp 2.6.2 — Windows x64" width="400"></a></p>
+<p align="center"><a href="#features">Explore the features</a> · <a href="#get-started">Get started</a> · <a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/tag/v2.6.2">Release notes</a></p>
 <p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/actions/workflows/build.yml"><img alt="Build and tests" src="https://github.com/sesantanajr/J365-IntunePSApp/actions/workflows/build.yml/badge.svg"></a> <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-315CF5?style=flat-square"></a> <img alt="Windows x64" src="https://img.shields.io/badge/Windows-x64-0A5CA8?style=flat-square"></p>
 
 ## Your next deployment package starts here
@@ -13,16 +13,16 @@ Turn an MSI or EXE installer into an organized Microsoft Intune package. **J365 
 
 | Prepare faster | Standardize the experience | Stay in control |
 | --- | --- | --- |
-| A winget-based catalog, installer analysis and silent-switch suggestions. | Company logo, colors, messages, deferrals and reusable defaults. | Review before building, tests, logs and protection against stale package publishing. |
+| A catalog of winget and the Microsoft Store, installer analysis, silent-switch suggestions and batch deploy. | Company logo, colors, messages, deferrals and reusable defaults. | Review before building, tests, logs and protection against stale package publishing. |
 
-<a href="docs/screenshots/en/application-dark.png"><img src="docs/screenshots/en/application-dark.png" alt="Version 2.5.1 visual application editor" width="100%"></a>
+<a href="docs/screenshots/en/application-dark.png"><img src="docs/screenshots/en/application-dark.png" alt="J365 IntunePSApp 2.6 visual application editor" width="100%"></a>
 
 **One complete workflow:** installer → application → experience → actions → uninstall → detection → branding → build → test → publish.
 
 <a id="features"></a>
 ## Explore the features
 
-Actual **2.5.1** captures with a demonstration project. Click images to enlarge. Connection and test states demonstrate the UI, not a live tenant deployment.
+Actual **2.6** captures with a demonstration project. Click images to enlarge. Connection and test states demonstrate the UI, not a live tenant deployment.
 
 ### 01 · Present applications clearly in Intune
 
@@ -32,7 +32,7 @@ Organize description, publisher, developer, owner and information/privacy links.
 
 ### 02 · Shape the installation experience
 
-Choose display mode, app closing, deferrals and messages. Add pre/post-install actions for files, registry, services, dependencies and custom commands.
+Choose display mode, app closing, deferrals and messages — or a **silent** installation with no dialogs and no Intune notifications. Add pre/post-install actions for files, registry, services, dependencies and custom commands.
 
 <table><tr><td width="50%"><b>User experience and deferrals</b><br><a href="docs/screenshots/en/experience.png"><img src="docs/screenshots/en/experience.png" alt="User experience and deferrals" width="100%"></a></td><td width="50%"><b>Ready-made actions and extra files</b><br><a href="docs/screenshots/en/actions.png"><img src="docs/screenshots/en/actions.png" alt="Ready-made actions and extra files" width="100%"></a></td></tr></table>
 
@@ -50,7 +50,7 @@ Use your company name, logo and accent color in PSAppDeployToolkit dialogs. Reus
 
 ### 05 · Connect and follow publishing
 
-Connect with an app certificate, user account, existing registration or Azure Cloud Shell. After building and testing, create or update an Intune application with upload progress. [Publishing guide](docs/INTUNE-PUBLISH.md).
+Connect with an app certificate, user account, existing registration or Azure Cloud Shell. After building and testing, create or update an Intune application with upload progress — one at a time, or many at once with the same assignment, including apps of the Microsoft Store. [Publishing guide](docs/INTUNE-PUBLISH.md).
 
 <table><tr><td width="50%"><b>Microsoft Intune connection options</b><br><a href="docs/screenshots/en/connection.png"><img src="docs/screenshots/en/connection.png" alt="Microsoft Intune connection options" width="100%"></a></td><td width="50%"><b>Connection settings and status</b><br><a href="docs/screenshots/en/intune.png"><img src="docs/screenshots/en/intune.png" alt="Connection settings and status" width="100%"></a></td></tr></table>
 
@@ -62,7 +62,7 @@ Reopen projects, search by name or publisher and sort by date, name or available
 
 ### 07 · Know when a rebuild is required
 
-Version **2.5.1** distinguishes saved projects from generated packages. Changed settings mark the previous result as stale and disable publishing/testing until rebuilding. Saving cannot hide outdated build output.
+The editor distinguishes saved projects from generated packages. Changed settings mark the previous result as stale and disable publishing/testing until rebuilding. Saving cannot hide outdated build output.
 
 <a href="docs/screenshots/en/needs-rebuild.png"><img src="docs/screenshots/en/needs-rebuild.png" alt="Stale build warning with publishing and testing disabled" width="100%"></a>
 
@@ -89,7 +89,7 @@ Test locally or in **Windows Sandbox**, where available, with results and logs. 
 
 1. Use the download button at the top and extract the ZIP.
 2. Open **`J365.IntunePSApp.exe`** and complete tool preparation. The runtime is included; no .NET SDK is required.
-3. Select an installer or catalog application, configure the project and review before building. Validate in a pilot group before distribution.
+3. Select an installer or a catalog application, configure the project and review before building — or tick several applications (winget or Microsoft Store) and deploy them together. Validate in a pilot group before distribution.
 
 ## New in 2.6
 
@@ -103,19 +103,19 @@ Test locally or in **Windows Sandbox**, where available, with results and logs. 
 
 ## Quality as the product evolves
 
-Version **2.5.1** adds package revision tracking, current-file saving, independent output-directory reservation, numeric input validation and a more responsive package library. The release passed **292 automated tests**, plus edit/save/reopen and interface rendering checks.
+Every release passes **349 automated tests** on Windows (generated scripts parsed by Windows PowerShell 5.1, packaging, detection, publishing texts, the Microsoft Store parsing, batch planning, localization) plus interface checks that render the editor, settings, connection and batch windows in both languages and themes. The Microsoft Store search and the update check were also exercised against the live services. See the [quality review](docs/QUALITY.md).
 
 Existing projects remain readable. Updating the editor does not change existing tenant applications. New packages carry a revision record; regenerate legacy packages to create one.
 
-**Compatibility:** WPF/.NET 10 editor for Windows x64. ARM64 package settings do not imply a native ARM64 editor. Silent switches, detection and restart behavior depend on the installer and require testing. Live-tenant validation of this revision remains pending.
+**Compatibility:** WPF/.NET 10 editor for Windows x64. ARM64 package settings do not imply a native ARM64 editor. Silent switches, detection and restart behavior depend on the installer and require testing. Publishing to a live tenant (packages and Microsoft Store apps) should be validated with a pilot group.
 
 **Signing:** this release is not Authenticode-signed yet. See [signing guidance](docs/SIGNING.md) if Windows policy blocks execution.
 
 ## Documentation & community
 
-[Changelog](CHANGELOG.md) · [Quality review](docs/QUALITY-25.md) · [Intune publishing](docs/INTUNE-PUBLISH.md) · [Building](docs/BUILDING.md) · [Architecture](docs/ARCHITECTURE.md)
+[Changelog](CHANGELOG.md) · [Quality review](docs/QUALITY.md) · [Intune publishing](docs/INTUNE-PUBLISH.md) · [Building](docs/BUILDING.md) · [Architecture](docs/ARCHITECTURE.md)
 
-[Contribute](CONTRIBUTING.md) · [Report an issue](https://github.com/sesantanajr/J365-IntunePSApp/issues) · [Security](SECURITY.md) · [SHA256SUMS.txt](https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v2.6.1/SHA256SUMS.txt)
+[Contribute](CONTRIBUTING.md) · [Report an issue](https://github.com/sesantanajr/J365-IntunePSApp/issues) · [Security](SECURITY.md) · [SHA256SUMS.txt](https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v2.6.2/SHA256SUMS.txt)
 
 ---
 

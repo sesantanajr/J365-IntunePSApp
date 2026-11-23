@@ -6,7 +6,7 @@
 
 Please **do not open a public issue** for security problems. Report them privately: use *Security > Report a vulnerability* on this repository when that option is shown, or send a private message to the author on [LinkedIn](https://www.linkedin.com/in/sergiosantanacloud/). You will get an answer as soon as possible; fixes are released as a new version and credited to the reporter (unless you prefer otherwise).
 
-Supported version: the latest release (2.3.x).
+Supported version: the latest release (2.6.x).
 
 ## What the application does to protect you
 
@@ -40,7 +40,7 @@ Supported version: the latest release (2.3.x).
 
 Por favor, **não abra uma issue pública** para problemas de segurança. Relate de forma privada: use *Security > Report a vulnerability* neste repositório quando essa opção aparecer, ou envie uma mensagem privada ao autor no [LinkedIn](https://www.linkedin.com/in/sergiosantanacloud/). Você receberá resposta o quanto antes; as correções saem em uma nova versão, com crédito a quem relatou (se desejar).
 
-Versão com suporte: a mais recente (2.3.x).
+Versão com suporte: a mais recente (2.6.x).
 
 ## O que o aplicativo faz para proteger você
 

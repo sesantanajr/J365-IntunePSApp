@@ -2,6 +2,16 @@
 
 All notable changes to J365 IntunePSApp. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.6.2 - 2026-11-23
+
+### Fixed
+
+- **The batch window hid its applications and its buttons** on ordinary screens: the shared settings took the whole height, so the list and *Generate*/*Close* were out of reach (seen in the interface checks of 2.6.1). The settings now scroll on the left, beside the list of applications, and the actions stay at the bottom at any size of window.
+
+### Documentation
+
+- README in both languages, screenshots of 2.6, the quality review (`docs/QUALITY.md`, 349 automated tests), the publishing guide (batch deploy, apps of the Microsoft Store, notifications), building and security notes brought up to date. Files nothing used any more were removed (`README.en.md`, unused images).
+
 ## 2.6.1 - 2026-11-23
 
 The 2.6.0 published first (commit 52a670f) did not have the applications of the Microsoft Store nor the fixes of the update check, which were added to 2.6.0 when it was published again. A copy of the first 2.6.0 does not see a release with the same number as an update: 2.6.1 is that same content with a new number, so **Settings > General > Check now** offers it.
@@ -46,7 +56,7 @@ The 2.6.0 published first (commit 52a670f) did not have the applications of the 
 - Reject invalid numeric input before saving or generating; invalidate superseded catalog searches immediately.
 - Validate with 292 automated tests and interface regression checks. Documentation includes fresh 2.5.1 screenshots in both languages and direct download buttons.
 
-Live-tenant validation remains pending. See [the quality review](docs/QUALITY-25.md) for scope and limitations.
+Live-tenant validation remains pending. See [the quality review](docs/QUALITY.md) for scope and limitations.
 
 ## 2.5.0 - 2026-11-20
 
