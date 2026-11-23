@@ -49,7 +49,7 @@ To use a database you built yourself: *Settings > Application database > Import 
 
 ## Documentation captures
 
-Every build renders the current application with an isolated demonstration project in English and Portuguese, light and dark themes, including the batch window with sample applications in every state. It also exercises edit/save/reopen and empty-filter recovery; a missing capture fails the build. The `interface-captures` artifact contains PNGs and state-check results. Screenshot provenance and filename mapping are documented in [screenshots/README.md](screenshots/README.md). These captures do not perform a tenant deployment.
+Every build renders the current application with an isolated demonstration project in English and Portuguese, light and dark themes, including the batch window with sample applications in every state. It also exercises edit/save/reopen and empty-filter recovery; a missing capture fails the build. The `interface-captures` artifact contains PNGs and state-check results. These captures do not perform a tenant deployment. The screenshots of the README and of the [user guide](USER-GUIDE.md) come from [`tools/Render-Screenshots.ps1`](../tools/Render-Screenshots.ps1), which renders the same pages with a demonstration company, a real package and a sample connection; how to run it and the filename map are in [screenshots/README.md](screenshots/README.md).
 
 ---
 
@@ -102,4 +102,4 @@ Para usar um banco de dados gerado por você: *Configurações > Banco de dados 
 
 ## Capturas da documentação
 
-Cada compilação renderiza o aplicativo atual com um projeto demonstrativo isolado, em inglês e português, nos temas claro e escuro, incluindo a janela de lote com aplicativos de exemplo em todos os estados. Ela também exercita editar/salvar/reabrir e a recuperação de um filtro sem resultados; uma captura que falta faz a compilação falhar. O artefato `interface-captures` traz os PNGs e o resultado das verificações de estado. A origem das capturas e o mapa de nomes de arquivo estão em [screenshots/README.md](screenshots/README.md). Essas capturas não fazem nenhuma implantação em tenant.
+Cada compilação renderiza o aplicativo atual com um projeto demonstrativo isolado, em inglês e português, nos temas claro e escuro, incluindo a janela de lote com aplicativos de exemplo em todos os estados. Ela também exercita editar/salvar/reabrir e a recuperação de um filtro sem resultados; uma captura que falta faz a compilação falhar. O artefato `interface-captures` traz os PNGs e o resultado das verificações de estado. Essas capturas não fazem nenhuma implantação em tenant. As imagens do README e do [guia de uso](USER-GUIDE.pt-BR.md) vêm do [`tools/Render-Screenshots.ps1`](../tools/Render-Screenshots.ps1), que renderiza as mesmas telas com uma empresa demonstrativa, um pacote real e uma conexão de exemplo; como executá-lo e o mapa de nomes de arquivo estão em [screenshots/README.md](screenshots/README.md).

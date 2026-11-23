@@ -4,73 +4,85 @@
 
 <p align="center"><b>Menos tarefas repetitivas. Mais consistência nos seus pacotes.</b><br>Uma interface visual para preparar, personalizar, testar e publicar aplicativos Windows.</p>
 <p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v2.7.0/J365-IntunePSApp-2.7.0-win-x64.zip"><img src="docs/assets/download-pt-BR.svg" alt="Baixar J365 IntunePSApp 2.7.0 — Windows x64" width="400"></a></p>
-<p align="center"><a href="#recursos">Conheça os recursos</a> · <a href="#comecar">Como começar</a> · <a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/tag/v2.7.0">Notas da versão</a></p>
+<p align="center"><a href="#recursos">Conheça os recursos</a> · <a href="#comecar">Como começar</a> · <a href="docs/USER-GUIDE.pt-BR.md">Guia de uso</a> · <a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/tag/v2.7.0">Notas da versão</a></p>
 <p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/actions/workflows/build.yml"><img alt="Build and tests" src="https://github.com/sesantanajr/J365-IntunePSApp/actions/workflows/build.yml/badge.svg"></a> <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-315CF5?style=flat-square"></a> <img alt="Windows x64" src="https://img.shields.io/badge/Windows-x64-0A5CA8?style=flat-square"></p>
 
 ## Seu próximo pacote começa aqui
 
-Transforme um instalador MSI ou EXE em um pacote organizado para o Microsoft Intune. O **J365 IntunePSApp** reúne a configuração da instalação, a experiência do usuário, as ações, a detecção e a publicação em um fluxo guiado baseado no **PSAppDeployToolkit**.
+Transforme um instalador MSI ou EXE — ou qualquer aplicativo do catálogo do winget e da Microsoft Store — em um pacote organizado para o Microsoft Intune. O **J365 IntunePSApp** reúne a configuração da instalação, a experiência do usuário, as ações, a detecção e a publicação em um fluxo guiado baseado no **PSAppDeployToolkit**.
 
 | Prepare com mais agilidade | Padronize a experiência | Mantenha o controle |
 | --- | --- | --- |
 | Catálogo do winget e da Microsoft Store, análise de instaladores, sugestões de parâmetros silenciosos e deploy em lote. | Logo, cores, mensagens, adiamentos e padrões reutilizáveis da sua empresa. | Revisão antes de gerar, testes, logs e proteção contra publicação de pacotes desatualizados. |
 
-<a href="docs/screenshots/pt-BR/application-dark.png"><img src="docs/screenshots/pt-BR/application-dark.png" alt="Editor do J365 IntunePSApp 2.7: nome, versão, arquitetura e instalação em uma interface visual" width="100%"></a>
+<a href="docs/screenshots/pt-BR/home-dark.png"><img src="docs/screenshots/pt-BR/home-dark.png" alt="J365 IntunePSApp 2.7: banco de dados, pacotes, toolkit e conexão com o Intune num relance" width="100%"></a>
 
-**Um fluxo, do começo ao fim:** instalador → aplicativo → experiência → ações → desinstalação → detecção → visual → gerar → testar → publicar.
+**Um fluxo completo:** catálogo ou instalador → aplicativo → experiência → ações → desinstalação → detecção → visual → geração → teste → publicação. Cada tela está explicada no **[guia de uso](docs/USER-GUIDE.pt-BR.md)**.
 
 <a id="recursos"></a>
 ## Conheça o que você pode fazer
 
-As telas abaixo são capturas reais da **2.7**, com um projeto demonstrativo. Clique nas imagens para ampliar. Os estados de conexão e teste ilustram a interface, sem representar uma implantação em tenant real.
+Capturas reais da **2.7** com uma empresa demonstrativa (Contoso) e o MSI do 7-Zip, empacotado de verdade. Clique nas imagens para ampliar. A conexão com o Intune é um exemplo: nada foi publicado em um tenant.
 
-### 01 · Apresente melhor seus aplicativos no Intune
+### 01 · Encontre qualquer aplicativo
 
-Organize descrição, fabricante, desenvolvedor, proprietário e links de informação e privacidade. Nome e versão ficam em campos separados, com identidade mais clara para o catálogo corporativo.
+Pesquise mais de 16 mil aplicativos do winget pelo nome, fabricante ou ID — com cada instalador, os parâmetros silenciosos que serão usados e a curadoria do Jornada 365 — e a Microsoft Store ao vivo, pelo nome ou ID do produto. **Baixar e empacotar** confere o instalador pelo SHA256 e o abre no editor já preenchido.
 
-<a href="docs/screenshots/pt-BR/metadata.png"><img src="docs/screenshots/pt-BR/metadata.png" alt="Informações e metadados do aplicativo para o Intune" width="100%"></a>
+<a href="docs/screenshots/pt-BR/catalog.png"><img src="docs/screenshots/pt-BR/catalog.png" alt="Busca no catálogo com instaladores, parâmetros silenciosos e curadoria" width="100%"></a>
 
-### 02 · Cuide da experiência de quem recebe a instalação
+### 02 · Apresente melhor seus aplicativos no Intune
 
-Defina o modo de exibição, os aplicativos que precisam ser fechados, os adiamentos e as mensagens — ou uma instalação **silenciosa**, sem janelas e sem notificações do Intune. Combine isso com ações antes ou depois da instalação: arquivos, registro, serviços, dependências e comandos personalizados.
+O instalador é analisado e reconhecido; nome, versão, arquitetura, contexto e ícone são preenchidos. Descrição, fabricante, desenvolvedor, proprietário e links de informações e privacidade vão para o Intune nos campos próprios.
+
+<table><tr><td width="50%"><b>Aplicativo, arquitetura e contexto</b><br><a href="docs/screenshots/pt-BR/application.png"><img src="docs/screenshots/pt-BR/application.png" alt="Etapa Aplicativo" width="100%"></a></td><td width="50%"><b>Informações exibidas no Intune e no Portal da Empresa</b><br><a href="docs/screenshots/pt-BR/metadata.png"><img src="docs/screenshots/pt-BR/metadata.png" alt="Informações do aplicativo para o Intune" width="100%"></a></td></tr></table>
+
+### 03 · Cuide da experiência de quem recebe a instalação
+
+Escolha o modo de exibição, o fechamento de aplicativos, os adiamentos e as mensagens — ou uma instalação **silenciosa**, sem janelas e sem notificações do Intune —, com a prévia ao vivo da janela real do PSAppDeployToolkit. Adicione ações antes e depois da instalação para arquivos, registro, serviços, dependências e comandos.
 
 <table><tr><td width="50%"><b>Experiência do usuário e adiamentos</b><br><a href="docs/screenshots/pt-BR/experience.png"><img src="docs/screenshots/pt-BR/experience.png" alt="Experiência do usuário e adiamentos" width="100%"></a></td><td width="50%"><b>Ações prontas e arquivos extras</b><br><a href="docs/screenshots/pt-BR/actions.png"><img src="docs/screenshots/pt-BR/actions.png" alt="Ações prontas e arquivos extras" width="100%"></a></td></tr></table>
 
-### 03 · Planeje a atualização e a detecção
+### 04 · Planeje a atualização e a detecção
 
-Configure a remoção de versões anteriores e a preservação de uma versão mais nova. Escolha como o Intune reconhecerá a instalação: nome e versão, código do produto ou arquivo. Revise o script gerado antes de distribuir.
+Remova versões anteriores, mantenha uma mais nova e — novidade da 2.7 — mantenha a mesma versão já instalada em vez de reinstalá-la. Detecte por nome/versão, código do produto ou arquivo, com a marca do pacote, e teste a regra no seu computador.
 
-<table><tr><td width="50%"><b>Tratamento de versões anteriores</b><br><a href="docs/screenshots/pt-BR/uninstall.png"><img src="docs/screenshots/pt-BR/uninstall.png" alt="Tratamento de versões anteriores" width="100%"></a></td><td width="50%"><b>Regras de detecção e teste local</b><br><a href="docs/screenshots/pt-BR/detection.png"><img src="docs/screenshots/pt-BR/detection.png" alt="Regras de detecção e teste local" width="100%"></a></td></tr></table>
+<table><tr><td width="50%"><b>Versões anteriores e versões mantidas</b><br><a href="docs/screenshots/pt-BR/uninstall.png"><img src="docs/screenshots/pt-BR/uninstall.png" alt="Tratamento de versões anteriores" width="100%"></a></td><td width="50%"><b>Regras de detecção e testes locais</b><br><a href="docs/screenshots/pt-BR/detection.png"><img src="docs/screenshots/pt-BR/detection.png" alt="Regras de detecção e testes locais" width="100%"></a></td></tr></table>
 
-### 04 · Dê aos pacotes a identidade da sua empresa
+### 05 · Dê aos pacotes a identidade da sua empresa
 
-Use seu nome, logo e cor de destaque nos diálogos do PSAppDeployToolkit. Salve os padrões para os próximos projetos e escolha a aparência do editor entre claro, escuro ou o tema do Windows.
+Use o nome, o logo e a cor de destaque da sua empresa nas janelas do PSAppDeployToolkit, salve tudo como padrão da empresa e trabalhe no tema claro, escuro ou igual ao Windows.
 
-<table><tr><td width="50%"><b>Marca e cores da empresa</b><br><a href="docs/screenshots/pt-BR/branding.png"><img src="docs/screenshots/pt-BR/branding.png" alt="Marca e cores da empresa" width="100%"></a></td><td width="50%"><b>Aparência e preferências do editor</b><br><a href="docs/screenshots/pt-BR/appearance.png"><img src="docs/screenshots/pt-BR/appearance.png" alt="Aparência e preferências do editor" width="100%"></a></td></tr></table>
+<table><tr><td width="50%"><b>Identidade visual e cores</b><br><a href="docs/screenshots/pt-BR/branding.png"><img src="docs/screenshots/pt-BR/branding.png" alt="Identidade visual e cores" width="100%"></a></td><td width="50%"><b>Aparência do editor</b><br><a href="docs/screenshots/pt-BR/appearance.png"><img src="docs/screenshots/pt-BR/appearance.png" alt="Aparência do editor" width="100%"></a></td></tr></table>
 
-### 05 · Prepare a conexão e acompanhe a publicação
+### 06 · Gere, teste e saiba quando gerar de novo
 
-A solução oferece conexão por certificado do aplicativo, conta de usuário, registro existente ou Azure Cloud Shell. Depois de gerar e testar o pacote, publique ou atualize o aplicativo no Intune com acompanhamento do envio — um de cada vez ou vários de uma vez com a mesma atribuição, inclusive apps da Microsoft Store. [Veja o guia de publicação](docs/INTUNE-PUBLISH.md).
+Um clique monta o pacote do PSAppDeployToolkit, o script de detecção e o `.intunewin`, com os comandos e as instruções para o Intune. Teste aqui ou no Windows Sandbox. Configurações alteradas marcam o resultado como desatualizado e desligam publicação e testes até você gerar de novo.
 
-<table><tr><td width="50%"><b>Opções de conexão com o Microsoft Intune</b><br><a href="docs/screenshots/pt-BR/connection.png"><img src="docs/screenshots/pt-BR/connection.png" alt="Opções de conexão com o Microsoft Intune" width="100%"></a></td><td width="50%"><b>Estado e configurações da conexão</b><br><a href="docs/screenshots/pt-BR/intune.png"><img src="docs/screenshots/pt-BR/intune.png" alt="Estado e configurações da conexão" width="100%"></a></td></tr></table>
+<table><tr><td width="50%"><b>Pacote pronto para o Intune</b><br><a href="docs/screenshots/pt-BR/generated.png"><img src="docs/screenshots/pt-BR/generated.png" alt="Pacote pronto para o Intune" width="100%"></a></td><td width="50%"><b>Pacote desatualizado: gere novamente</b><br><a href="docs/screenshots/pt-BR/needs-rebuild.png"><img src="docs/screenshots/pt-BR/needs-rebuild.png" alt="Aviso de pacote desatualizado" width="100%"></a></td></tr></table>
 
-### 06 · Encontre seus pacotes e retome o trabalho
+### 07 · Conecte e publique
 
-Reabra projetos, localize pacotes pelo nome ou fabricante e ordene a biblioteca por data, nome ou atualizações disponíveis. O carregamento acontece em segundo plano; buscas sem resultados oferecem um caminho para limpar os filtros.
+Conecte com a sua conta, com um certificado do aplicativo guardado no TPM, com um registro que já existe ou pelo Azure Cloud Shell. Crie ou atualize o app no Intune com o progresso do envio, o ícone, a detecção, os requisitos e uma atribuição opcional. [Guia de publicação](docs/INTUNE-PUBLISH.md).
 
-<table><tr><td width="50%"><b>Biblioteca com busca e ordenação</b><br><a href="docs/screenshots/pt-BR/packages.png"><img src="docs/screenshots/pt-BR/packages.png" alt="Biblioteca com busca e ordenação" width="100%"></a></td><td width="50%"><b>Filtros com recuperação simples</b><br><a href="docs/screenshots/pt-BR/no-results.png"><img src="docs/screenshots/pt-BR/no-results.png" alt="Filtros com recuperação simples" width="100%"></a></td></tr></table>
+<table><tr><td width="50%"><b>Formas de conectar</b><br><a href="docs/screenshots/pt-BR/connection.png"><img src="docs/screenshots/pt-BR/connection.png" alt="Opções de conexão com o Microsoft Intune" width="100%"></a></td><td width="50%"><b>Publicar no Intune</b><br><a href="docs/screenshots/pt-BR/publish.png"><img src="docs/screenshots/pt-BR/publish.png" alt="Janela de publicação" width="100%"></a></td></tr></table>
 
-### 07 · Saiba quando é hora de gerar novamente
+### 08 · Implante vários aplicativos de uma vez
 
-O editor diferencia o projeto salvo do pacote gerado. Mudou as configurações? O resultado anterior recebe um aviso e suas ações de publicação e teste ficam desabilitadas até a nova geração. Salvar não mascara um pacote desatualizado.
+Marque aplicativos do catálogo (winget ou Microsoft Store), defina o que eles têm em comum e gere — e, se quiser, publique — todos. O que precisaria de um palpite é pulado com o motivo e pode ser terminado no editor.
 
-<a href="docs/screenshots/pt-BR/needs-rebuild.png"><img src="docs/screenshots/pt-BR/needs-rebuild.png" alt="Aviso de pacote anterior e publicação/testes desabilitados até gerar novamente" width="100%"></a>
+<a href="docs/screenshots/pt-BR/batch.png"><img src="docs/screenshots/pt-BR/batch.png" alt="Geração e deploy em lote com o estado de cada aplicativo" width="100%"></a>
 
-### 08 · Trabalhe do seu jeito
+### 09 · Encontre seus pacotes e retome o trabalho
 
-Interface em português e inglês, temas claro e escuro, janela adaptável, atalhos de projeto e execução portátil. **Ctrl+S** salva no arquivo atual; **Ctrl+Shift+S** cria outra cópia; **Ctrl+K** abre a busca do catálogo.
+Reabra projetos, pesquise pelo nome ou fabricante, ordene por data, nome ou atualizações disponíveis e saia de uma busca vazia com um clique.
 
-<a href="docs/screenshots/pt-BR/application.png"><img src="docs/screenshots/pt-BR/application.png" alt="Tema claro em janela compacta" width="100%"></a>
+<table><tr><td width="50%"><b>Biblioteca de pacotes e ordenação</b><br><a href="docs/screenshots/pt-BR/packages.png"><img src="docs/screenshots/pt-BR/packages.png" alt="Biblioteca de pacotes e ordenação" width="100%"></a></td><td width="50%"><b>Busca sem resultados com ação de recuperação</b><br><a href="docs/screenshots/pt-BR/no-results.png"><img src="docs/screenshots/pt-BR/no-results.png" alt="Busca sem resultados com ação de recuperação" width="100%"></a></td></tr></table>
+
+### 10 · Trabalhe do seu jeito
+
+Português ou inglês, claro ou escuro, portátil ou instalado para o seu usuário, atualizações sem sair do aplicativo e padrões que todo pacote novo segue.
+
+<table><tr><td width="50%"><b>Configurações gerais, atualizações e pastas</b><br><a href="docs/screenshots/pt-BR/settings.png"><img src="docs/screenshots/pt-BR/settings.png" alt="Configurações gerais" width="100%"></a></td><td width="50%"><b>Configurações e estado da conexão</b><br><a href="docs/screenshots/pt-BR/intune.png"><img src="docs/screenshots/pt-BR/intune.png" alt="Configurações e estado da conexão" width="100%"></a></td></tr></table>
 
 ## O que você leva ao gerar um pacote
 
@@ -89,7 +101,7 @@ O teste pode ser executado localmente ou no **Windows Sandbox**, quando disponí
 
 1. Use o botão de download no topo e extraia o ZIP para uma pasta.
 2. Abra **`J365.IntunePSApp.exe`** e conclua a preparação das ferramentas. O runtime está incluído; não é necessário instalar o SDK .NET.
-3. Escolha um instalador ou um aplicativo do catálogo, configure o projeto e revise antes de gerar — ou marque vários aplicativos (winget ou Microsoft Store) e faça o deploy de todos juntos. Valide em um grupo piloto antes de distribuir.
+3. Escolha um instalador ou um aplicativo do catálogo, configure o projeto e revise antes de gerar — ou marque vários aplicativos (winget ou Microsoft Store) e faça o deploy de todos juntos. Valide em um grupo piloto antes de distribuir. O [guia de uso](docs/USER-GUIDE.pt-BR.md) percorre cada tela.
 
 ## Novidades da 2.7
 
@@ -114,7 +126,7 @@ Projetos antigos continuam legíveis. Atualizar o editor não altera automaticam
 
 ## Documentação e comunidade
 
-[Novidades por versão](CHANGELOG.md) · [Análise técnica](docs/QUALITY.md) · [Publicação no Intune](docs/INTUNE-PUBLISH.md) · [Compilar](docs/BUILDING.md) · [Arquitetura / Architecture](docs/ARCHITECTURE.md)
+[Guia de uso](docs/USER-GUIDE.pt-BR.md) · [Novidades por versão](CHANGELOG.md) · [Análise técnica](docs/QUALITY.md) · [Publicação no Intune](docs/INTUNE-PUBLISH.md) · [Compilar](docs/BUILDING.md) · [Arquitetura / Architecture](docs/ARCHITECTURE.md)
 
 [Contribuir](CONTRIBUTING.md) · [Relatar um problema](https://github.com/sesantanajr/J365-IntunePSApp/issues) · [Security](SECURITY.md) · [SHA256SUMS.txt](https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v2.7.0/SHA256SUMS.txt)
 

@@ -1,29 +1,42 @@
 # Screenshots — J365 IntunePSApp 2.7
 
-Unmodified PNG captures rendered by the application itself, in English and Portuguese, light and dark themes, with a generic demonstration project and isolated data: no tenant connection, installation or publication.
+Unmodified PNG captures rendered by the application itself (its `--snapshot` mode), in English (`en/`) and Portuguese (`pt-BR/`), used by the [README](../../README.md) and the user guide ([English](../USER-GUIDE.md), [Português](../USER-GUIDE.pt-BR.md)).
 
-Source: J365 IntunePSApp 2.7.0, rendered on 2026-11-23 with exactly the command of the *Render interface smoke checks* step of [`build.yml`](../../.github/workflows/build.yml) (same demonstration project, sizes, themes and languages; isolated data folder). Every build of the workflow produces the same set as its `interface-captures` artifact.
+They show a fictitious company, *Contoso*, with an isolated data folder (`C:\Users\Public\J365-Docs`): the 7-Zip MSI analysed and really packaged, two packages made before (7-Zip and the Visual C++ Redistributable), and a **sample** Microsoft Intune connection. Nothing was published: sign-in and Microsoft Graph pointed to a closed local port, and the tenant and application IDs shown do not exist.
 
-| Documentation file | Capture | Theme / size |
+## Regenerate
+
+```powershell
+dotnet build src/IntunePSApp -c Release
+.\tools\Render-Screenshots.ps1 -Installer <7z…-x64.msi> -Extra <VC_redist.x64.exe> -CopyFrom "$env:LOCALAPPDATA\J365\IntunePSApp"
+```
+
+[`tools/Render-Screenshots.ps1`](../../tools/Render-Screenshots.ps1) builds the demonstration data (database and PSAppDeployToolkit copied from `-CopyFrom`, or downloaded with `--setup`), renders every page in both languages and both themes at 1440×900, renders the editor checks (an outdated package, an empty search) apart, copies the captures below into this folder and removes the demonstration folder. The build workflow renders the same pages for its interface checks (`interface-captures` artifact) with a generic project.
+
+## Files
+
+| File | Capture | Theme |
 | --- | --- | --- |
-| application-dark.png | 03-editor-2.png | Dark |
-| application.png | 03-editor-2.png | Light / compact |
-| metadata.png | 03-editor-2-end.png | Dark |
-| experience.png | 03-editor-3.png | Dark |
-| actions.png | 03-editor-4.png | Dark |
-| uninstall.png | 03-editor-5.png | Dark |
-| detection.png | 03-editor-6.png | Dark |
-| branding.png | 03-editor-7.png | Light / compact |
-| needs-rebuild.png | 04-editor-needs-rebuild.png | Dark |
-| packages.png | 05-packages.png | Dark |
-| no-results.png | 05-packages-no-results.png | Light / compact |
-| appearance.png | 06-settings-appearance.png | Dark |
-| defaults.png | 06-settings-defaults.png | Dark |
-| intune.png | 06-settings-intune.png | Dark |
-| connection.png | 08-connect-choose.png | Dark |
-| connect-failed.png | 08-connect-failed.png | Light |
-| connect-shell.png | 08-connect-shell.png | Light |
+| setup.png | 00-setup-done | Light |
+| home.png / home-dark.png | 01-home | Light / Dark |
+| catalog.png | 02-catalog (search "7-Zip") | Light |
+| batch.png | 02-batch (sample states) | Light |
+| installer.png | 03-editor-1 | Light |
+| application.png / application-dark.png | 03-editor-2 | Light / Dark |
+| metadata.png | 03-editor-2-end | Light |
+| experience.png / experience-end.png | 03-editor-3 / 03-editor-3-end | Light |
+| actions.png | 03-editor-4 | Light |
+| uninstall.png | 03-editor-5 | Light |
+| detection.png | 03-editor-6 | Light |
+| branding.png | 03-editor-7 | Light |
+| review.png | 03-editor-8 | Light |
+| progress.png | 04-progress | Light |
+| generated.png | 04-generated | Light |
+| needs-rebuild.png | 04-editor-needs-rebuild (checks pass) | Light |
+| publish.png | 09-publish | Light |
+| packages.png | 05-packages | Light |
+| no-results.png | 05-packages-no-results (checks pass) | Light |
+| settings.png, appearance.png, company.png, defaults.png, intune.png, components.png, about.png | 06-settings, 06-settings-* | Light |
+| connection.png, connect-shell.png, connect-progress.png, connect-done.png, connect-failed.png | 08-connect-* | Light |
 
-`pt-BR/` uses the `dark` / `light` artifact folders; `en/` uses `en-dark` / `en-light`. The demonstration project's name is user data and stays in Portuguese when the interface language changes. Connection screens are staged UI states. The batch window is rendered as `02-batch.png` with sample applications in every state. The catalog page needs the application database, which the CI runner does not download, so it is not used here.
-
-To regenerate, run the build workflow and take its `interface-captures` artifact; see [BUILDING.md](../BUILDING.md). Earlier screenshots remain in the Git history.
+Earlier screenshots remain in the Git history.
