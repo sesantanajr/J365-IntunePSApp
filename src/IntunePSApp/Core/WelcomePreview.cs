@@ -10,12 +10,10 @@ namespace J365.IntunePSApp.Core
     /// <summary>The moment of a required installation the preview shows.</summary>
     public enum WelcomeMoment
     {
-        /// <summary>An application of the list is open and deferrals are left.</summary>
+        /// <summary>An application of the list is open: the dialog warns that it is about to be closed.</summary>
         AppOpen,
-        /// <summary>None of the applications is open.</summary>
-        AppClosed,
-        /// <summary>The deferrals are used up and an application is open: the last notice.</summary>
-        LastNotice
+        /// <summary>None of the applications is open: the dialog does not appear.</summary>
+        AppClosed
     }
 
     /// <summary>What the welcome dialog of PSAppDeployToolkit 4.1.8 shows at one moment, or why it does not appear.</summary>
@@ -32,26 +30,21 @@ namespace J365.IntunePSApp.Core
         public string AppName { get; init; }
         /// <summary>The program under the name, as the toolkit writes it ("acrobat.exe").</summary>
         public string AppExe { get; init; } = "";
-        public string DeferralsLabel { get; init; }
-        public string DeferralsValue { get; init; }
+
         public string CountdownLabel { get; init; }
         public string CountdownValue { get; init; }
-        /// <summary>Fluent: the accent button, on the left (alone, it takes the right half).</summary>
+        /// <summary>Fluent: the accent button (alone, on the right half: nothing is deferred).</summary>
         public string MainButton { get; init; } = "";
-        /// <summary>Fluent: the button on the right; null when the user cannot defer.</summary>
-        public string DeferButton { get; init; }
 
         // Classic style
         public string ClassicWelcome { get; init; } = "";
         public string ClassicCloseApps { get; init; } = "";
-        public string ClassicExpiry { get; init; } = "";
-        public string ClassicDeferrals { get; init; }
-        public string ClassicExpiryWarning { get; init; } = "";
+
         public string ClassicCountdownLabel { get; init; }
         public string ClassicCountdownValue { get; init; }
         public string ClassicButtonClose { get; init; }
+        /// <summary>Classic: the Defer button stays in the dialog, greyed (the installation is never deferred).</summary>
         public string ClassicButtonDefer { get; init; } = "";
-        public bool ClassicDeferEnabled { get; init; }
         public string ClassicButtonContinue { get; init; } = "";
 
         /// <summary>What happens at this moment, for the person who builds the package.</summary>
@@ -61,14 +54,12 @@ namespace J365.IntunePSApp.Core
     /// <summary>The settings of the package the preview depends on.</summary>
     public sealed class WelcomePreviewInput
     {
-        /// <summary>Auto, WhenNeeded, Silent or Interactive.</summary>
-        public string Mode { get; init; } = "Auto";
+        /// <summary>Silent or Notify (<see cref="DeployModes"/>).</summary>
+        public string Mode { get; init; } = DeployModes.Notify;
         public string AppName { get; init; } = "";
         public string AppVersion { get; init; } = "";
         public string Company { get; init; } = "";
         public IList<string> Processes { get; init; } = new List<string>();
-        public bool AllowDefer { get; init; }
-        public int DeferTimes { get; init; } = 3;
         public int CountdownSeconds { get; init; } = 300;
         public string CustomMessage { get; init; } = "";
     }
@@ -76,7 +67,8 @@ namespace J365.IntunePSApp.Core
     /// <summary>
     /// The welcome dialog the package shows during a required installation from Intune, moment by moment, the way
     /// Show-ADTInstallationWelcome of PSAppDeployToolkit 4.1.8 decides it (one user signed in): the texts come from the
-    /// string table of the toolkit in the language of the dialogs.
+    /// string table of the toolkit in the language of the dialogs. The installation is never deferred, so the dialog has
+    /// one purpose: to warn that an open application is about to be closed.
     /// </summary>
     public static class WelcomePreview
     {
@@ -87,70 +79,50 @@ namespace J365.IntunePSApp.Core
         {
             string Str(string fallbackKey, params string[] path) => Clean(strings?.Get(path)) is { Length: > 0 } s ? s : T(fallbackKey);
             bool apps = input.Processes.Count > 0;
-            int deferrals = Math.Clamp(input.DeferTimes, 1, 99);
             var countdown = TimeSpan.FromSeconds(Math.Max(0, input.CountdownSeconds));
-            string mode = input.Mode is "WhenNeeded" or "Silent" or "Interactive" ? input.Mode : "Auto";
+            string mode = DeployModes.Normalize(input.Mode);
             string close = Str("Prev_CloseAndInstall", "CloseAppsPrompt", "Fluent", "ButtonLeftText", "Install");
-            string install = Str("Prev_Install", "CloseAppsPrompt", "Fluent", "ButtonLeftNoProcessesText", "Install");
 
             WelcomePreviewInfo Hidden(string reason) => new() { Shown = false, HiddenReason = reason, Note = reason };
-            if (mode == "Silent") return Hidden(T("Prev_HiddenSilent"));
-            if (!apps && !input.AllowDefer) return Hidden(T("Prev_HiddenNothing"));
-            // Without applications to close, the moments "open" and "closed" are the same.
-            if (!apps && moment == WelcomeMoment.AppOpen) moment = WelcomeMoment.AppClosed;
-            // Without deferral, the first notice is already the last one.
-            if (!input.AllowDefer && moment == WelcomeMoment.LastNotice) moment = WelcomeMoment.AppOpen;
-            if (moment == WelcomeMoment.AppClosed && apps && mode == "WhenNeeded") return Hidden(T("Prev_HiddenWhenNeeded"));
-            if (moment == WelcomeMoment.AppClosed && !input.AllowDefer) return Hidden(T("Prev_HiddenNoDefer"));
-            if (moment == WelcomeMoment.LastNotice && !apps) return Hidden(T("Prev_HiddenNothing"));
+            if (mode == DeployModes.Silent) return Hidden(T("Prev_HiddenSilent"));
+            // Nothing to close: there is nothing to tell, and nothing to decide (the installation is never deferred).
+            if (!apps) return Hidden(T("Prev_HiddenNothing"));
+            if (moment == WelcomeMoment.AppClosed) return Hidden(T("Prev_HiddenClosed"));
 
-            bool listed = apps && moment != WelcomeMoment.AppClosed;
-            bool canDefer = input.AllowDefer && moment != WelcomeMoment.LastNotice;
-            bool counting = !canDefer && listed && countdown > TimeSpan.Zero;
+            // From here on an application of the list is open: the dialog lists it and, with a countdown, closes it by itself.
+            bool counting = countdown > TimeSpan.Zero;
             string title = (input.AppName ?? "").Trim();
             string company = string.IsNullOrWhiteSpace(input.Company) ? AppInfo.PsadtName : input.Company.Trim();
             string subtitle = Str("Prev_Subtitle", "CloseAppsPrompt", "Fluent", "Subtitle", "Install");
             subtitle = subtitle.Contains("{0}") ? string.Format(CultureInfo.InvariantCulture, subtitle, company)
                 : Regex.Replace(subtitle, @"\{Toolkit\\CompanyName\}", company.Replace("$", "$$"));
-            string exe = apps ? input.Processes[0].Trim().ToLowerInvariant() : "";
+            string exe = input.Processes[0].Trim().ToLowerInvariant();
             if (exe.Length > 0 && !exe.EndsWith(".exe", StringComparison.Ordinal)) exe += ".exe";
 
-            string note = moment switch
-            {
-                WelcomeMoment.AppOpen when canDefer => T("Prev_NoteOpen", deferrals, close),
-                WelcomeMoment.AppOpen => counting ? T("Prev_NoteOpenCountdown", Duration(countdown), close) : T("Prev_NoteOpenWait", close),
-                WelcomeMoment.AppClosed => T("Prev_NoteClosed", install),
-                _ => counting ? T("Prev_NoteLast", deferrals, Duration(countdown)) : T("Prev_NoteLastWait", deferrals, close)
-            };
-            if (canDefer) note += " " + T("Prev_NoteTimeout", TimeoutMinutes);
+            string note = counting ? T("Prev_NoteOpenCountdown", Duration(countdown), close) : T("Prev_NoteOpenWait", close, TimeoutMinutes);
 
             return new WelcomePreviewInfo
             {
                 Title = title,
                 Subtitle = subtitle,
-                Message = listed ? Str("Prev_CloseBody", "CloseAppsPrompt", "Fluent", "DialogMessage", "Install")
-                    : Str("Prev_ReadyBody", "CloseAppsPrompt", "Fluent", "DialogMessageNoProcesses", "Install"),
+                Message = Str("Prev_CloseBody", "CloseAppsPrompt", "Fluent", "DialogMessage", "Install"),
                 Custom = (input.CustomMessage ?? "").Trim(),
-                AppName = listed ? (string.IsNullOrWhiteSpace(input.AppName) ? T("Prev_AppLabel") : input.AppName.Trim()) : null,
-                AppExe = listed ? exe : "",
-                DeferralsLabel = canDefer ? Str("Prev_Deferrals", "CloseAppsPrompt", "Fluent", "DeferralsRemaining") : null,
-                // The toolkit counts the deferral being offered: 3, then 2, then 1, then the last notice.
-                DeferralsValue = canDefer ? deferrals.ToString(CultureInfo.InvariantCulture) : null,
+                AppName = string.IsNullOrWhiteSpace(input.AppName) ? T("Prev_AppLabel") : input.AppName.Trim(),
+                AppExe = exe,
+
                 CountdownLabel = counting ? Str("Prev_Countdown", "CloseAppsPrompt", "Fluent", "AutomaticStartCountdown") : null,
                 CountdownValue = counting ? $"{(int)countdown.TotalHours}h {countdown.Minutes}m {countdown.Seconds}s" : null,
-                MainButton = listed ? close : install,
-                DeferButton = canDefer ? Str("Prev_Defer", "CloseAppsPrompt", "Fluent", "ButtonRightText") : null,
+                MainButton = close,
+
 
                 ClassicWelcome = Str("Prev_ClassicWelcome", "CloseAppsPrompt", "Classic", "WelcomeMessage", "Install"),
-                ClassicCloseApps = listed ? Str("Prev_ClassicCloseApps", "CloseAppsPrompt", "Classic", "CloseAppsMessage", "Install") : "",
-                ClassicExpiry = canDefer ? Str("Prev_ClassicExpiry", "CloseAppsPrompt", "Classic", "ExpiryMessage", "Install") : "",
-                ClassicDeferrals = canDefer ? Str("Prev_ClassicDeferrals", "CloseAppsPrompt", "Classic", "DeferralsRemaining") + " " + deferrals.ToString(CultureInfo.InvariantCulture) : null,
-                ClassicExpiryWarning = canDefer ? Str("Prev_ClassicExpiryWarning", "CloseAppsPrompt", "Classic", "ExpiryWarning") : "",
+                ClassicCloseApps = Str("Prev_ClassicCloseApps", "CloseAppsPrompt", "Classic", "CloseAppsMessage", "Install"),
+
                 ClassicCountdownLabel = counting ? Str("Prev_ClassicCountdown", "CloseAppsPrompt", "Classic", "CountdownClose", "Install") : null,
                 ClassicCountdownValue = counting ? $"{(int)countdown.TotalHours}:{countdown.Minutes:00}:{countdown.Seconds:00}" : null,
-                ClassicButtonClose = listed ? Mnemonic(Str("Prev_ClassicClose", "CloseAppsPrompt", "Classic", "ButtonClose")) : null,
+                ClassicButtonClose = Mnemonic(Str("Prev_ClassicClose", "CloseAppsPrompt", "Classic", "ButtonClose")),
                 ClassicButtonDefer = Mnemonic(Str("Prev_Defer", "CloseAppsPrompt", "Classic", "ButtonDefer")),
-                ClassicDeferEnabled = canDefer,
+
                 ClassicButtonContinue = Mnemonic(Str("Prev_ClassicContinue", "CloseAppsPrompt", "Classic", "ButtonContinue")),
                 Note = note
             };
@@ -162,7 +134,6 @@ namespace J365.IntunePSApp.Core
             var list = new List<WelcomeMoment>();
             if (input.Processes.Count > 0) list.Add(WelcomeMoment.AppOpen);
             list.Add(WelcomeMoment.AppClosed);
-            if (input.Processes.Count > 0 && input.AllowDefer) list.Add(WelcomeMoment.LastNotice);
             return list;
         }
 

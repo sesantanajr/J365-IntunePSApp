@@ -59,12 +59,7 @@ namespace J365.IntunePSApp.Core
             rows.Add((g5, T("Sum_F_WhatChecks"), det));
             if (s.InstallerType == "MSI" && !string.IsNullOrWhiteSpace(s.MsiProductCode) && s.MsiProductCode.StartsWith("{"))
                 rows.Add((g5, T("Sum_F_MsiAlt"), T("Sum_V_MsiAlt", s.MsiProductCode, s.AppVersion) + (s.DetectionRequireMark ? T("Sum_V_MsiAltNoMark") : "")));
-            rows.Add((g6, T("Sum_F_Notifications"), PackageBuilder.IntuneNotifications(s) switch
-            {
-                "hideAll" => T("Sum_V_NotifyHideAll"),
-                "showReboot" => T("Sum_V_NotifyReboot"),
-                _ => T("Sum_V_NotifyShowAll")
-            }));
+            rows.Add((g6, T("Sum_F_Notifications"), PackageBuilder.IntuneNotifications(s) == "hideAll" ? T("Sum_V_NotifyHideAll") : T("Sum_V_NotifyShowAll")));
             rows.Add((g6, T("Sum_F_Suggestion"), T("Sum_V_Suggestion")));
             return rows;
         }

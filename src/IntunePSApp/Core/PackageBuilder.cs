@@ -88,7 +88,7 @@ namespace J365.IntunePSApp.Core
         public string UninstallCommandLine { get; set; }
         public string InstallExperience { get; set; }
         public string RestartBehavior { get; set; } = "basedOnReturnCode";
-        /// <summary>Toasts of the assignment: showAll, showReboot or hideAll (silent packages hide them).</summary>
+        /// <summary>Toasts of the assignment: hideAll for a silent package, showAll for one that notifies.</summary>
         public string Notifications { get; set; } = "showAll";
         public int MaximumInstallationTimeInMinutes { get; set; } = 60;
         public bool AllowAvailableUninstall { get; set; } = true;
@@ -110,24 +110,18 @@ namespace J365.IntunePSApp.Core
             return m.Success ? $"Windows {m.Groups[1].Value} {m.Groups[2].Value}" : code ?? "";
         }
 
-        /// <summary>Values Intune accepts for the toasts of an assignment (win32LobAppAssignmentSettings.notifications).</summary>
-        public static readonly string[] NotificationOptions = { "showAll", "showReboot", "hideAll" };
-
         /// <summary>
-        /// Toasts Intune shows on the device for the assignment: the choice of the package, or (automatic) none for a
-        /// silent package, so the user is not told about the installation at all, and every toast otherwise.
+        /// Toasts Intune shows on the device for the assignment (win32LobAppAssignmentSettings.notifications). The mode of
+        /// the package decides: none for a silent package ("hideAll"), so the user is not told about the installation at
+        /// all, and every toast for a package that notifies ("showAll").
         /// </summary>
-        public static string IntuneNotifications(PackageSettings s)
-        {
-            string chosen = NotificationOptions.FirstOrDefault(o => string.Equals(o, s?.IntuneNotifications, StringComparison.OrdinalIgnoreCase));
-            return chosen ?? (s?.DeployMode == "Silent" ? "hideAll" : "showAll");
-        }
+        public static string IntuneNotifications(PackageSettings s) => ScriptGenerator.IsSilent(s) ? "hideAll" : "showAll";
 
         /// <summary>
         /// Device restart behavior of the app in Intune. A silent package never makes Intune restart the device or ask
         /// for it ("suppress"): a restart the installer needs happens at the next restart of the user.
         /// </summary>
-        public static string RestartBehavior(PackageSettings s) => s?.DeployMode == "Silent" ? "suppress" : "basedOnReturnCode";
+        public static string RestartBehavior(PackageSettings s) => ScriptGenerator.IsSilent(s) ? "suppress" : "basedOnReturnCode";
 
         /// <summary>Architecture value understood by the Intune requirement rule (x86 installers also run on x64).</summary>
         public static string IntuneArchitecture(PackageSettings s) => s.AppArch switch { "x64" => "x64", "arm64" => "arm64", _ => "x64x86" };
@@ -154,6 +148,9 @@ namespace J365.IntunePSApp.Core
             if (string.IsNullOrEmpty(s.MinimumOs)) s.MinimumOs = MinimumOsOptions[0];
             if (string.IsNullOrEmpty(s.InstallerType) && !string.IsNullOrEmpty(s.InstallerPath))
                 s.InstallerType = Path.GetExtension(s.InstallerPath).TrimStart('.').ToUpperInvariant();
+            // 3.0: two modes. Auto, WhenNeeded and Interactive of earlier versions showed the windows of the package: "Notify".
+            // What 3.0 no longer has (deferrals, the choice of Intune toasts, keeping the same version) is simply not read.
+            s.DeployMode = DeployModes.Normalize(s.DeployMode);
             s.SchemaVersion = PackageSettings.CurrentSchema;
         }
 
@@ -184,17 +181,22 @@ namespace J365.IntunePSApp.Core
 
             if (s.InstallerType == "EXE" && string.IsNullOrWhiteSpace(s.InstallArgs)) v.Warnings.Add(T("Val_Warn_NoSilentArgs"));
             // A setup program of the catalog that installs an MSI is removed with msiexec /x by its product code: no switches needed.
-            if (s.InstallerType == "EXE" && string.IsNullOrWhiteSpace(s.UninstallExeArgs) && ScriptGenerator.ExeMsiCode(s) == null) v.Warnings.Add(T("Val_Warn_NoUninstallArgs"));
+            if (s.InstallerType == "EXE" && string.IsNullOrWhiteSpace(s.UninstallExeArgs) && ScriptGenerator.ExeMsiCode(s) == null)
+            {
+                v.Warnings.Add(T("Val_Warn_NoUninstallArgs"));
+                // The installation stops when a copy cannot be removed: without switches, that is every device whose copy
+                // registered no silent uninstaller and is neither Inno Setup nor NSIS.
+                if (s.RemovePreviousVersions && !s.InstallIfRemovalFails) v.Warnings.Add(T("Val_Warn_StrictRemovalNoArgs"));
+            }
             foreach (var p in s.ProcessesToClose) if (!Regex.IsMatch(p, @"^[\w\.\-\+ ]+$")) v.Errors.Add(T("Val_ProcessName", p));
-            if (s.AllowDefer && (s.DeferTimes < 1 || s.DeferTimes > 99)) v.Errors.Add(T("Val_DeferTimes"));
             if (s.CloseAppsCountdown < 0 || s.CloseAppsCountdown > 3000) v.Errors.Add(T("Val_CloseCountdown"));
             if (s.RestartPrompt && (s.RestartCountdown < 60 || s.RestartCountdown > 86400)) v.Errors.Add(T("Val_RestartCountdown"));
             if (!string.IsNullOrWhiteSpace(s.LogoPath) && !File.Exists(s.LogoPath)) v.Errors.Add(T("Val_LogoMissing", s.LogoPath));
             if (!string.IsNullOrWhiteSpace(s.AppIconPath) && !File.Exists(s.AppIconPath)) v.Errors.Add(T("Val_IconMissing", s.AppIconPath));
             if (!string.IsNullOrWhiteSpace(s.AccentColor) && !Regex.IsMatch(s.AccentColor.Trim(), "^#?[0-9A-Fa-f]{6}$")) v.Errors.Add(T("Val_AccentColor"));
             if (!ScriptGenerator.IsCodeList(s.ExtraSuccessCodes)) v.Errors.Add(T("Val_SuccessCodes"));
-            // PSAppDeployToolkit only shows the welcome dialog when there is something to decide: a deferral or an open application.
-            if (!string.IsNullOrWhiteSpace(s.WelcomeMessage) && !s.AllowDefer && s.ProcessesToClose.Count == 0) v.Warnings.Add(T("Val_Warn_WelcomeNotShown"));
+            // PSAppDeployToolkit only shows the welcome dialog when there is something to tell: an open application that will be closed.
+            if (!ScriptGenerator.IsSilent(s) && !string.IsNullOrWhiteSpace(s.WelcomeMessage) && s.ProcessesToClose.Count == 0) v.Warnings.Add(T("Val_Warn_WelcomeNotShown"));
             // Silent: the messages and the restart prompt typed for this package are never shown.
             if (ScriptGenerator.IsSilent(s) && (s.RestartPrompt || new[] { s.WelcomeMessage, s.ProgressMessage, s.CompletionMessage }.Any(m => !string.IsNullOrWhiteSpace(m))))
                 v.Warnings.Add(T("Val_Warn_SilentHidesDialogs"));

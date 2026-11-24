@@ -35,7 +35,6 @@ namespace J365.IntunePSApp.Views
             static Visibility Vis(bool v) => v ? Visibility.Visible : Visibility.Collapsed;
             bool listed = !string.IsNullOrEmpty(m.AppName);
             bool custom = !string.IsNullOrWhiteSpace(m.Custom);
-            bool defer = m.DeferButton != null;
 
             // Fluent
             FSidebar.Background = accent;
@@ -50,21 +49,12 @@ namespace J365.IntunePSApp.Views
             FAppName.Text = m.AppName ?? "";
             FAppExe.Text = m.AppExe ?? "";
             FAppExe.Foreground = accent;
-            // The separator comes with the deferral rows only.
-            FSeparator.Visibility = Vis(m.DeferralsLabel != null);
             FCountdownRow.Visibility = Vis(m.CountdownLabel != null);
             FCountdownLabel.Text = m.CountdownLabel ?? "";
             FCountdownValue.Text = m.CountdownValue ?? "";
-            FDeferRow.Visibility = Vis(m.DeferralsLabel != null);
-            FDeferLabel.Text = m.DeferralsLabel ?? "";
-            FDeferValue.Text = m.DeferralsValue ?? "";
+            // The installation is never deferred: the accent button is alone, on the right half (like the toolkit).
             FMainBtn.Background = accent;
             FMainText.Text = m.MainButton;
-            FDeferBtn.Visibility = Vis(defer);
-            FDeferText.Text = m.DeferButton ?? "";
-            // Alone, the accent button takes the right half (like the toolkit).
-            Grid.SetColumn(FMainBtn, defer ? 0 : 1);
-            FMainBtn.Margin = new Thickness(defer ? 0 : 3, 0, defer ? 3 : 0, 0);
 
             // Classic: the accent colour only appears on the banner line, like the generated Banner.Classic.png.
             CIcon.Source = look.Logo;
@@ -80,12 +70,7 @@ namespace J365.IntunePSApp.Views
             CCloseApps.Visibility = Vis(listed);
             CAppsBox.Visibility = Vis(listed);
             CApps.Text = m.AppName ?? "";
-            CExpiry.Text = m.ClassicExpiry;
-            CExpiry.Visibility = Vis(!string.IsNullOrEmpty(m.ClassicExpiry));
-            CDeferrals.Text = m.ClassicDeferrals ?? "";
-            CDeferrals.Visibility = Vis(m.ClassicDeferrals != null);
-            CExpiryWarning.Text = m.ClassicExpiryWarning;
-            CExpiryWarning.Visibility = Vis(!string.IsNullOrEmpty(m.ClassicExpiryWarning));
+
             CCountdownLabel.Text = m.ClassicCountdownLabel ?? "";
             CCountdownLabel.Visibility = Vis(m.ClassicCountdownLabel != null);
             CCountdownValue.Text = m.ClassicCountdownValue ?? "";
@@ -93,8 +78,8 @@ namespace J365.IntunePSApp.Views
             CCloseBtn.Visibility = m.ClassicButtonClose != null ? Visibility.Visible : Visibility.Hidden;
             CCloseText.Text = m.ClassicButtonClose ?? "";
             CDeferText.Text = m.ClassicButtonDefer;
-            // Without deferrals the button stays, greyed.
-            CDeferBtn.Opacity = m.ClassicDeferEnabled ? 1 : 0.45;
+            // The Classic dialog keeps its Defer button, greyed: the installation is never deferred.
+            CDeferBtn.Opacity = 0.45;
             CContinueText.Text = m.ClassicButtonContinue;
         }
     }

@@ -210,14 +210,14 @@ namespace J365.IntunePSApp.Tests
             var table = PsadtStrings.Load(strings, "pt-BR");
             var adobe = new WelcomePreviewInput
             {
-                Mode = "Auto", AppName = "Adobe Acrobat Reader", AppVersion = "26.003.22110", Company = "Jornada 365",
+                Mode = "Notify", AppName = "Adobe Acrobat Reader", AppVersion = "26.003.22110", Company = "Jornada 365",
                 Processes = new System.Collections.Generic.List<string> { "AcroRd32", "Acrobat", "AcroCEF" },
-                AllowDefer = true, DeferTimes = 3, CountdownSeconds = 300
+                CountdownSeconds = 300
             };
-            Assert.Equal(new[] { WelcomeMoment.AppOpen, WelcomeMoment.AppClosed, WelcomeMoment.LastNotice }, WelcomePreview.Moments(adobe));
+            Assert.Equal(new[] { WelcomeMoment.AppOpen, WelcomeMoment.AppClosed }, WelcomePreview.Moments(adobe));
 
-            // An application of the list open: one row for all its programs, the deferrals left, Close Apps & Install on
-            // the left and Defer on the right; no countdown while the user can defer.
+            // An application of the list open: one row for all its programs, Close Apps & Install alone (3.0: the
+            // installation is never deferred) and the countdown of the package, after which the programs are closed.
             var open = WelcomePreview.Build(adobe, WelcomeMoment.AppOpen, table);
             Assert.True(open.Shown);
             Assert.Equal("Adobe Acrobat Reader", open.Title);
@@ -225,43 +225,28 @@ namespace J365.IntunePSApp.Tests
             Assert.StartsWith("Por favor, salve seu trabalho", open.Message);
             Assert.Equal("Adobe Acrobat Reader", open.AppName);
             Assert.Equal("acrord32.exe", open.AppExe);
-            Assert.Equal(("Adiamentos restantes", "3"), (open.DeferralsLabel, open.DeferralsValue));
-            Assert.Null(open.CountdownLabel);
-            Assert.Equal(("Fechar Aplicativos e Instalar", "Adiar"), (open.MainButton, open.DeferButton));
-            Assert.Equal(("Fechar Programas", "Adiar", "“Continuar”"), (open.ClassicButtonClose, open.ClassicButtonDefer, open.ClassicButtonContinue));
-            Assert.Equal("Adiamentos restantes: 3", open.ClassicDeferrals);
+            Assert.Equal("Fechar Aplicativos e Instalar", open.MainButton);
+            Assert.Equal(("Fechar Programas", "“Continuar”"), (open.ClassicButtonClose, open.ClassicButtonContinue));
+            Assert.Equal(("Contagem regressiva para início automático", "0h 5m 0s"), (open.CountdownLabel, open.CountdownValue));
+            Assert.Equal("0:05:00", open.ClassicCountdownValue);
+            Assert.Contains("5 min 00 s", open.Note);
 
-            // Nothing open: the dialog still appears in the automatic mode, to install now or defer.
+            // Nothing open: nothing to tell and nothing to decide, so the dialog does not appear.
             var closed = WelcomePreview.Build(adobe, WelcomeMoment.AppClosed, table);
-            Assert.True(closed.Shown);
-            Assert.Equal("Selecione Instalar para continuar com a instalação.", closed.Message);
-            Assert.Null(closed.AppName);
-            Assert.Equal(("Instalar", "Adiar"), (closed.MainButton, closed.DeferButton));
-            Assert.Null(closed.ClassicButtonClose);
+            Assert.False(closed.Shown);
+            Assert.Equal(Loc.T("Prev_HiddenClosed"), closed.HiddenReason);
 
-            // Deferrals used up: no Defer, the countdown of the package, then the programs are closed.
-            var last = WelcomePreview.Build(adobe, WelcomeMoment.LastNotice, table);
-            Assert.Null(last.DeferButton);
-            Assert.Null(last.DeferralsLabel);
-            Assert.Equal(("Contagem regressiva para início automático", "0h 5m 0s"), (last.CountdownLabel, last.CountdownValue));
-            Assert.Equal("0:05:00", last.ClassicCountdownValue);
-            Assert.False(last.ClassicDeferEnabled);
-            Assert.Contains("5 min 00 s", last.Note);
+            // A silent package never shows it; the modes of versions before 3.0 are read as "Notify".
+            Assert.False(WelcomePreview.Build(new WelcomePreviewInput { Mode = "Silent", Processes = adobe.Processes }, WelcomeMoment.AppOpen, table).Shown);
+            Assert.True(WelcomePreview.Build(new WelcomePreviewInput { Mode = "WhenNeeded", Processes = adobe.Processes }, WelcomeMoment.AppOpen, table).Shown);
 
-            // The discreet mode stays silent while nothing is open; the silent mode never shows it.
-            Assert.False(WelcomePreview.Build(new WelcomePreviewInput { Mode = "WhenNeeded", Processes = adobe.Processes, AllowDefer = true }, WelcomeMoment.AppClosed, table).Shown);
-            Assert.False(WelcomePreview.Build(new WelcomePreviewInput { Mode = "Silent", Processes = adobe.Processes, AllowDefer = true }, WelcomeMoment.AppOpen, table).Shown);
+            // Without a countdown the dialog waits for the click.
+            var waits = WelcomePreview.Build(new WelcomePreviewInput { AppName = "7-Zip", Processes = new System.Collections.Generic.List<string> { "7zFM" }, CountdownSeconds = 0 }, WelcomeMoment.AppOpen, table);
+            Assert.Null(waits.CountdownValue);
+            Assert.Contains(WelcomePreview.TimeoutMinutes.ToString(), waits.Note);
 
-            // Without deferral: the first notice already counts down, and with nothing open there is no dialog.
-            var noDefer = new WelcomePreviewInput { Mode = "Auto", AppName = "7-Zip", Processes = new System.Collections.Generic.List<string> { "7zFM" }, CountdownSeconds = 60 };
-            Assert.Equal(new[] { WelcomeMoment.AppOpen, WelcomeMoment.AppClosed }, WelcomePreview.Moments(noDefer));
-            var first = WelcomePreview.Build(noDefer, WelcomeMoment.LastNotice, table);
-            Assert.Equal("0h 1m 0s", first.CountdownValue);
-            Assert.Null(first.DeferButton);
-            Assert.False(WelcomePreview.Build(noDefer, WelcomeMoment.AppClosed, table).Shown);
-
-            // No program to close and no deferral: no welcome dialog at all.
-            var nothing = new WelcomePreviewInput { Mode = "Auto", AppName = "Tool" };
+            // No program to close: no welcome dialog at all.
+            var nothing = new WelcomePreviewInput { AppName = "Tool" };
             Assert.Equal(new[] { WelcomeMoment.AppClosed }, WelcomePreview.Moments(nothing));
             Assert.False(WelcomePreview.Build(nothing, WelcomeMoment.AppOpen, table).Shown);
 
@@ -299,7 +284,8 @@ namespace J365.IntunePSApp.Tests
             s.UninstallExeArgs = "";
             var v = PackageBuilder.Validate(s);
             Assert.True(v.IsValid);
-            Assert.Equal(2, v.Warnings.Count);
+            // No silent switches to install, none to uninstall and, since 3.0, a mandatory removal that may stop for lack of them.
+            Assert.Equal(new[] { Loc.T("Val_Warn_NoSilentArgs"), Loc.T("Val_Warn_NoUninstallArgs"), Loc.T("Val_Warn_StrictRemovalNoArgs") }, v.Warnings);
         }
 
         [Fact]
@@ -395,7 +381,7 @@ namespace J365.IntunePSApp.Tests
             string file = Path.Combine(tmp.Path, PackageLayout.ProjectFile);
             Json.Save(file, s);
             var loaded = PackageBuilder.LoadProject(file);
-            Assert.Equal(JsonSerializer.Serialize(s, Json.Options).Replace("\"SchemaVersion\": 0", "\"SchemaVersion\": 2"), JsonSerializer.Serialize(loaded, Json.Options));
+            Assert.Equal(JsonSerializer.Serialize(s, Json.Options).Replace("\"SchemaVersion\": 0", $"\"SchemaVersion\": {PackageSettings.CurrentSchema}"), JsonSerializer.Serialize(loaded, Json.Options));
             Assert.False(File.Exists(file + ".tmp"));
         }
 

@@ -9,8 +9,9 @@ namespace J365.IntunePSApp.Tests;
 
 /// <summary>
 /// 2.7.0, from the logs of a real deployment (Adobe Acrobat Reader 26.003.22110 through Intune): the device already had
-/// that same version, installed some other way; the package removed it (4 minutes) and installed it again (5 minutes)
-/// after asking the user to close it. The same version of the same product is now kept and only marked.
+/// that same version, installed some other way; the package removed it and installed it again. 2.7 kept that copy and
+/// only marked it. 3.0 goes back to one rule that has no exception but a newer version: whatever is installed is removed
+/// before the installation, so every device ends with the copy this package installs.
 /// </summary>
 public class Release27PackagingTests
 {
@@ -45,7 +46,7 @@ public class Release27PackagingTests
 
     /// <summary>
     /// Runs the "kept" block of the generated script against fake installed applications (what Get-ADTApplication would
-    /// return) and gives how many were kept and why ("newer", "same" or "none").
+    /// return) and gives how many were kept ("newer:n" or "none").
     /// </summary>
     private static string Kept(PackageSettings s, params string[] apps)
     {
@@ -62,65 +63,30 @@ public class Release27PackagingTests
         }
         fake.Append(") }\r\n");
         string run = fake + script.Substring(start, end - start)
-            + "\r\nif ($keptApps.Count -eq 0) { 'none' } elseif ($keptReason -like 'The same*') { 'same:' + $keptApps.Count } else { 'newer:' + $keptApps.Count }";
+            + "\r\nif ($keptApps.Count -eq 0) { 'none' } else { 'newer:' + $keptApps.Count }";
         return RunPowerShell(run);
     }
 
     [Fact]
-    public void The_same_version_of_the_same_msi_product_is_kept_and_marked()
+    public void Only_a_newer_version_is_kept_the_same_version_is_removed_and_installed_again()
     {
         var s = Acrobat();
         string script = ScriptGenerator.DeployScript(Fakes.Template, s, "setup.exe");
         Ps.AssertParses(script);
-        Assert.Contains("$keptReason = 'The same version is already installed and is kept", script);
-        // The block that keeps it writes the mark and stops before the welcome dialog and the removal.
-        int same = script.IndexOf("-OrSame)", StringComparison.Ordinal);
-        Assert.True(same > 0 && same < script.IndexOf("Show-ADTInstallationWelcome", StringComparison.Ordinal));
-        Assert.True(same < script.IndexOf("Uninstall-ADTApplication", StringComparison.Ordinal));
+        Assert.DoesNotContain("-OrSame", script);
+        Assert.DoesNotContain("The same version is already installed and is kept", script);
+        // The block that keeps a newer version writes the mark and stops before the welcome dialog and the removal.
+        int kept = script.IndexOf("if ($keptApps.Count -gt 0)", StringComparison.Ordinal);
+        Assert.True(kept > 0 && kept < script.IndexOf("Show-ADTInstallationWelcome", StringComparison.Ordinal));
+        Assert.True(kept < script.IndexOf("$existingApps = @(Get-J365InstalledCopies)", StringComparison.Ordinal));
 
-        // The device of the log: the same version with the same product code.
-        Assert.Equal("same:1", Kept(s, "26.003.22110|ac76ba86-1033-ff00-7760-bc15014ea700|true"));
-        // A newer one is still kept as newer; an older one is replaced.
         Assert.Equal("newer:1", Kept(s, "26.004.20000|ac76ba86-1033-ff00-7760-bc15014ea700|true"));
-        Assert.Equal("none", Kept(s, "25.001.20000|ac76ba86-1033-ff00-7760-bc15014ea700|true"));
-        // The same version of another product (another edition or architecture: another product code) is replaced.
-        Assert.Equal("none", Kept(s, "26.003.22110|ac76ba86-1033-ffff-7760-bc15014ea700|true"));
-        Assert.Equal("none", Kept(s, "26.003.22110||true"));
-    }
-
-    [Fact]
-    public void Without_a_product_code_the_same_version_must_have_the_same_architecture()
-    {
-        var s = Acrobat();
-        s.MsiProductCode = "";
-        Assert.Equal("same:1", Kept(s, "26.003.22110||true"));
-        Assert.Equal("none", Kept(s, "26.003.22110||false"));    // an x86 copy is replaced by the x64 package
-
-        s.AppArch = "x86";
-        Assert.Equal("same:1", Kept(s, "26.003.22110||false"));
-        Assert.Equal("none", Kept(s, "26.003.22110||true"));
-
-        s.AppArch = "";                                             // a package for any architecture
-        Assert.Equal("same:1", Kept(s, "26.003.22110||true"));
-    }
-
-    [Fact]
-    public void The_same_version_is_installed_again_when_it_cannot_be_told_apart_or_when_asked()
-    {
-        var s = Acrobat();
-        s.MsiProductCode = "";
-        s.AppArch = "arm64";                                        // an x64 copy also registers as 64-bit on ARM64
-        Assert.Null(ScriptGenerator.SameProductCondition(s));
-        Assert.Equal("none", Kept(s, "26.003.22110||true"));
-
-        s = Acrobat();
-        s.KeepSameVersion = false;                                  // repair: install it again
-        string script = ScriptGenerator.DeployScript(Fakes.Template, s, "setup.exe");
-        Assert.DoesNotContain("-OrSame)", script);
-        Assert.Contains("Test-J365NewerVersion -Installed", script);
+        // The device of the 2.7 log: the same version of the same product. Not kept: removed and installed again.
         Assert.Equal("none", Kept(s, "26.003.22110|ac76ba86-1033-ff00-7760-bc15014ea700|true"));
+        Assert.Equal("none", Kept(s, "25.001.20000|ac76ba86-1033-ff00-7760-bc15014ea700|true"));
+        Assert.Equal("none", Kept(s, "26.003.22110||false"));
 
-        s.KeepNewerVersion = false;                                 // neither: nothing is kept
+        s.KeepNewerVersion = false;                                 // nothing is kept
         Assert.DoesNotContain("Test-J365NewerVersion", ScriptGenerator.DeployScript(Fakes.Template, s, "setup.exe"));
     }
 
@@ -187,16 +153,13 @@ public class Release27PackagingTests
     }
 
     [Fact]
-    public void Keeping_the_same_version_by_default_changes_no_saved_project_nor_its_build_record()
+    public void A_project_that_chose_about_the_same_version_is_read_and_saved_without_that_choice()
     {
-        var s = Acrobat();
-        Assert.Null(s.KeepSameVersion);
-        string json = JsonSerializer.Serialize(s, Json.Options);
-        Assert.DoesNotContain("KeepSameVersion", json);
-        string before = PackageRevision.Fingerprint(s);
-        s.KeepSameVersion = false;
-        Assert.Contains("\"KeepSameVersion\": false", JsonSerializer.Serialize(s, Json.Options));
-        Assert.NotEqual(before, PackageRevision.Fingerprint(s));
-        Assert.False(JsonSerializer.Deserialize<PackageSettings>(JsonSerializer.Serialize(s, Json.Options), Json.Options).KeepSameVersion);
+        // 2.7 and 2.8 wrote "KeepSameVersion": false to install the same version again. That is what 3.0 always does.
+        const string old = "{ \"AppName\": \"Adobe Acrobat Reader\", \"KeepNewerVersion\": true, \"KeepSameVersion\": false }";
+        var s = JsonSerializer.Deserialize<PackageSettings>(old, Json.Options);
+        PackageBuilder.Migrate(s);
+        Assert.True(s.KeepNewerVersion);
+        Assert.DoesNotContain("KeepSameVersion", JsonSerializer.Serialize(s, Json.Options));
     }
 }

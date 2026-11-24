@@ -262,25 +262,17 @@
               <TextBlock Text="{l:T Settings_Defaults}" Style="{StaticResource H2}"/>
               <TextBlock Text="{l:T Settings_DefaultsHint}" Style="{StaticResource MutedText}"/>
               <Grid>
-                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition Width="160"/><ColumnDefinition Width="16"/><ColumnDefinition Width="220"/></Grid.ColumnDefinitions>
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition Width="220"/></Grid.ColumnDefinitions>
                 <StackPanel><TextBlock Text="{l:T Settings_Mode}" Style="{StaticResource Label}"/>
-                  <ComboBox x:Name="CmbMode"><ComboBoxItem Tag="Auto" Content="{l:T Opt_ModeAuto}"/><ComboBoxItem Tag="WhenNeeded" Content="{l:T Opt_ModeWhenNeeded}"/><ComboBoxItem Tag="Silent" Content="{l:T Opt_ModeSilent}"/><ComboBoxItem Tag="Interactive" Content="{l:T Opt_ModeInteractive}"/></ComboBox>
+                  <ComboBox x:Name="CmbMode"><ComboBoxItem Tag="Notify" Content="{l:T Opt_ModeNotifyLong}"/><ComboBoxItem Tag="Silent" Content="{l:T Opt_ModeSilentLong}"/></ComboBox>
                 </StackPanel>
-                <StackPanel Grid.Column="2"><TextBlock Text="{l:T Settings_Deferrals}" Style="{StaticResource Label}"/><TextBox x:Name="TxtDefer" TextChanged="Brand_Changed"/></StackPanel>
-                <StackPanel Grid.Column="4"><TextBlock Text="{l:T Settings_Countdown}" Style="{StaticResource Label}"/><TextBox x:Name="TxtCountdown" TextChanged="Brand_Changed"/></StackPanel>
+                <StackPanel Grid.Column="2"><TextBlock Text="{l:T Settings_Countdown}" Style="{StaticResource Label}"/><TextBox x:Name="TxtCountdown" TextChanged="Brand_Changed"/></StackPanel>
               </Grid>
-              <TextBlock Text="{l:T Ed_IntuneNotify}" Style="{StaticResource Label}"/>
-              <ComboBox x:Name="CmbNotify" MaxWidth="520" HorizontalAlignment="Left" MinWidth="320">
-                <ComboBoxItem Tag="" Content="{l:T Opt_NotifyAuto}"/>
-                <ComboBoxItem Tag="showAll" Content="{l:T Opt_NotifyShowAll}"/>
-                <ComboBoxItem Tag="showReboot" Content="{l:T Opt_NotifyReboot}"/>
-                <ComboBoxItem Tag="hideAll" Content="{l:T Opt_NotifyHideAll}"/>
-              </ComboBox>
               <TextBlock Text="{l:T Settings_NotifyHint}" Style="{StaticResource Hint}"/>
-              <CheckBox x:Name="ChkDefer" Style="{StaticResource Switch}" Content="{l:T Opt_AllowDefer}" Margin="0,18,0,0" Checked="Brand_Changed" Unchecked="Brand_Changed"/>
-              <CheckBox x:Name="ChkBlock" Style="{StaticResource Switch}" Content="{l:T Opt_BlockExecution}"/>
+              <CheckBox x:Name="ChkBlock" Style="{StaticResource Switch}" Content="{l:T Opt_BlockExecution}" Margin="0,18,0,0"/>
               <CheckBox x:Name="ChkDisk" Style="{StaticResource Switch}" Content="{l:T Opt_CheckDisk}"/>
               <CheckBox x:Name="ChkRemovePrev" Style="{StaticResource Switch}" Content="{l:T Opt_RemovePrevious}"/>
+              <CheckBox x:Name="ChkInstallOver" Style="{StaticResource Switch}" Content="{l:T Ed_InstallOver}" IsEnabled="{Binding IsChecked, ElementName=ChkRemovePrev}"/>
               <TextBlock Text="{l:T Settings_Welcome}" Style="{StaticResource Label}"/>
               <TextBox x:Name="TxtWelcome" TextChanged="Brand_Changed" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60" VerticalContentAlignment="Top"/>
               <TextBlock Text="{l:T Settings_Completion}" Style="{StaticResource Label}"/>

@@ -180,7 +180,6 @@ namespace J365.IntunePSApp.Core
                 // The toolkit runs as SYSTEM on every device: only the official release, signed by its publisher, goes in.
                 Log.Info(T("Log_PsadtSignatureOk", VerifyPsadt(root)));
                 ValidateTemplate(root, version);
-                foreach (var f in Directory.GetFiles(root, "*", SearchOption.AllDirectories)) Unblock(f);
                 Directory.CreateDirectory(PsadtBase);
                 string dest = Path.Combine(PsadtBase, version);
                 if (Directory.Exists(dest)) Directory.Delete(dest, true);
@@ -236,13 +235,7 @@ namespace J365.IntunePSApp.Core
                 try { File.Delete(exe); } catch { }
                 return null;
             }
-            Unblock(exe);
             return exe;
-        }
-
-        private static void Unblock(string file)
-        {
-            try { File.Delete(file + ":Zone.Identifier"); } catch { }
         }
 
         public static string WindowsPowerShell

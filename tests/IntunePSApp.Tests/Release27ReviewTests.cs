@@ -93,18 +93,6 @@ public class Release27ReviewTests
         Assert.True(kept > 0 && actions > kept && actions < mark, "The actions run in the kept branch, before the mark.");
     }
 
-    [Fact]
-    public void Per_user_packages_without_a_product_code_do_not_keep_the_same_version()
-    {
-        var s = Fakes.Settings();
-        s.AppArch = "x64";
-        s.MsiProductCode = "";
-        Assert.Equal("$_.Is64BitApplication", ScriptGenerator.SameProductCondition(s));
-        s.InstallBehavior = "User";
-        Assert.Null(ScriptGenerator.SameProductCondition(s));
-        s.MsiProductCode = "{23170F69-40C1-2702-2600-000001000000}";
-        Assert.Contains("23170F69-40C1-2702-2600-000001000000", ScriptGenerator.SameProductCondition(s));
-    }
 
     [Fact]
     public void Keeping_a_newer_version_with_a_detection_by_product_code_is_warned()

@@ -2,7 +2,7 @@
 
 # J365 IntunePSApp — User guide
 
-From an installer (`.msi` or `.exe`) or an application of the catalog to a Win32 app in Microsoft Intune: this guide walks through every screen of **J365 IntunePSApp 2.8** with real captures. The examples use a fictitious company, *Contoso*, and the 7-Zip MSI.
+From an installer (`.msi` or `.exe`) or an application of the catalog to a Win32 app in Microsoft Intune: this guide walks through every screen of **J365 IntunePSApp 3.0** with real captures. The examples use a fictitious company, *Contoso*, and the 7-Zip MSI.
 
 | You want to… | Go to |
 | --- | --- |
@@ -79,16 +79,14 @@ Further down, the information Intune shows: description, developer, owner, infor
 
 ### Step 3 — Experience
 
-![Step 3: display mode, closing applications and deferrals, with a live preview](screenshots/en/experience.png)
+![Step 3: silent installation or with notification and closing applications, with a live preview](screenshots/en/experience.png)
 
-| Display mode | What the user sees |
+| Type of installation | What the user sees |
 | --- | --- |
-| **Automatic (recommended)** | The branded dialogs whenever a user is signed in (silent during Autopilot or with nobody signed in). |
-| **Discreet** | Dialogs only when one of the applications to close is open (the toolkit's default). |
-| **Interactive** | Always the dialogs, also during Autopilot. |
-| **Silent** | Nothing: no dialog, no deferral and — with automatic notifications — no Intune toast. Open applications of the list are closed. |
+| **With notification** | The windows of the package (the notice that an application will be closed, progress and completion) whenever a user is signed in, and the notifications of Intune. Silent during Autopilot or with nobody signed in. |
+| **Silent** | Nothing: no window and no notice from Intune, which does not restart the device or ask for a restart either. Open applications of the list are closed. |
 
-Also here: the **applications to close** (with a countdown), **deferrals** (how many times the user may postpone), blocking the application while it installs, the disk space check, the welcome, progress and completion messages, a restart prompt and the **Intune notifications** of the assignment. The preview on the right draws the real PSAppDeployToolkit 4 dialog, with your logo and colors, in the language of the user.
+The installation cannot be deferred (the option to defer left in 3.0), and the notifications of Intune follow the type of installation. Also here: the **applications to close** (with a countdown), blocking the application while it installs, the disk space check, the welcome, progress and completion messages and the restart prompt.The preview on the right draws the real PSAppDeployToolkit 4 dialog, with your logo and colors, in the language of the user.
 
 The preview switches between the moments of the installation — **App open**, **App closed** and **Last notice** — and shows the message **When it finishes**:
 
@@ -106,7 +104,7 @@ Ready-made actions, each in its phase (*before/after install*, *before/after uni
 
 - **Uninstall any version already installed before installing the new one** keeps a single copy on the device.
 - **Keep a newer version that is already installed** never downgrades an application that updated itself.
-- **Also keep the same version already installed** (new in 2.7): a copy of this exact version and product installed some other way is not removed and installed again — the package applies its post-install actions and records its mark. Turn it off to repair a copy.
+- **If the removal fails, install over the existing copy anyway** (off by default): off, if a copy is still installed the installation stops with an error, the log names the copy that stayed and Intune reports the failure, so the new version never ends up next to the old one. On, the new version is installed over it. Everything found is removed, the same version included: an MSI by its product code; an .exe by the switches typed here, by the silent command the program registered or, without one, by the switches of Inno Setup and NSIS, recognised on the device.
 - **Program name in "Installed apps"** (wildcards allowed) is used to find, remove and detect the application; **Show matches on this PC** lists what it would match. MSI packages uninstall by product code; an `.exe` needs its silent uninstall switches.
 
 ### Step 6 — Detection
@@ -212,7 +210,7 @@ Once no device runs the earlier version, unassign and delete it: Intune keeps at
 ![Batch window: shared settings and every application with its state](screenshots/en/batch.png)
 
 1. In the catalog, tick several applications (or **Add to batch** on the details) and click **Batch package**.
-2. Set what they share: company, owner, display mode, Intune notifications and deferral.
+2. Set what they share: company, owner, and the type of installation (silent or with notification).
 3. Optionally **Publish each package to Intune as soon as it is generated**, with what to do with an app of the same name (update it, **create a new app that supersedes it**, create another, or do not publish) and the assignment. The tenant and the assignment are confirmed before anything starts.
 4. **Generate N packages**. Each installer is downloaded from its official link, checked against its SHA256 and packaged as in the editor. An `.exe` without known silent switches, or a name that also matches other applications, is **skipped with the reason** — open it in the editor to finish it by hand. A failed publication can be retried alone; **Copy report** gives a table of the results.
 
@@ -229,7 +227,7 @@ Every package of the output folder, newest first (or *Name A–Z*, *Updates firs
 | **General** | Interface language, **check for new versions** (and **Check now**), installation for the user, desktop shortcut, the packages folder and the data folder (with **Logs**). |
 | **Appearance** | Light, dark or the theme of Windows. |
 | **Company** | Company name, logo, accent color and dialog style of new packages. |
-| **Defaults** | Display mode, Intune notifications, deferrals, countdown, blocking, disk check, previous versions, messages, preferred architecture and installer language. |
+| **Defaults** | Type of installation (silent or with notification), countdown, blocking, disk check, previous versions and what to do if the removal fails, messages, preferred architecture and installer language. |
 | **Microsoft Intune** | The connection: account or certificate, tenant, subscription check, renew the certificate, disconnect. |
 | **Components** | The application database (**Update address**, how often it is checked, **Download again**, **Import file (offline)...**), PSAppDeployToolkit and IntuneWinAppUtil. |
 | **About** | Version, signature of the executable, author and licenses. |
@@ -252,7 +250,7 @@ The check reads the files of the latest release on github.com, so it works on co
 
 ```powershell
 J365.IntunePSApp.exe --build <project.json|installer> [--out <folder>] [--native]
-J365.IntunePSApp.exe --batch <id1,id2,...> [--mode Silent] [--notifications hideAll] [--company <name>] [--out <folder>]
+J365.IntunePSApp.exe --batch <id1,id2,...> [--mode Silent|Notify] [--company <name>] [--out <folder>]
                      [--publish [--if-exists Update|Supersede|CreateNew|Fail [--supersedence Update|Replace]]
                                 [--assign none|available|required] [--assign-to AllUsers|AllDevices|Group] [--group <id>]]
 J365.IntunePSApp.exe --sandbox <package folder>

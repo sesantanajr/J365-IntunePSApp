@@ -321,12 +321,11 @@ namespace J365.IntunePSApp.Views
             // A sample application open on the computer: the dialog the packages show with this branding and these defaults.
             var input = new WelcomePreviewInput
             {
-                Mode = "Auto",
+                Mode = DeployModes.Notify,
                 AppName = T("Settings_PreviewApp"),
                 Company = company,
                 Processes = new List<string> { "contoso" },
-                AllowDefer = ChkDefer?.IsChecked == true,
-                DeferTimes = int.TryParse(TxtDefer?.Text, out int d) ? d : 3,
+
                 CountdownSeconds = int.TryParse(TxtCountdown?.Text, out int c) ? c : 300,
                 CustomMessage = TxtWelcome?.Text.Trim() ?? ""
             };
@@ -374,14 +373,12 @@ namespace J365.IntunePSApp.Views
             SelectTag(CmbStyle, c.DialogStyle);
             SelectTag(CmbLanguage, c.Language);
             ChkImeLogs.IsChecked = c.LogsInIntuneFolder;
-            SelectTag(CmbMode, c.DeployMode);
-            SelectTag(CmbNotify, c.IntuneNotifications);
-            TxtDefer.Text = c.DeferTimes.ToString();
+            SelectTag(CmbMode, DeployModes.Normalize(c.DeployMode));
             TxtCountdown.Text = c.CloseAppsCountdown.ToString();
-            ChkDefer.IsChecked = c.AllowDefer;
             ChkBlock.IsChecked = c.BlockExecution;
             ChkDisk.IsChecked = c.CheckDiskSpace;
             ChkRemovePrev.IsChecked = c.RemovePreviousVersions;
+            ChkInstallOver.IsChecked = c.InstallIfRemovalFails;
             TxtWelcome.Text = c.WelcomeMessage;
             TxtCompletion.Text = c.CompletionMessage;
             SelectTag(CmbArch, c.PreferredArch);
@@ -400,7 +397,7 @@ namespace J365.IntunePSApp.Views
         public void OnLanguageChanged()
         {
             _loading = true;
-            RefreshSelection(CmbUiLanguage, CmbStyle, CmbLanguage, CmbMode, CmbNotify, CmbArch);
+            RefreshSelection(CmbUiLanguage, CmbStyle, CmbLanguage, CmbMode, CmbArch);
             _loading = false;
             // The names of the colors (tooltips of the swatches) follow the language too.
             BuildSwatches();
@@ -567,14 +564,12 @@ namespace J365.IntunePSApp.Views
             c.DialogStyle = TagOf(CmbStyle);
             c.Language = TagOf(CmbLanguage);
             c.LogsInIntuneFolder = ChkImeLogs.IsChecked == true;
-            c.DeployMode = TagOf(CmbMode);
-            c.IntuneNotifications = TagOf(CmbNotify);
-            c.DeferTimes = int.TryParse(TxtDefer.Text, out var d) ? Math.Clamp(d, 1, 99) : 3;
+            c.DeployMode = DeployModes.Normalize(TagOf(CmbMode));
             c.CloseAppsCountdown = int.TryParse(TxtCountdown.Text, out var cd) ? Math.Clamp(cd, 0, 3000) : 300;
-            c.AllowDefer = ChkDefer.IsChecked == true;
             c.BlockExecution = ChkBlock.IsChecked == true;
             c.CheckDiskSpace = ChkDisk.IsChecked == true;
             c.RemovePreviousVersions = ChkRemovePrev.IsChecked == true;
+            c.InstallIfRemovalFails = ChkInstallOver.IsChecked == true;
             c.WelcomeMessage = TxtWelcome.Text.Trim();
             c.CompletionMessage = TxtCompletion.Text.Trim();
             c.PreferredArch = TagOf(CmbArch);

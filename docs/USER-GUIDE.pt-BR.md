@@ -2,7 +2,7 @@
 
 # J365 IntunePSApp — Guia de uso
 
-De um instalador (`.msi` ou `.exe`) ou de um aplicativo do catálogo até um app Win32 no Microsoft Intune: este guia percorre todas as telas do **J365 IntunePSApp 2.8** com capturas reais. Os exemplos usam uma empresa fictícia, a *Contoso*, e o MSI do 7-Zip.
+De um instalador (`.msi` ou `.exe`) ou de um aplicativo do catálogo até um app Win32 no Microsoft Intune: este guia percorre todas as telas do **J365 IntunePSApp 3.0** com capturas reais. Os exemplos usam uma empresa fictícia, a *Contoso*, e o MSI do 7-Zip.
 
 | Você quer… | Vá para |
 | --- | --- |
@@ -79,16 +79,14 @@ Mais abaixo, as informações que o Intune mostra: descrição, desenvolvedor, p
 
 ### Etapa 3 — Experiência
 
-![Etapa 3: modo de exibição, fechamento de aplicativos e adiamentos, com prévia ao vivo](screenshots/pt-BR/experience.png)
+![Etapa 3: instalação silenciosa ou com notificação e fechamento de aplicativos, com prévia ao vivo](screenshots/pt-BR/experience.png)
 
-| Modo de exibição | O que o usuário vê |
+| Tipo de instalação | O que o usuário vê |
 | --- | --- |
-| **Automático (recomendado)** | As janelas personalizadas sempre que houver um usuário conectado (silencioso no Autopilot ou sem ninguém conectado). |
-| **Discreto** | Janelas só quando algum dos aplicativos a fechar estiver aberto (o padrão do toolkit). |
-| **Interativo** | Sempre as janelas, inclusive durante o Autopilot. |
-| **Silencioso** | Nada: nenhuma janela, nenhum adiamento e — com as notificações automáticas — nenhum aviso do Intune. Aplicativos abertos da lista são fechados. |
+| **Com notificação** | As janelas do pacote (aviso de que um aplicativo será fechado, progresso e conclusão) sempre que houver um usuário conectado, e as notificações do Intune. Silenciosa no Autopilot ou sem ninguém conectado. |
+| **Silenciosa** | Nada: nenhuma janela e nenhum aviso do Intune, que também não reinicia o computador nem pede reinicialização. Aplicativos abertos da lista são fechados. |
 
-Também aqui: os **aplicativos a fechar** (com contagem regressiva), os **adiamentos** (quantas vezes o usuário pode adiar), o bloqueio do aplicativo durante a instalação, a verificação de espaço em disco, as mensagens de boas-vindas, de progresso e de conclusão, o pedido de reinício e as **notificações do Intune** da atribuição. A prévia à direita desenha a janela real do PSAppDeployToolkit 4, com o seu logo e as suas cores, no idioma do usuário.
+A instalação não pode ser adiada (a opção de adiar saiu na 3.0), e as notificações do Intune seguem o tipo de instalação. Também aqui: os **aplicativos a fechar** (com contagem regressiva), o bloqueio do aplicativo durante a instalação, a verificação de espaço em disco, as mensagens de boas-vindas, de progresso e de conclusão e o pedido de reinício.A prévia à direita desenha a janela real do PSAppDeployToolkit 4, com o seu logo e as suas cores, no idioma do usuário.
 
 A prévia alterna entre os momentos da instalação — **Programa aberto**, **Programa fechado** e **Último aviso** — e mostra a mensagem **Ao concluir**:
 
@@ -104,9 +102,9 @@ Ações prontas, cada uma na sua fase (*antes/depois da instalação*, *antes/de
 
 ![Etapa 5: versões anteriores, versões mantidas e o nome usado na desinstalação](screenshots/pt-BR/uninstall.png)
 
-- **Desinstalar qualquer versão já instalada antes de instalar a nova** mantém uma única cópia no dispositivo.
-- **Manter uma versão mais nova que já esteja instalada** nunca rebaixa um aplicativo que se atualizou sozinho.
-- **Manter também a mesma versão já instalada** (novidade da 2.7): uma cópia desta mesma versão e produto instalada de outra forma não é removida e reinstalada — o pacote aplica as ações pós-instalação e grava a sua marca. Desligue para reparar uma cópia.
+- **Desinstalar qualquer versão já instalada antes de instalar a nova** mantém uma única cópia no dispositivo. Tudo o que for encontrado sai, inclusive a mesma versão: MSI pelo código do produto; .exe pelos parâmetros informados, pelo comando silencioso que o programa registrou ou, na falta dele, pelos parâmetros do Inno Setup e do NSIS, reconhecidos no dispositivo.
+- **Se a remoção falhar, instalar por cima mesmo assim** (desligado por padrão): desligado, se uma cópia continuar instalada a instalação para com erro, o log diz qual cópia ficou e o Intune informa a falha, de modo que a versão nova nunca fica ao lado da antiga. Ligado, a versão nova é instalada por cima.
+- **Manter uma versão mais nova que já esteja instalada** nunca rebaixa um aplicativo que se atualizou sozinho. É a única cópia que o pacote não remove.
 - **Nome do programa em "Aplicativos instalados"** (aceita curingas) é usado para encontrar, remover e detectar o aplicativo; **Ver correspondências neste PC** mostra o que ele encontraria. Pacotes MSI desinstalam pelo código do produto; um `.exe` precisa dos seus parâmetros silenciosos de desinstalação.
 
 ### Etapa 6 — Detecção
@@ -212,7 +210,7 @@ Quando nenhum dispositivo usar mais a versão anterior, remova as atribuições 
 ![Janela de lote: configurações em comum e cada aplicativo com o seu estado](screenshots/pt-BR/batch.png)
 
 1. No catálogo, marque vários aplicativos (ou **Adicionar ao lote** nos detalhes) e clique em **Gerar em lote**.
-2. Defina o que eles têm em comum: empresa, proprietário, modo de exibição, notificações do Intune e adiamento.
+2. Defina o que eles têm em comum: empresa, proprietário, e o tipo de instalação (silenciosa ou com notificação).
 3. Se quiser, ligue **Publicar cada pacote no Intune assim que for gerado (deploy)**, com o que fazer com um app do mesmo nome (atualizá-lo, **criar um app novo que substitui o existente**, criar outro ou não publicar) e a atribuição. O tenant e a atribuição são confirmados antes de qualquer coisa começar.
 4. **Gerar N pacotes**. Cada instalador é baixado do link oficial, conferido pelo SHA256 e empacotado como no editor. Um `.exe` sem parâmetros silenciosos conhecidos, ou um nome que também corresponde a outros aplicativos, é **pulado com o motivo** — abra-o no editor para terminar manualmente. Uma publicação que falhou pode ser repetida sozinha; **Copiar relatório** gera uma tabela com os resultados.
 
@@ -229,7 +227,7 @@ Todos os pacotes da pasta de saída, do mais recente ao mais antigo (ou *Nome A�
 | **Geral** | Idioma da interface, **verificar novas versões** (e **Verificar agora**), instalação para o usuário, atalho na área de trabalho, a pasta dos pacotes e a pasta de dados (com **Logs**). |
 | **Aparência** | Claro, escuro ou igual ao Windows. |
 | **Empresa** | Nome da empresa, logo, cor de destaque e estilo das janelas dos pacotes novos. |
-| **Padrões** | Modo de exibição, notificações do Intune, adiamentos, contagem regressiva, bloqueio, verificação de disco, versões anteriores, mensagens, arquitetura e idioma preferidos dos instaladores. |
+| **Padrões** | Tipo de instalação (silenciosa ou com notificação), contagem regressiva, bloqueio, verificação de disco, versões anteriores e o que fazer se a remoção falhar, mensagens, arquitetura e idioma preferidos dos instaladores. |
 | **Microsoft Intune** | A conexão: conta ou certificado, tenant, **Verificar a assinatura**, **Renovar o certificado**, **Desconectar**. |
 | **Componentes** | O banco de dados de aplicativos (**Endereço de atualização**, frequência da verificação, **Baixar novamente**, **Importar arquivo (offline)...**), o PSAppDeployToolkit e o IntuneWinAppUtil. |
 | **Sobre** | Versão, assinatura do executável, autor e licenças. |
@@ -252,7 +250,7 @@ A verificação lê os arquivos da última versão no github.com, então funcion
 
 ```powershell
 J365.IntunePSApp.exe --build <project.json|instalador> [--out <pasta>] [--native]
-J365.IntunePSApp.exe --batch <id1,id2,...> [--mode Silent] [--notifications hideAll] [--company <nome>] [--out <pasta>]
+J365.IntunePSApp.exe --batch <id1,id2,...> [--mode Silent|Notify] [--company <nome>] [--out <pasta>]
                      [--publish [--if-exists Update|Supersede|CreateNew|Fail [--supersedence Update|Replace]]
                                 [--assign none|available|required] [--assign-to AllUsers|AllDevices|Group] [--group <id>]]
 J365.IntunePSApp.exe --sandbox <pasta do pacote>

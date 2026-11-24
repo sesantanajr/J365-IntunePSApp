@@ -73,36 +73,15 @@
           </StackPanel>
         </Grid>
         <Grid>
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="18"/>
-            <ColumnDefinition Width="*"/>
-          </Grid.ColumnDefinitions>
           <StackPanel>
             <TextBlock Text="{l:T Settings_Mode}" Style="{StaticResource Label}"/>
             <ComboBox x:Name="CmbMode" SelectionChanged="Mode_Changed">
-              <ComboBoxItem Tag="Auto" Content="{l:T Opt_ModeAutoLong}"/>
-              <ComboBoxItem Tag="WhenNeeded" Content="{l:T Opt_ModeWhenNeededLong}"/>
+              <ComboBoxItem Tag="Notify" Content="{l:T Opt_ModeNotifyLong}"/>
               <ComboBoxItem Tag="Silent" Content="{l:T Opt_ModeSilentLong}"/>
-              <ComboBoxItem Tag="Interactive" Content="{l:T Opt_ModeInteractiveLong}"/>
-            </ComboBox>
-          </StackPanel>
-          <StackPanel Grid.Column="2">
-            <TextBlock Text="{l:T Ed_IntuneNotify}" Style="{StaticResource Label}"/>
-            <ComboBox x:Name="CmbNotify" SelectionChanged="Mode_Changed">
-              <ComboBoxItem Tag="" Content="{l:T Opt_NotifyAuto}"/>
-              <ComboBoxItem Tag="showAll" Content="{l:T Opt_NotifyShowAll}"/>
-              <ComboBoxItem Tag="showReboot" Content="{l:T Opt_NotifyReboot}"/>
-              <ComboBoxItem Tag="hideAll" Content="{l:T Opt_NotifyHideAll}"/>
             </ComboBox>
           </StackPanel>
         </Grid>
         <TextBlock x:Name="ModeHint" Style="{StaticResource Hint}" TextWrapping="Wrap"/>
-        <StackPanel x:Name="DeferPanel" Orientation="Horizontal" Margin="0,10,0,0">
-          <CheckBox x:Name="ChkDefer" Style="{StaticResource Switch}" Content="{l:T Ed_DeferUpTo}" VerticalAlignment="Center"/>
-          <TextBox x:Name="TxtDeferTimes" Width="56" Margin="10,0,8,0" VerticalAlignment="Center" HorizontalContentAlignment="Center"/>
-          <TextBlock Text="{l:T Ed_Times}" Style="{StaticResource Body}" VerticalAlignment="Center"/>
-        </StackPanel>
         <TextBlock x:Name="DefaultsHint" Style="{StaticResource Hint}" TextWrapping="Wrap"/>
         <CheckBox x:Name="ChkSaveDefaults" Style="{StaticResource Switch}" Content="{l:T Batch_SaveDefaults}" Margin="0,10,0,0"/>
 

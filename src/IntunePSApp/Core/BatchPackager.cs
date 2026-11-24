@@ -12,18 +12,15 @@ using static J365.IntunePSApp.Localization.Loc;
 namespace J365.IntunePSApp.Core
 {
     /// <summary>
-    /// What every package of a batch shares (the company, how the installation is shown, the toasts of Intune, the
+    /// What every package of a batch shares (the company, whether the installation is silent or notifies the user, the
     /// publication). The rest of each package comes from the company defaults of Settings and from what the installer
     /// and the database say.
     /// </summary>
     public class BatchOptions
     {
         public string CompanyName { get; set; } = "";
-        public string DeployMode { get; set; } = "Auto";
-        /// <summary>"" or null (automatic: hidden for silent packages), showAll, showReboot or hideAll.</summary>
-        public string IntuneNotifications { get; set; } = "";
-        public bool AllowDefer { get; set; } = true;
-        public int DeferTimes { get; set; } = 3;
+        /// <summary>Silent or Notify (<see cref="DeployModes"/>).</summary>
+        public string DeployMode { get; set; } = DeployModes.Notify;
         /// <summary>Owner shown in Intune. Empty: the company.</summary>
         public string Owner { get; set; } = "";
         /// <summary>Use the built-in .intunewin packager instead of IntuneWinAppUtil.</summary>
@@ -50,10 +47,7 @@ namespace J365.IntunePSApp.Core
         public static BatchOptions FromConfig(AppConfig c) => new BatchOptions
         {
             CompanyName = c?.CompanyName ?? "",
-            DeployMode = string.IsNullOrEmpty(c?.DeployMode) ? "Auto" : c.DeployMode,
-            IntuneNotifications = c?.IntuneNotifications ?? "",
-            AllowDefer = c?.AllowDefer ?? true,
-            DeferTimes = c?.DeferTimes ?? 3,
+            DeployMode = DeployModes.Normalize(c?.DeployMode),
         };
 
         /// <summary>
@@ -171,7 +165,6 @@ namespace J365.IntunePSApp.Core
     /// </summary>
     public static class BatchPackager
     {
-        public static readonly string[] DeployModes = { "Auto", "WhenNeeded", "Silent", "Interactive" };
 
         /// <summary>The items of a batch: each application with the installer the editor would choose for it.</summary>
         public static List<BatchItem> Plan(IEnumerable<CatalogApp> apps, AppConfig cfg)
@@ -196,10 +189,7 @@ namespace J365.IntunePSApp.Core
         {
             if (s == null || o == null) return;
             s.CompanyName = (o.CompanyName ?? "").Trim();
-            s.DeployMode = DeployModes.Contains(o.DeployMode) ? o.DeployMode : "Auto";
-            s.IntuneNotifications = PackageBuilder.NotificationOptions.Contains(o.IntuneNotifications) ? o.IntuneNotifications : null;
-            s.AllowDefer = o.AllowDefer;
-            s.DeferTimes = Math.Clamp(o.DeferTimes, 1, 99);
+            s.DeployMode = DeployModes.Normalize(o.DeployMode);
             if (!string.IsNullOrWhiteSpace(o.Owner)) s.Owner = o.Owner.Trim();
             if (!string.IsNullOrWhiteSpace(o.OutputRoot)) s.OutputRoot = o.OutputRoot.Trim();
         }

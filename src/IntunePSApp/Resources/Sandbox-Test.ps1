@@ -12,7 +12,7 @@
     The package runs the way Intune runs it: as SYSTEM for an app installed for the device (a scheduled
     task, like the Intune Management Extension), as the signed-in user for an app installed for the user.
     As SYSTEM, PSAppDeployToolkit shows its dialogs in the session of the signed-in user, exactly as in a
-    required installation: what the user will see, deferrals included. -AsUser runs it as the
+    required installation: what the user will see. -AsUser runs it as the
     administrator of the sandbox instead. Use the test to validate the installer switches, the dialogs and
     the detection rule; always finish with a pilot group in Intune.
 

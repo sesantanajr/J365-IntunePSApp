@@ -11,7 +11,7 @@
     <RootNamespace>J365.IntunePSApp</RootNamespace>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>2.8.0</Version>
+    <Version>3.0.0</Version>
     <Authors>Sérgio Sant'Ana Junior</Authors>
     <Company>Jornada 365</Company>
     <Product>J365 IntunePSApp</Product>
@@ -32,7 +32,9 @@
     <SelfContained>true</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
-    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <!-- Not compressed: a compressed single file looks like a packed program to heuristic antivirus engines (and has to
+         be unpacked in memory at every start). The release is a zip, so the download is about the same size. -->
+    <EnableCompressionInSingleFile>false</EnableCompressionInSingleFile>
     <IncludeAllContentForSelfExtract>false</IncludeAllContentForSelfExtract>
   </PropertyGroup>
 

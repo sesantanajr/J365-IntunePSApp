@@ -344,7 +344,7 @@ namespace J365.IntunePSApp.Core
                 var token = await IntuneConnection.RenewAsync(ct) ?? throw new AuthException(T("Auth_ErrNotSignedIn"));
                 var g = new Graph(token.AccessToken);
                 var po = o.PublishOptions(IntuneConnection.UsesCertificate);
-                string notifications = PackageBuilder.IntuneNotifications(new PackageSettings { DeployMode = o.DeployMode, IntuneNotifications = o.IntuneNotifications });
+                string notifications = PackageBuilder.IntuneNotifications(new PackageSettings { DeployMode = o.DeployMode });
 
                 step?.Invoke(T("Publish_StepLooking"));
                 string existing = await FindAsync(g, app.Id, ct);

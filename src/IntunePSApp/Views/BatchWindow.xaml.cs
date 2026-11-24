@@ -13,8 +13,8 @@ using static J365.IntunePSApp.Localization.Loc;
 namespace J365.IntunePSApp.Views
 {
     /// <summary>
-    /// Packages several applications of the database with the same settings (company, display mode, Intune toasts,
-    /// deferral) and, when asked, publishes each package to Intune with the same assignment: a deploy of several
+    /// Packages several applications of the database with the same settings (company, silent or with notification)
+    /// and, when asked, publishes each package to Intune with the same assignment: a deploy of several
     /// applications at once. Each one is downloaded, checked, analysed and built as the editor does; the list shows how
     /// far each got, and a skipped one opens in the editor.
     /// </summary>
@@ -50,9 +50,6 @@ namespace J365.IntunePSApp.Views
             TxtCompany.Text = o.CompanyName;
             TxtOwner.Text = "";
             SelectTag(CmbMode, o.DeployMode);
-            SelectTag(CmbNotify, o.IntuneNotifications);
-            ChkDefer.IsChecked = o.AllowDefer;
-            TxtDeferTimes.Text = o.DeferTimes.ToString();
             SelectTag(CmbIfExists, o.IfExists);
             SelectTag(CmbAssign, "none|AllUsers");
             if (_storeOnly)
@@ -60,8 +57,7 @@ namespace J365.IntunePSApp.Views
                 ChkPublish.IsChecked = true;
                 ChkPublish.IsEnabled = false;
             }
-            ChkDefer.Checked += (s, e) => UpdateHints();
-            ChkDefer.Unchecked += (s, e) => UpdateHints();
+
             Closing += OnClosing;
             Loc.Instance.LanguageChanged += OnLanguageChanged;
             IntuneConnection.Changed += OnConnectionChanged;
@@ -79,7 +75,7 @@ namespace J365.IntunePSApp.Views
 
         public void OnLanguageChanged()
         {
-            SettingsView.RefreshSelection(CmbMode, CmbNotify, CmbIfExists, CmbAssign);
+            SettingsView.RefreshSelection(CmbMode, CmbIfExists, CmbAssign);
             Title = T("Batch_Title");
             Heading.Text = _storeOnly ? T("Batch_HeadingStore", _items.Count) : T("Batch_Heading", _items.Count);
             foreach (var i in _items) i.Changed();
@@ -105,18 +101,9 @@ namespace J365.IntunePSApp.Views
         private void UpdateHints()
         {
             if (ModeHint == null) return;
-            string mode = TagOf(CmbMode);
-            bool silent = mode == "Silent";
-            var probe = new PackageSettings { DeployMode = mode, IntuneNotifications = TagOf(CmbNotify) };
-            ModeHint.Text = (silent ? T("Ed_ModeHintSilent") : mode switch
-            {
-                "Interactive" => T("Ed_ModeHintInteractive"),
-                "WhenNeeded" => T("Ed_ModeHintWhenNeeded"),
-                _ => T("Ed_ModeHintAuto")
-            }) + " " + T("Ed_NotifyEffective", EditorView.NotifyLabel(PackageBuilder.IntuneNotifications(probe)));
-            // A silent package has nothing to defer: the switch would only suggest a dialog.
-            DeferPanel.IsEnabled = !silent && !_running;
-            TxtDeferTimes.IsEnabled = ChkDefer.IsChecked == true;
+            var probe = new PackageSettings { DeployMode = TagOf(CmbMode) };
+            ModeHint.Text = T(ScriptGenerator.IsSilent(probe) ? "Ed_ModeHintSilent" : "Ed_ModeHintNotify")
+                + " " + T("Ed_NotifyEffective", EditorView.NotifyLabel(PackageBuilder.IntuneNotifications(probe)));
             var cfg = ConfigStore.Current;
             DefaultsHint.Text = T("Batch_DefaultsHint", string.IsNullOrWhiteSpace(cfg.AccentColor) ? "—" : cfg.AccentColor, cfg.DialogStyle, cfg.OutputFolder);
             ListTitle.Text = T("Batch_ListTitle", _items.Count);
@@ -170,10 +157,7 @@ namespace J365.IntunePSApp.Views
             {
                 CompanyName = TxtCompany.Text.Trim(),
                 Owner = TxtOwner.Text.Trim(),
-                DeployMode = TagOf(CmbMode),
-                IntuneNotifications = TagOf(CmbNotify),
-                AllowDefer = ChkDefer.IsChecked == true,
-                DeferTimes = int.TryParse(TxtDeferTimes.Text.Trim(), out int n) ? n : 3,
+                DeployMode = DeployModes.Normalize(TagOf(CmbMode)),
                 Publish = ChkPublish.IsChecked == true,
                 IfExists = TagOf(CmbIfExists),
                 AssignIntent = assign[0],
@@ -215,7 +199,7 @@ namespace J365.IntunePSApp.Views
         {
             if (_running || _preparing) return;
             var o = Options();
-            if (o.AllowDefer && (o.DeferTimes < 1 || o.DeferTimes > 99)) { Ui.Warn(T("Val_DeferTimes")); return; }
+
             if (MainWindow.Current?.Editor?.IsBuilding == true) { Ui.Warn(T("Ed_BusyBuilding")); return; }
             if (o.Publish)
             {
@@ -236,9 +220,6 @@ namespace J365.IntunePSApp.Views
                 var cfg = ConfigStore.Current;
                 cfg.CompanyName = o.CompanyName;
                 cfg.DeployMode = o.DeployMode;
-                cfg.IntuneNotifications = o.IntuneNotifications;
-                cfg.AllowDefer = o.AllowDefer;
-                cfg.DeferTimes = Math.Clamp(o.DeferTimes, 1, 99);
                 ConfigStore.Save();
             }
             _running = true;

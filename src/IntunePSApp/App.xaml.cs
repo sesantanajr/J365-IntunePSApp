@@ -239,8 +239,9 @@ namespace J365.IntunePSApp
         }
 
         /// <summary>
-        /// --batch id1,id2,... [--mode Auto|WhenNeeded|Silent|Interactive] [--notifications showAll|showReboot|hideAll]
-        /// [--company "Name"] [--out folder] [--native]: packages several applications of the database with the same settings.
+        /// --batch id1,id2,... [--mode Silent|Notify] [--company "Name"] [--out folder] [--native]: packages several
+        /// applications of the database with the same settings. The modes of versions before 3.0 (Auto, WhenNeeded,
+        /// Interactive) are accepted as Notify, so a script written for them keeps working.
         /// Exit code 0 when every package was generated, 1 otherwise (each line says why).
         /// </summary>
         private static int CliBatch()
@@ -262,8 +263,14 @@ namespace J365.IntunePSApp
             }
             var o = BatchOptions.FromConfig(ConfigStore.Current);
             if (Arg("--company") is string company) o.CompanyName = company;
-            if (Arg("--mode") is string mode) o.DeployMode = mode;
-            if (Arg("--notifications") is string notifications) o.IntuneNotifications = notifications;
+            if (Arg("--mode") is string mode)
+            {
+                // An unknown mode is refused instead of becoming a package that shows windows nobody asked for.
+                if (!DeployModes.IsKnown(mode) && BatchOptions.Choice(mode, "Auto", "WhenNeeded", "Interactive") == null) { Console.WriteLine(T("Cli_BatchUsage")); return 2; }
+                o.DeployMode = DeployModes.Normalize(mode);
+            }
+            // The toasts of Intune follow the mode since 3.0: a script that still chooses them is told, not silently ignored.
+            if (HasArg("--notifications")) { Console.WriteLine(T("Cli_NotificationsRemoved")); return 2; }
             if (Arg("--out") is string output) o.OutputRoot = output;
             o.NativePackager = HasArg("--native");
             // --publish: each package goes to Intune with the connection of this computer (the certificate connects without

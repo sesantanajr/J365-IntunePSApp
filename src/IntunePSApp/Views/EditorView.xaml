@@ -255,31 +255,16 @@
             <Border Style="{StaticResource Section}">
               <StackPanel>
                 <TextBlock Text="{l:T Settings_Mode}" Style="{StaticResource H2}"/>
-                <ComboBox x:Name="CmbMode" Margin="0,12,0,0" SelectionChanged="Mode_Changed">
-                  <ComboBoxItem Tag="Auto" Content="{l:T Opt_ModeAutoLong}"/>
-                  <ComboBoxItem Tag="WhenNeeded" Content="{l:T Opt_ModeWhenNeededLong}"/>
-                  <ComboBoxItem Tag="Silent" Content="{l:T Opt_ModeSilentLong}"/>
-                  <ComboBoxItem Tag="Interactive" Content="{l:T Opt_ModeInteractiveLong}"/>
-                </ComboBox>
-                <TextBlock x:Name="ModeHint" Style="{StaticResource Hint}"/>
-                <TextBlock Text="{l:T Ed_IntuneNotify}" Style="{StaticResource Label}"/>
-                <ComboBox x:Name="CmbNotify" SelectionChanged="Mode_Changed">
-                  <ComboBoxItem Tag="" Content="{l:T Opt_NotifyAuto}"/>
-                  <ComboBoxItem Tag="showAll" Content="{l:T Opt_NotifyShowAll}"/>
-                  <ComboBoxItem Tag="showReboot" Content="{l:T Opt_NotifyReboot}"/>
-                  <ComboBoxItem Tag="hideAll" Content="{l:T Opt_NotifyHideAll}"/>
-                </ComboBox>
-                <TextBlock x:Name="NotifyHint" Style="{StaticResource Hint}"/>
+                <!-- Two ways, nothing else to combine: the windows of the package and the toasts of Intune follow the choice. -->
+                <RadioButton x:Name="RbModeNotify" GroupName="deployMode" Tag="Notify" Content="{l:T Opt_ModeNotifyLong}" FontWeight="SemiBold" Margin="0,14,0,0" Checked="Mode_Changed"/>
+                <TextBlock Text="{l:T Ed_ModeHintNotify}" Style="{StaticResource Hint}" Margin="28,4,0,0"/>
+                <RadioButton x:Name="RbModeSilent" GroupName="deployMode" Tag="Silent" Content="{l:T Opt_ModeSilentLong}" FontWeight="SemiBold" Margin="0,14,0,0" Checked="Mode_Changed"/>
+                <TextBlock Text="{l:T Ed_ModeHintSilent}" Style="{StaticResource Hint}" Margin="28,4,0,0"/>
               </StackPanel>
             </Border>
             <Border Style="{StaticResource Section}">
               <StackPanel>
-                <TextBlock Text="{l:T Ed_CloseDefer}" Style="{StaticResource H2}"/>
-                <StackPanel x:Name="DeferRow" Orientation="Horizontal" Margin="0,12,0,0">
-                  <CheckBox x:Name="ChkDefer" Style="{StaticResource Switch}" Content="{l:T Ed_DeferUpTo}" Margin="0,4,0,0" Checked="Preview_Changed" Unchecked="Preview_Changed"/>
-                  <TextBox x:Name="TxtDeferTimes" Width="64" Margin="10,0,8,0" HorizontalContentAlignment="Center" TextChanged="Preview_Changed"/>
-                  <TextBlock Text="{l:T Ed_Times}" VerticalAlignment="Center"/>
-                </StackPanel>
+                <TextBlock Text="{l:T Ed_CloseApps}" Style="{StaticResource H2}"/>
                 <StackPanel x:Name="CountdownRow" Orientation="Horizontal" Margin="0,12,0,0">
                   <TextBlock Text="{l:T Ed_CloseAfter}" VerticalAlignment="Center"/>
                   <TextBox x:Name="TxtCountdown" Width="76" Margin="10,0,8,0" HorizontalContentAlignment="Center" TextChanged="Preview_Changed"/>
@@ -422,11 +407,11 @@
                 <CheckBox x:Name="ChkRemovePrev" Style="{StaticResource Switch}" Content="{l:T Ed_RemovePrev}" FontWeight="SemiBold" Margin="0,16,0,0"
                           Checked="RemovePrev_Changed" Unchecked="RemovePrev_Changed"/>
                 <TextBlock Text="{l:T Ed_RemovePrevHint}" Style="{StaticResource Hint}" Margin="52,6,0,0"/>
+                <CheckBox x:Name="ChkInstallOver" Style="{StaticResource Switch}" Content="{l:T Ed_InstallOver}" Margin="0,14,0,0"
+                          IsEnabled="{Binding IsChecked, ElementName=ChkRemovePrev}"/>
+                <TextBlock Text="{l:T Ed_InstallOverHint}" Style="{StaticResource Hint}" Margin="52,6,0,0"/>
                 <CheckBox x:Name="ChkKeepNewer" Style="{StaticResource Switch}" Content="{l:T Ed_KeepNewer}" Margin="0,14,0,0"/>
                 <TextBlock Text="{l:T Ed_KeepNewerHint}" Style="{StaticResource Hint}" Margin="52,6,0,0"/>
-                <CheckBox x:Name="ChkKeepSame" Style="{StaticResource Switch}" Content="{l:T Ed_KeepSame}" Margin="0,14,0,0"
-                          IsEnabled="{Binding IsChecked, ElementName=ChkKeepNewer}"/>
-                <TextBlock Text="{l:T Ed_KeepSameHint}" Style="{StaticResource Hint}" Margin="52,6,0,0"/>
                 <TextBlock Text="{l:T Ed_ProgramName}" Style="{StaticResource Label}"/>
                 <Grid>
                   <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -734,12 +719,11 @@
           <StackPanel Margin="0,0,12,0">
             <TextBlock Text="{l:T Ed_PreviewOverline}" Style="{StaticResource Overline}"/>
             <TextBlock Text="{l:T Ed_PreviewHint}" Style="{StaticResource Hint}" Margin="0,2,0,10"/>
-            <!-- The moments of a required installation: an application of the list open, none open, deferrals used up -->
+            <!-- The moments of a required installation: an application of the list open, none open -->
             <Border x:Name="PrevMoments" Style="{StaticResource SegmentTrack}" Padding="3" CornerRadius="10" HorizontalAlignment="Left" Margin="0,0,0,12">
               <StackPanel Orientation="Horizontal">
                 <RadioButton x:Name="PrevMomentOpen" Style="{StaticResource SegmentItem}" GroupName="prevMoment" Tag="AppOpen" Content="{l:T Prev_MomentOpen}" Padding="10,4" IsChecked="True" Checked="PrevMoment_Checked"/>
                 <RadioButton x:Name="PrevMomentClosed" Style="{StaticResource SegmentItem}" GroupName="prevMoment" Tag="AppClosed" Content="{l:T Prev_MomentClosed}" Padding="10,4" Checked="PrevMoment_Checked"/>
-                <RadioButton x:Name="PrevMomentLast" Style="{StaticResource SegmentItem}" GroupName="prevMoment" Tag="LastNotice" Content="{l:T Prev_MomentLast}" Padding="10,4" Checked="PrevMoment_Checked"/>
               </StackPanel>
             </Border>
             <v:DialogPreview x:Name="PrevDialog"/>

@@ -6,7 +6,7 @@
        the toolkit (FluentDialog.xaml, Classic CloseAppsDialog). It shows the light Windows dialog whatever the theme of
        this application, so its colors are fixed. -->
   <Grid>
-    <!-- Fluent: accent sidebar with the toolkit logo; header; card with the message, the applications and the deferral or
+    <!-- Fluent: accent sidebar with the toolkit logo; header; card with the message, the applications and the
          countdown rows; the accent button on the left and Defer on the right, in two equal halves. -->
     <Border x:Name="FluentCard" Background="#F3F3F3" CornerRadius="8" BorderBrush="#D6DAE1" BorderThickness="1" Effect="{DynamicResource CardShadow}" TextElement.Foreground="#1B1B1B">
       <Grid>
@@ -34,26 +34,17 @@
                   <TextBlock x:Name="FAppExe" FontSize="11" TextTrimming="CharacterEllipsis"/>
                 </StackPanel>
               </Grid>
-              <Border x:Name="FSeparator" Height="1" Background="#E5E5E5"/>
               <DockPanel x:Name="FCountdownRow" Margin="12,9,12,9">
                 <TextBlock Text="&#xE916;" Style="{StaticResource Icon}" FontSize="13" Foreground="#1B1B1B" VerticalAlignment="Center"/>
                 <TextBlock x:Name="FCountdownValue" DockPanel.Dock="Right" FontSize="12.5" FontWeight="SemiBold" Foreground="#1B1B1B" VerticalAlignment="Center" Margin="8,0,0,0"/>
                 <TextBlock x:Name="FCountdownLabel" FontSize="12.5" TextWrapping="Wrap" Foreground="#1B1B1B" VerticalAlignment="Center" Margin="10,0,0,0"/>
               </DockPanel>
-              <DockPanel x:Name="FDeferRow" Margin="12,9,12,9">
-                <TextBlock Text="&#xE823;" Style="{StaticResource Icon}" FontSize="13" Foreground="#1B1B1B" VerticalAlignment="Center"/>
-                <TextBlock x:Name="FDeferValue" DockPanel.Dock="Right" FontSize="12.5" FontWeight="SemiBold" Foreground="#1B1B1B" VerticalAlignment="Center" Margin="8,0,0,0"/>
-                <TextBlock x:Name="FDeferLabel" FontSize="12.5" TextWrapping="Wrap" Foreground="#1B1B1B" VerticalAlignment="Center" Margin="10,0,0,0"/>
-              </DockPanel>
             </StackPanel>
           </Border>
           <Grid Margin="14,0,14,14">
             <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
-            <Border x:Name="FMainBtn" CornerRadius="4" Padding="6,7" Margin="0,0,3,0" Background="{DynamicResource Brand}">
+            <Border x:Name="FMainBtn" Grid.Column="1" CornerRadius="4" Padding="6,7" Margin="3,0,0,0" Background="{DynamicResource Brand}">
               <TextBlock x:Name="FMainText" FontSize="12" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"/>
-            </Border>
-            <Border x:Name="FDeferBtn" Grid.Column="1" CornerRadius="4" Padding="6,7" Margin="3,0,0,0" Background="#FBFBFB" BorderBrush="#D1D1D1" BorderThickness="1">
-              <TextBlock x:Name="FDeferText" FontSize="12" Foreground="#1B1B1B" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"/>
             </Border>
           </Grid>
         </StackPanel>
@@ -82,9 +73,6 @@
           <Border x:Name="CAppsBox" Margin="0,6,0,0" Background="White" BorderBrush="#ABADB3" BorderThickness="1" Padding="6,4">
             <TextBlock x:Name="CApps" FontSize="12"/>
           </Border>
-          <TextBlock x:Name="CExpiry" FontSize="12" TextWrapping="Wrap" TextAlignment="Center" Margin="0,8,0,0"/>
-          <TextBlock x:Name="CDeferrals" FontSize="12" FontWeight="Bold" TextWrapping="Wrap" TextAlignment="Center" Margin="0,4,0,0"/>
-          <TextBlock x:Name="CExpiryWarning" FontSize="12" TextWrapping="Wrap" TextAlignment="Center" Margin="0,4,0,0"/>
           <TextBlock x:Name="CCountdownLabel" FontSize="12" FontWeight="Bold" TextWrapping="Wrap" TextAlignment="Center" Margin="0,8,0,0"/>
           <TextBlock x:Name="CCountdownValue" FontSize="18" FontWeight="Bold" TextAlignment="Center"/>
         </StackPanel>

@@ -98,12 +98,10 @@ namespace J365.IntunePSApp.Tests
             s.DetectionVersion = package;
             string script = ScriptGenerator.DeployScript(Fakes.Template, s, "setup.exe");
             int start = script.IndexOf("    function Test-J365NewerVersion", StringComparison.Ordinal);
-            int end = script.IndexOf("    $installedApps", start, StringComparison.Ordinal);
+            int end = script.IndexOf("    $keptApps", start, StringComparison.Ordinal);
             string function = script.Substring(start, end - start);
+            // Only a newer version counts: the same version is never "newer" (3.0 removes it and installs it again).
             Assert.Equal(newer ? "True" : "False", RunPowerShell(function + $"\r\nTest-J365NewerVersion -Installed '{installed}' -Package '{package}'"));
-            // -OrSame also counts the same version (and still never an older one).
-            bool same = !newer && installed.Length > 0 && Names.TrimVersionZeros(installed) == Names.TrimVersionZeros(package);
-            Assert.Equal(newer || same ? "True" : "False", RunPowerShell(function + $"\r\nTest-J365NewerVersion -Installed '{installed}' -Package '{package}' -OrSame"));
         }
 
         [Fact]
@@ -127,7 +125,7 @@ namespace J365.IntunePSApp.Tests
             int install = script.IndexOf("Start-ADTProcess", block, StringComparison.Ordinal);
             string removal = script.Substring(block, install - block);
             Assert.Contains("$j365ExitCode = $adtSession.GetExitCode()", removal);
-            Assert.Equal(2, removal.Split("$adtSession.SetExitCode($j365ExitCode)").Length - 1);
+            Assert.Equal(1, removal.Split("$adtSession.SetExitCode($j365ExitCode)").Length - 1);
         }
 
         [Fact]

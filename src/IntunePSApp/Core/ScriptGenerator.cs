@@ -21,7 +21,8 @@ namespace J365.IntunePSApp.Core
 
         public static (string Install, string Uninstall, string Repair) Commands(PackageSettings s)
         {
-            string mode = s.DeployMode switch { "Silent" => " -DeployMode Silent", "Interactive" => " -DeployMode Interactive", _ => "" };
+            // "Notify" needs no switch: the toolkit decides by itself to stay silent when nobody is signed in or during OOBE/ESP.
+            string mode = IsSilent(s) ? " -DeployMode Silent" : "";
             return ($"Invoke-AppDeployToolkit.exe -DeploymentType Install{mode}",
                     $"Invoke-AppDeployToolkit.exe -DeploymentType Uninstall{mode}",
                     $"Invoke-AppDeployToolkit.exe -DeploymentType Repair{mode}");
@@ -178,6 +179,7 @@ namespace J365.IntunePSApp.Core
               .Append(" - ").Append(Comment(s.AppName + " " + s.AppVersion)).Append(" - ").Append(AppInfo.RepoUrl).Append("\r\n");
             sb.Append(header);
             sb.Append(Variables(s, mVer.Groups[1].Value)).Append("\r\n\r\n");
+            sb.Append(string.Join("\r\n", RemovalHelpers(s))).Append("\r\n\r\n");
             sb.Append(Function("Install-ADTDeployment", InstallBody(s, installerRelative))).Append("\r\n\r\n");
             sb.Append(Function("Uninstall-ADTDeployment", UninstallBody(s))).Append("\r\n\r\n");
             sb.Append(Function("Repair-ADTDeployment", RepairBody(s, installerRelative))).Append("\r\n\r\n\r\n");
@@ -209,10 +211,10 @@ namespace J365.IntunePSApp.Core
                 $"    AppScriptAuthor = {Lit(author)}",
                 $"    RequireAdmin = {(s.InstallBehavior == "User" ? "$false" : "$true")}",
             };
-            // "Automatic": the toolkit's Auto mode turns the deployment silent when none of the applications to close is
+            // "Notify": the toolkit's Auto mode turns the deployment silent when none of the applications to close is
             // running, so users only saw Intune's notification. Without that check the branded dialogs are shown whenever
             // someone is signed in; with no user, or during OOBE/ESP, the deployment stays silent.
-            if (IsAutoWithDialogs(s.DeployMode))
+            if (!IsSilent(s))
             {
                 L.Add("    # Dialogs whenever a user is signed in (silent with nobody signed in or during OOBE/ESP).");
                 L.Add("    NoProcessDetection = $true");
@@ -234,13 +236,10 @@ namespace J365.IntunePSApp.Core
         }
 
         /// <summary>
-        /// Display modes: "Auto" (dialogs whenever a user is signed in), "WhenNeeded" (the toolkit's own Auto: dialogs only
-        /// when an application to close is running), "Interactive" and "Silent". Unknown values behave as "Auto".
+        /// The package never shows anything to the user (the toolkit's Silent mode, and Intune's toasts hidden). The other
+        /// mode, "Notify", shows the windows of the package whenever a user is signed in (<see cref="DeployModes"/>).
         /// </summary>
-        public static bool IsAutoWithDialogs(string mode) => mode is not ("WhenNeeded" or "Interactive" or "Silent");
-
-        /// <summary>The package never shows anything to the user (the toolkit's Silent mode, and Intune's toasts hidden by default).</summary>
-        public static bool IsSilent(PackageSettings s) => s?.DeployMode == "Silent";
+        public static bool IsSilent(PackageSettings s) => DeployModes.Normalize(s?.DeployMode) == DeployModes.Silent;
 
         private static string Function(string name, List<string> body)
         {
@@ -270,21 +269,20 @@ namespace J365.IntunePSApp.Core
             bool userContext = s.InstallBehavior == "User";
             Mark(L, "Pre-Install", "\"Pre-$($adtSession.DeploymentType)\"");
             L.AddRange(KeepNewerLines(s));
-            // A silent package shows nothing: no deferral, no message, no countdown (the toolkit closes the applications
-            // in use without a dialog). Writing them anyway would only suggest a dialog that never appears.
+            // A silent package shows nothing: no message, no countdown (the toolkit closes the applications in use without
+            // a dialog). Writing them anyway would only suggest a dialog that never appears.
+            // The installation is never deferred: the dialog only appears to warn that an application is about to be closed.
             bool silent = IsSilent(s);
             bool hasProc = s.ProcessesToClose.Count > 0;
-            bool allowDefer = s.AllowDefer && !silent;
             bool hasMsg = !silent && !string.IsNullOrWhiteSpace(s.WelcomeMessage);
-            if (hasProc || allowDefer || hasMsg)
+            if (hasProc || hasMsg)
             {
                 L.Add(silent
                     ? "    ## Silent package: the applications in use are closed without a dialog and the free disk space is checked."
-                    : "    ## Welcome dialog: closes the applications in use, lets the user defer and checks the free disk space.");
+                    : "    ## Welcome dialog: warns that the applications in use are closed, and checks the free disk space. No deferral.");
                 L.Add("    $saiwParams = @{");
                 if (!silent) L.Add("        PersistPrompt = $true");
                 if (s.CheckDiskSpace) L.Add("        CheckDiskSpace = $true");
-                if (allowDefer) { L.Add("        AllowDefer = $true"); L.Add($"        DeferTimes = {Math.Clamp(s.DeferTimes, 1, 99)}"); }
                 if (hasMsg) L.Add("        CustomText = $true");
                 L.Add("    }");
                 L.Add("    if ($adtSession.AppProcessesToClose.Count -gt 0)");
@@ -300,7 +298,7 @@ namespace J365.IntunePSApp.Core
             }
             else
             {
-                L.Add("    ## Welcome dialog disabled (no applications to close, no deferral and no custom message).");
+                L.Add("    ## Welcome dialog disabled (no applications to close and no custom message).");
                 if (s.CheckDiskSpace)
                 {
                     L.Add("    ## Free disk space is still checked (no dialog is shown for it).");
@@ -314,7 +312,7 @@ namespace J365.IntunePSApp.Core
             // Pre-install actions prepare the device (stop a service, install a dependency): they run before the
             // removal of the versions already installed, so they can help it.
             AddActions(L, s, "PreInstall");
-            if (s.RemovePreviousVersions) { L.AddRange(RemoveLines(s, true)); L.Add(""); }
+            if (s.RemovePreviousVersions) { L.AddRange(RemoveBeforeInstallLines(s)); L.Add(""); }
             L.Add("");
             Mark(L, "Install", "$adtSession.DeploymentType");
             L.Add("    ## Installs " + Comment($"{s.AppName} {s.AppVersion}".Trim()) + ".");
@@ -358,15 +356,10 @@ namespace J365.IntunePSApp.Core
             string pattern = KeepPattern(s);
             if (!s.KeepNewerVersion || !Regex.IsMatch(version, @"\d") || pattern.Trim('*', '?', ' ').Length < 3) return L;
             string pat = Lit(pattern);
-            string sameProduct = s.KeepSameVersion != false ? SameProductCondition(s) : null;
             L.Add("    ## A newer version than this package is already installed (the application updated itself, or it was installed");
-            L.Add("    ## some other way): it is kept, because installing this package would downgrade it.");
-            if (sameProduct != null)
-            {
-                L.Add("    ## The same version installed some other way is kept too: removing it and installing it again would only interrupt");
-                L.Add("    ## the user. It has to be the same product (the same MSI product code, or the same architecture).");
-            }
-            L.Add("    function Test-J365NewerVersion([string]$Installed, [string]$Package, [switch]$OrSame)");
+            L.Add("    ## some other way): it is kept, because installing this package would downgrade it. It is the only copy the");
+            L.Add("    ## package keeps: the same version and every older one are removed below, before the installation.");
+            L.Add("    function Test-J365NewerVersion([string]$Installed, [string]$Package)");
             L.Add("    {");
             L.Add("        $a = @([regex]::Matches([string]$Installed, '\\d+') | Select-Object -First 4 | ForEach-Object { [decimal]$_.Value })");
             L.Add("        $b = @([regex]::Matches([string]$Package, '\\d+') | Select-Object -First 4 | ForEach-Object { [decimal]$_.Value })");
@@ -378,22 +371,12 @@ namespace J365.IntunePSApp.Core
             L.Add("            if ($x -gt $y) { return $true }");
             L.Add("            if ($x -lt $y) { return $false }");
             L.Add("        }");
-            L.Add("        return [bool]$OrSame");
+            L.Add("        return $false");
             L.Add("    }");
-            L.Add($"    $installedApps = @(Get-ADTApplication -Name {pat} -NameMatch 'Wildcard')");
-            L.Add($"    $keptApps = @($installedApps | Where-Object {{ Test-J365NewerVersion -Installed $_.DisplayVersion -Package {Lit(version)} }})");
-            L.Add("    $keptReason = 'A newer version is already installed and is kept (this package would downgrade it): '");
-            if (sameProduct != null)
-            {
-                L.Add("    if ($keptApps.Count -eq 0)");
-                L.Add("    {");
-                L.Add($"        $keptApps = @($installedApps | Where-Object {{ {sameProduct} -and (Test-J365NewerVersion -Installed $_.DisplayVersion -Package {Lit(version)} -OrSame) }})");
-                L.Add("        $keptReason = 'The same version is already installed and is kept (installing it again would only interrupt the user): '");
-                L.Add("    }");
-            }
+            L.Add($"    $keptApps = @(Get-ADTApplication -Name {pat} -NameMatch 'Wildcard' | Where-Object {{ Test-J365NewerVersion -Installed $_.DisplayVersion -Package {Lit(version)} }})");
             L.Add("    if ($keptApps.Count -gt 0)");
             L.Add("    {");
-            L.Add("        Write-ADTLogEntry -Message ($keptReason + (($keptApps | ForEach-Object { \"$($_.DisplayName) $($_.DisplayVersion)\".Trim() }) -join '; '))");
+            L.Add("        Write-ADTLogEntry -Message ('A newer version is already installed and is kept (this package would downgrade it): ' + (($keptApps | ForEach-Object { \"$($_.DisplayName) $($_.DisplayVersion)\".Trim() }) -join '; '))");
             // The copy that is kept gets the configuration of the package too (registry settings, shortcuts, files): the
             // post-install actions run before the mark, so a failed action leaves no mark and Intune tries again.
             var post = s.Actions.Where(a => a.Phase == "PostInstall").ToList();
@@ -418,26 +401,6 @@ namespace J365.IntunePSApp.Core
             => (s.DetectionMethod == "Registry" && !string.IsNullOrWhiteSpace(s.DetectionNamePattern) ? s.DetectionNamePattern
                 : string.IsNullOrWhiteSpace(s.UninstallPattern) ? s.DetectionNamePattern : s.UninstallPattern)?.Trim() ?? "";
 
-        /// <summary>
-        /// The PowerShell condition ($_ = an installed application with the name of the package) that tells the same product
-        /// as the package: the same MSI product code when the package has one (an x86 and an x64 edition have different
-        /// codes), otherwise the same architecture (Is64BitApplication). Null when it cannot be told apart safely (ARM64
-        /// without a product code: an x64 copy also registers as 64-bit there), so the same version is installed again.
-        /// </summary>
-        internal static string SameProductCondition(PackageSettings s)
-        {
-            if (MsiCode(s) is string code) return $"(([string]$_.ProductCode).Trim('{{', '}}') -eq {Lit(code.Trim('{', '}'))})";
-            // Per-user entries (HKCU) are all reported as 64-bit by the toolkit: the architecture tells nothing there.
-            if (s.InstallBehavior == "User") return null;
-            return (s.AppArch ?? "").Trim().ToLowerInvariant() switch
-            {
-                "x64" => "$_.Is64BitApplication",
-                "x86" => "(-not $_.Is64BitApplication)",
-                "" => "$true",
-                _ => null
-            };
-        }
-
         private static List<string> UninstallBody(PackageSettings s)
         {
             var L = new List<string>();
@@ -456,9 +419,18 @@ namespace J365.IntunePSApp.Core
             AddActions(L, s, "PreUninstall");
             L.Add("");
             Mark(L, "Uninstall", "$adtSession.DeploymentType");
-            L.AddRange(RemoveLines(s, false));
+            L.Add("    ## Removes the application: every copy found, MSI and EXE. A failed uninstaller fails the uninstallation.");
+            L.Add("    $installedCopies = @(Get-J365InstalledCopies)");
+            L.Add("    if ($installedCopies.Count -eq 0)");
+            L.Add("    {");
+            L.Add("        Write-ADTLogEntry -Message 'The application is not installed: nothing to remove.'");
+            L.Add("    }");
+            L.Add("    foreach ($installedCopy in $installedCopies)");
+            L.Add("    {");
+            L.Add("        Remove-J365InstalledCopy -Application $installedCopy");
+            L.Add("    }");
             L.Add("");
-            L.AddRange(VerifyRemovedLines(s));
+            L.AddRange(VerifyRemovedLines());
             if (s.DetectionRequireMark) L.AddRange(RemoveMarkLines(s));
             L.Add("");
             Mark(L, "Post-Uninstallation", "\"Post-$($adtSession.DeploymentType)\"");
@@ -513,30 +485,20 @@ namespace J365.IntunePSApp.Core
         }
 
         /// <summary>
-        /// After the uninstallation: anything still registered with the name makes the deployment fail, instead of
-        /// reporting "uninstalled" to Intune while the program stays (an .exe that registers no silent uninstaller is
-        /// skipped by the toolkit). The package mark stays, so the detection keeps telling the truth.
+        /// After the uninstallation: anything still registered makes the deployment fail, instead of reporting
+        /// "uninstalled" to Intune while the program stays (an .exe that registers no silent uninstaller and whose setup
+        /// technology is not recognised is not started). The package mark stays, so the detection keeps telling the truth.
         /// </summary>
-        private static List<string> VerifyRemovedLines(PackageSettings s)
+        private static List<string> VerifyRemovedLines() => new List<string>
         {
-            string pat = Lit(s.UninstallPattern);
-            string find = $"@(Get-ADTApplication -Name {pat} -NameMatch 'Wildcard')";
-            return new List<string>
-            {
-                "    ## Checks that nothing is left (a few seconds are allowed for uninstallers that finish in the background).",
-                $"    $remainingApps = {find}",
-                "    for ($wait = 0; $wait -lt 3 -and $remainingApps.Count -gt 0; $wait++)",
-                "    {",
-                "        Start-Sleep -Seconds 5",
-                $"        $remainingApps = {find}",
-                "    }",
-                "    if ($remainingApps.Count -gt 0)",
-                "    {",
-                "        throw ('Still installed after the uninstallation (no silent uninstaller was found, or it failed): ' + (($remainingApps | ForEach-Object { \"$($_.DisplayName) $($_.DisplayVersion)\".Trim() }) -join '; '))",
-                "    }",
-                ""
-            };
-        }
+            "    ## Checks that nothing is left.",
+            "    $remainingApps = @(Wait-J365CopiesRemoved)",
+            "    if ($remainingApps.Count -gt 0)",
+            "    {",
+            "        throw ('Still installed after the uninstallation (no silent uninstaller was found, or it failed): ' + (Format-J365Copies -Application $remainingApps))",
+            "    }",
+            ""
+        };
 
         /// <summary>
         /// The Windows Installer product code of the package, as {GUID}: the MSI itself, or the MSI a setup program installs
@@ -557,79 +519,204 @@ namespace J365.IntunePSApp.Core
         public static string ExeMsiCode(PackageSettings s)
             => s != null && s.InstallerType == "EXE" && !string.IsNullOrEmpty(s.CatalogId) && string.IsNullOrWhiteSpace(s.UninstallExeArgs) ? MsiCode(s) : null;
 
-        private static List<string> RemoveLines(PackageSettings s, bool continueOnError)
+        // ------------------------------------------------------------------ removal of installed copies
+
+        /// <summary>How long the package waits for an uninstaller that finishes in the background, before it says what is left.</summary>
+        public const int RemovalWaitSeconds = 30;
+
+        /// <summary>Silent switches of the uninstallers of Inno Setup, used for a copy that registered no silent command.</summary>
+        public const string InnoSilentSwitches = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART";
+
+        /// <summary>
+        /// The functions the installation and the uninstallation share to remove what is installed, written once at the top
+        /// of the script: which copies are installed (by name, and by the product code of the package), how each one is
+        /// removed, and what is still there afterwards.
+        /// <para>Each copy is removed the way it can be removed without a window: an MSI by its product code (msiexec /x); an
+        /// .exe with the switches of the package, or with the silent command it registered, or - when it registered none -
+        /// with the switches of its setup technology (Inno Setup by its key name, NSIS by the manifest of the uninstaller).
+        /// An .exe nobody knows how to silence is not started: as SYSTEM its window would wait for an answer forever.</para>
+        /// </summary>
+        private static List<string> RemovalHelpers(PackageSettings s)
         {
             string pat = Lit(s.UninstallPattern);
-            string msi = $"Uninstall-ADTApplication -Name {pat} -NameMatch 'Wildcard' -ApplicationType 'MSI'";
-            // The product of this package by its code first (msiexec /x): it goes even when its name does not match the
-            // pattern, and a setup program that installs an MSI needs no switches. Only a Windows Installer product with
-            // this code is touched (-ApplicationType 'MSI'); when none is installed, the toolkit only logs it.
             string code = MsiCode(s);
-            string byCode = code == null ? null : $"Uninstall-ADTApplication -ProductCode {Lit(code)} -ApplicationType 'MSI'";
             string ua = (s.UninstallExeArgs ?? "").Trim();
-            // -WaitForChildProcesses: many uninstallers (NSIS, 7-Zip) copy themselves to %TEMP%, start the copy and exit at once.
-            // Without waiting for that copy the removal "finishes" while the program is still installed, and the new
-            // version is installed at the same time.
-            string exe = ua.Length > 0
-                ? $"Uninstall-ADTApplication -Name {pat} -NameMatch 'Wildcard' -ApplicationType 'EXE' -ArgumentList {Lit(ua)} -WaitForChildProcesses"
-                : $"Uninstall-ADTApplication -Name {pat} -NameMatch 'Wildcard' -ApplicationType 'EXE' -FilterScript {{ ![System.String]::IsNullOrWhiteSpace($_.QuietUninstallString) }} -WaitForChildProcesses";
-            var L = new List<string>();
-            if (continueOnError)
+            var L = new List<string>
             {
-                // Uninstall first, install after: no detection rule is consulted, so the same version is replaced too
-                // and two versions of the application never end up side by side.
-                string find = $"@(Get-ADTApplication -Name {pat} -NameMatch 'Wildcard')";
-                const string describe = "(($_ | ForEach-Object { \"$($_.DisplayName) $($_.DisplayVersion)\".Trim() }) -join '; ')";
-                L.Add("    ## Existing versions: whatever is already installed is removed first, then the new version is installed.");
-                L.Add(code == null
-                    ? "    ## No detection rule is consulted here: the removal runs whenever a program with this name is found (MSI and EXE)."
-                    : "    ## No detection rule is consulted here: the removal runs whenever a program with this name (MSI and EXE), or the MSI with this product code, is found.");
-                L.Add("    ## A failure is logged but does not stop the installation.");
-                L.Add($"    $existingApps = {find}");
+                "##================================================",
+                "## MARK: Removal of installed copies",
+                "##================================================",
+                "",
+                "function Get-J365InstalledCopies",
+                "{",
+                code == null
+                    ? "    ## Every installed copy of the application: the programs with its name, MSI and EXE."
+                    : "    ## Every installed copy of the application: the programs with its name (MSI and EXE) and the MSI with the product code of this package.",
+                $"    $found = @(Get-ADTApplication -Name {pat} -NameMatch 'Wildcard')"
+            };
+            if (code != null)
+            {
                 // The product of this package also when its name does not match the pattern (counted once when it does).
-                if (code != null)
-                    L.Add($"    $existingApps += @(Get-ADTApplication -ProductCode {Lit(code)} -ApplicationType 'MSI' | Where-Object {{ $existingApps.ProductCode -notcontains $_.ProductCode }})");
-                L.Add("    if ($existingApps.Count -eq 0)");
-                L.Add("    {");
-                L.Add("        Write-ADTLogEntry -Message 'No version already installed was found: nothing to remove.'");
-                L.Add("    }");
-                L.Add("    else");
-                L.Add("    {");
-                L.Add("        Write-ADTLogEntry -Message ('Versions already installed, removed before installing: ' + " + describe.Replace("$_ |", "$existingApps |") + ")");
-                // The toolkit records the exit code of a failed process before it throws: restored, so a failed
-                // removal that is only logged does not make the whole installation report that code.
-                L.Add("        $j365ExitCode = $adtSession.GetExitCode()");
-                foreach (var c in byCode == null ? new[] { msi, exe } : new[] { byCode, msi, exe })
-                {
-                    L.Add("        try");
-                    L.Add("        {");
-                    L.Add("            " + c);
-                    L.Add("        }");
-                    L.Add("        catch");
-                    L.Add("        {");
-                    L.Add("            Write-ADTLogEntry -Message \"Could not remove the previous version: $($_.Exception.Message)\" -Severity 2");
-                    L.Add("            $adtSession.SetExitCode($j365ExitCode)");
-                    L.Add("        }");
-                }
-                L.Add($"        $remainingApps = {find}");
-                L.Add("        if ($remainingApps.Count -gt 0)");
-                L.Add("        {");
-                L.Add("            Write-ADTLogEntry -Message ('Still installed after the removal (the new version is installed over it): ' + " + describe.Replace("$_ |", "$remainingApps |") + ") -Severity 2");
-                L.Add("        }");
-                L.Add("    }");
+                L.Add($"    $found += @(Get-ADTApplication -ProductCode {Lit(code)} -ApplicationType 'MSI' | Where-Object {{ $found.ProductCode -notcontains $_.ProductCode }})");
+            }
+            L.AddRange(new[]
+            {
+                "    $found",
+                "}",
+                "",
+                "function Format-J365Copies",
+                "{",
+                "    param ($Application)",
+                "    (@($Application) | ForEach-Object { \"$($_.DisplayName) $($_.DisplayVersion)\".Trim() }) -join '; '",
+                "}",
+                "",
+                "function Get-J365SilentSwitches",
+                "{",
+                "    ## An .exe uninstaller that registered no silent command: the switches of its setup technology, when it is recognised.",
+                "    param ($Application)",
+                "    ## Inno Setup registers its uninstall key as '<AppId>_is1'.",
+                $"    if ([System.String]$Application.PSChildName -like '*_is1') {{ return {Lit(InnoSilentSwitches)} }}",
+                "    $file = [System.String]$Application.UninstallStringFilePath",
+                "    if ([System.String]::IsNullOrWhiteSpace($file) -or -not (Test-Path -LiteralPath $file -PathType Leaf)) { return $null }",
+                "    try",
+                "    {",
+                "        ## NSIS (Nullsoft): the uninstaller carries the name of its stub in the manifest, and takes /S.",
+                "        $stream = [System.IO.File]::Open($file, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)",
+                "        try",
+                "        {",
+                "            $buffer = New-Object -TypeName 'System.Byte[]' -ArgumentList ([System.Int32][System.Math]::Min($stream.Length, 4194304))",
+                "            $read = 0",
+                "            while ($read -lt $buffer.Length)",
+                "            {",
+                "                $count = $stream.Read($buffer, $read, $buffer.Length - $read)",
+                "                if ($count -le 0) { break }",
+                "                $read += $count",
+                "            }",
+                "        }",
+                "        finally",
+                "        {",
+                "            $stream.Dispose()",
+                "        }",
+                "        $text = [System.Text.Encoding]::ASCII.GetString($buffer, 0, $read)",
+                "        if ($text.Contains('Nullsoft.NSIS') -or $text.Contains('NullsoftInst')) { return '/S' }",
+                "    }",
+                "    catch",
+                "    {",
+                "        Write-ADTLogEntry -Message \"Could not read the uninstaller [$file]: $($_.Exception.Message)\" -Severity 2",
+                "    }",
+                "    return $null",
+                "}",
+                "",
+                "function Remove-J365InstalledCopy",
+                "{",
+                "    param ($Application)",
+                "    if ($Application.WindowsInstaller)",
+                "    {",
+                "        ## Windows Installer: msiexec /x by the product code.",
+                "        Uninstall-ADTApplication -InstalledApplication $Application",
+                "        return",
+                "    }",
+                "    ## -WaitForChildProcesses: many uninstallers (NSIS, 7-Zip) copy themselves to %TEMP%, start the copy and exit at",
+                "    ## once. Without waiting for that copy the removal 'finishes' while the program is still installed."
+            });
+            if (ua.Length > 0)
+            {
+                L.Add("    ## The silent switches this package gives to the .exe uninstaller.");
+                L.Add($"    Uninstall-ADTApplication -InstalledApplication $Application -ArgumentList {Lit(ua)} -WaitForChildProcesses");
             }
             else
             {
-                L.Add("    ## Removes the application (every version found, MSI and EXE).");
-                if (byCode != null)
+                L.AddRange(new[]
                 {
-                    L.Add("    ## The Windows Installer product of this package, by its product code (msiexec /x).");
-                    L.Add("    " + byCode);
-                    L.Add("    ## Other versions with the same name.");
-                }
-                L.Add("    " + msi);
-                L.Add("    " + exe);
+                    "    if (-not [System.String]::IsNullOrWhiteSpace($Application.QuietUninstallString))",
+                    "    {",
+                    "        ## The silent command the program registered.",
+                    "        Uninstall-ADTApplication -InstalledApplication $Application -WaitForChildProcesses",
+                    "        return",
+                    "    }",
+                    "    $copy = Format-J365Copies -Application $Application",
+                    "    $switches = Get-J365SilentSwitches -Application $Application",
+                    "    if ($switches)",
+                    "    {",
+                    "        Write-ADTLogEntry -Message \"[$copy] registers no silent uninstall command: its uninstaller is started with the switches of its setup technology ($switches).\"",
+                    "        Uninstall-ADTApplication -InstalledApplication $Application -ArgumentList $switches -WaitForChildProcesses",
+                    "        return",
+                    "    }",
+                    "    ## Not started: without silent switches its window would wait for an answer nobody can give.",
+                    "    Write-ADTLogEntry -Message \"[$copy] registers no silent uninstall command and its setup technology was not recognised: it was not removed.\" -Severity 2"
+                });
             }
+            L.AddRange(new[]
+            {
+                "}",
+                "",
+                "function Wait-J365CopiesRemoved",
+                "{",
+                $"    ## What is still installed. An uninstaller that finishes in the background gets up to {RemovalWaitSeconds} seconds.",
+                "    $remaining = @(Get-J365InstalledCopies)",
+                $"    $deadline = [System.DateTime]::UtcNow.AddSeconds({RemovalWaitSeconds})",
+                "    while (($remaining.Count -gt 0) -and ([System.DateTime]::UtcNow -lt $deadline))",
+                "    {",
+                "        Start-Sleep -Seconds 5",
+                "        $remaining = @(Get-J365InstalledCopies)",
+                "    }",
+                "    $remaining",
+                "}"
+            });
+            return L;
+        }
+
+        /// <summary>
+        /// Before the installation: every copy already installed is removed, and what is left decides what happens next.
+        /// By default the installation stops (the new version is never installed next to an old one, and Intune reports the
+        /// failure with the reason in the log); with <see cref="PackageSettings.InstallIfRemovalFails"/> the new version is
+        /// installed over the copy that could not be removed.
+        /// </summary>
+        private static List<string> RemoveBeforeInstallLines(PackageSettings s)
+        {
+            var L = new List<string>
+            {
+                "    ## Existing versions: every copy already installed is removed first, then the new version is installed.",
+                "    ## No detection rule is consulted here: the removal runs whenever a copy is found (Get-J365InstalledCopies).",
+                "    $existingApps = @(Get-J365InstalledCopies)",
+                "    if ($existingApps.Count -eq 0)",
+                "    {",
+                "        Write-ADTLogEntry -Message 'No version already installed was found: nothing to remove.'",
+                "    }",
+                "    else",
+                "    {",
+                "        Write-ADTLogEntry -Message ('Versions already installed, removed before installing: ' + (Format-J365Copies -Application $existingApps))",
+                // The toolkit records the exit code of a failed process before it throws: restored, so a failed removal
+                // (judged below by what is still installed) does not make the whole installation report that code.
+                "        $j365ExitCode = $adtSession.GetExitCode()",
+                "        foreach ($existingApp in $existingApps)",
+                "        {",
+                "            try",
+                "            {",
+                "                Remove-J365InstalledCopy -Application $existingApp",
+                "            }",
+                "            catch",
+                "            {",
+                "                Write-ADTLogEntry -Message \"Could not remove the previous version: $($_.Exception.Message)\" -Severity 2",
+                "                $adtSession.SetExitCode($j365ExitCode)",
+                "            }",
+                "        }",
+                "        $remainingApps = @(Wait-J365CopiesRemoved)",
+                "        if ($remainingApps.Count -gt 0)",
+                "        {"
+            };
+            if (s.InstallIfRemovalFails)
+            {
+                L.Add("            ## This package installs over a copy that could not be removed.");
+                L.Add("            Write-ADTLogEntry -Message ('Still installed after the removal (the new version is installed over it): ' + (Format-J365Copies -Application $remainingApps)) -Severity 2");
+            }
+            else
+            {
+                L.Add("            ## The new version is never installed next to a copy that could not be removed: the installation stops here.");
+                L.Add("            throw ('Still installed after the removal: ' + (Format-J365Copies -Application $remainingApps) + '. The installation was stopped so that two versions do not end up side by side. Give the package the silent switches of the uninstaller, or allow it to install over a copy that cannot be removed.')");
+            }
+            L.Add("        }");
+            L.Add("    }");
             return L;
         }
 

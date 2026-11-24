@@ -1,10 +1,10 @@
 <p align="center"><a href="README.md">English</a> · <strong>Português (Brasil)</strong></p>
 
-<p align="center"><img src="docs/assets/hero-pt-BR.svg" alt="J365 IntunePSApp 2.8.0 — do instalador ao Intune, com controle em cada etapa" width="100%"></p>
+<p align="center"><img src="docs/assets/hero-pt-BR.svg" alt="J365 IntunePSApp 3.0.0 — do instalador ao Intune, com controle em cada etapa" width="100%"></p>
 
 <p align="center"><b>Menos tarefas repetitivas. Mais consistência nos seus pacotes.</b><br>Uma interface visual para preparar, personalizar, testar e publicar aplicativos Windows.</p>
-<p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v2.8.0/J365-IntunePSApp-2.8.0-win-x64.zip"><img src="docs/assets/download-pt-BR.svg" alt="Baixar J365 IntunePSApp 2.8.0 — Windows x64" width="400"></a></p>
-<p align="center"><a href="#recursos">Conheça os recursos</a> · <a href="#comecar">Como começar</a> · <a href="docs/USER-GUIDE.pt-BR.md">Guia de uso</a> · <a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/tag/v2.8.0">Notas da versão</a></p>
+<p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v3.0.0/J365-IntunePSApp-3.0.0-win-x64.zip"><img src="docs/assets/download-pt-BR.svg" alt="Baixar J365 IntunePSApp 3.0.0 — Windows x64" width="400"></a></p>
+<p align="center"><a href="#recursos">Conheça os recursos</a> · <a href="#comecar">Como começar</a> · <a href="docs/USER-GUIDE.pt-BR.md">Guia de uso</a> · <a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/tag/v3.0.0">Notas da versão</a></p>
 <p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/actions/workflows/build.yml"><img alt="Build and tests" src="https://github.com/sesantanajr/J365-IntunePSApp/actions/workflows/build.yml/badge.svg"></a> <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-315CF5?style=flat-square"></a> <img alt="Windows x64" src="https://img.shields.io/badge/Windows-x64-0A5CA8?style=flat-square"></p>
 
 ## Seu próximo pacote começa aqui
@@ -13,16 +13,16 @@ Transforme um instalador MSI ou EXE — ou qualquer aplicativo do catálogo do w
 
 | Prepare com mais agilidade | Padronize a experiência | Mantenha o controle |
 | --- | --- | --- |
-| Catálogo do winget e da Microsoft Store, análise de instaladores, sugestões de parâmetros silenciosos e deploy em lote. | Logo, cores, mensagens, adiamentos e padrões reutilizáveis da sua empresa. | Revisão antes de gerar, testes, logs e proteção contra publicação de pacotes desatualizados. |
+| Catálogo do winget e da Microsoft Store, análise de instaladores, sugestões de parâmetros silenciosos e deploy em lote. | Instalação silenciosa ou com notificação, logo, cores, mensagens e padrões reutilizáveis da sua empresa. | Revisão antes de gerar, testes, logs e proteção contra publicação de pacotes desatualizados. |
 
-<a href="docs/screenshots/pt-BR/home-dark.png"><img src="docs/screenshots/pt-BR/home-dark.png" alt="J365 IntunePSApp 2.8: banco de dados, pacotes, toolkit e conexão com o Intune num relance" width="100%"></a>
+<a href="docs/screenshots/pt-BR/home-dark.png"><img src="docs/screenshots/pt-BR/home-dark.png" alt="J365 IntunePSApp 3.0: banco de dados, pacotes, toolkit e conexão com o Intune num relance" width="100%"></a>
 
 **Um fluxo completo:** catálogo ou instalador → aplicativo → experiência → ações → desinstalação → detecção → visual → geração → teste → publicação. Cada tela está explicada no **[guia de uso](docs/USER-GUIDE.pt-BR.md)**.
 
 <a id="recursos"></a>
 ## Conheça o que você pode fazer
 
-Capturas reais da **2.8** com uma empresa demonstrativa (Contoso) e o MSI do 7-Zip, empacotado de verdade. Clique nas imagens para ampliar. A conexão com o Intune é um exemplo: nada foi publicado em um tenant.
+Capturas reais da **3.0** com uma empresa demonstrativa (Contoso) e o MSI do 7-Zip, empacotado de verdade. Clique nas imagens para ampliar. A conexão com o Intune é um exemplo: nada foi publicado em um tenant.
 
 ### 01 · Encontre qualquer aplicativo
 
@@ -38,13 +38,13 @@ O instalador é analisado e reconhecido; nome, versão, arquitetura, contexto e 
 
 ### 03 · Cuide da experiência de quem recebe a instalação
 
-Escolha o modo de exibição, o fechamento de aplicativos, os adiamentos e as mensagens — ou uma instalação **silenciosa**, sem janelas e sem notificações do Intune —, com a prévia ao vivo da janela real do PSAppDeployToolkit. Adicione ações antes e depois da instalação para arquivos, registro, serviços, dependências e comandos.
+Escolha entre a instalação **com notificação** (as janelas do pacote e as notificações do Intune) e a **silenciosa** (nada aparece), defina o fechamento de aplicativos e as mensagens, com a prévia ao vivo da janela real do PSAppDeployToolkit. A instalação não pode ser adiada. Adicione ações antes e depois da instalação para arquivos, registro, serviços, dependências e comandos.
 
-<table><tr><td width="50%"><b>Experiência do usuário e adiamentos</b><br><a href="docs/screenshots/pt-BR/experience.png"><img src="docs/screenshots/pt-BR/experience.png" alt="Experiência do usuário e adiamentos" width="100%"></a></td><td width="50%"><b>Ações prontas e arquivos extras</b><br><a href="docs/screenshots/pt-BR/actions.png"><img src="docs/screenshots/pt-BR/actions.png" alt="Ações prontas e arquivos extras" width="100%"></a></td></tr></table>
+<table><tr><td width="50%"><b>Instalação silenciosa ou com notificação</b><br><a href="docs/screenshots/pt-BR/experience.png"><img src="docs/screenshots/pt-BR/experience.png" alt="Instalação silenciosa ou com notificação" width="100%"></a></td><td width="50%"><b>Ações prontas e arquivos extras</b><br><a href="docs/screenshots/pt-BR/actions.png"><img src="docs/screenshots/pt-BR/actions.png" alt="Ações prontas e arquivos extras" width="100%"></a></td></tr></table>
 
 ### 04 · Planeje a atualização e a detecção
 
-Remova versões anteriores, mantenha uma mais nova e — novidade da 2.7 — mantenha a mesma versão já instalada em vez de reinstalá-la. Detecte por nome/versão, código do produto ou arquivo, com a marca do pacote, e teste a regra no seu computador.
+Tudo o que estiver instalado é removido antes de instalar (só uma versão mais nova é mantida), e, se uma cópia não puder ser removida, a instalação para em vez de deixar duas versões lado a lado. Detecte por nome/versão, código do produto ou arquivo, com a marca do pacote, e teste a regra no seu computador.
 
 <table><tr><td width="50%"><b>Versões anteriores e versões mantidas</b><br><a href="docs/screenshots/pt-BR/uninstall.png"><img src="docs/screenshots/pt-BR/uninstall.png" alt="Tratamento de versões anteriores" width="100%"></a></td><td width="50%"><b>Regras de detecção e testes locais</b><br><a href="docs/screenshots/pt-BR/detection.png"><img src="docs/screenshots/pt-BR/detection.png" alt="Regras de detecção e testes locais" width="100%"></a></td></tr></table>
 
@@ -103,18 +103,18 @@ O teste pode ser executado localmente ou no **Windows Sandbox**, quando disponí
 2. Abra **`J365.IntunePSApp.exe`** e conclua a preparação das ferramentas. O runtime está incluído; não é necessário instalar o SDK .NET.
 3. Escolha um instalador ou um aplicativo do catálogo, configure o projeto e revise antes de gerar — ou marque vários aplicativos (winget ou Microsoft Store) e faça o deploy de todos juntos. Valide em um grupo piloto antes de distribuir. O [guia de uso](docs/USER-GUIDE.pt-BR.md) percorre cada tela.
 
-## Novidades da 2.8
+## Novidades da 3.0
 
-- **Uma versão nova, grupo a grupo (substituição):** publique a versão nova como um app novo do Intune que substitui o anterior. O Intune leva para ela só os dispositivos onde ela estiver atribuída — primeiro um grupo piloto, depois mais grupos — e o app anterior continua lá para um rollback. *Atualizar* instala por cima da versão anterior (padrão); *Desinstalar antes* faz o Intune removê-la primeiro. Na janela de publicação, no lote e na linha de comando (`--if-exists Supersede`).
-- **Status no Intune:** quantos dispositivos têm o app instalado, com falha, pendente, não instalado ou não aplicável; as atribuições e a substituição; e cada dispositivo, problemas primeiro, com o código do erro explicado (`0x87D1041C`: não detectado depois de instalar). No cartão de resultado de um pacote publicado e em *Meus pacotes*, com a permissão que a conexão já tem. Nada é alterado no tenant.
-- **A publicação testada de ponta a ponta:** o script de publicação agora roda nos testes contra um Microsoft Graph simulado — criação, envio, confirmação, substituição e atribuição — no Windows PowerShell 5.1.
-- **Correções:** o resumo do lote concorda com qualquer número ("Gerados: 4 de 6 · pulados: 1"), e uma escolha desconhecida na linha de comando é recusada em vez de virar uma atualização.
+- **Instalação silenciosa ou com notificação:** os quatro modos de exibição, a escolha das notificações do Intune e os adiamentos viraram uma escolha só. *Com notificação* mostra as janelas do pacote e as notificações do Intune; *Silenciosa* não mostra nada. Projetos antigos continuam abrindo.
+- **Sem adiamento:** a opção de o usuário adiar a instalação (3 vezes, por padrão) foi removida.
+- **Remoção garantida antes de instalar:** tudo o que estiver instalado sai antes, inclusive a mesma versão. MSI pelo código do produto; .exe pelos parâmetros do pacote, pelo comando silencioso registrado ou pelos parâmetros do Inno Setup e do NSIS, reconhecidos no dispositivo. Se uma cópia continuar instalada, a instalação para com erro (ou instala por cima, se você permitir).
+- **Menos motivos para o antivírus desconfiar:** o executável não é mais comprimido e o aplicativo não remove mais a "marca da web" dos arquivos que baixa. O Controle Inteligente de Aplicativos continua exigindo a release assinada ([como assinar](docs/SIGNING.md)).
 
-A 2.7 trouxe a verificação de atualizações que funciona em redes corporativas, a mesma versão mantida em vez de reinstalada, pacotes mais rápidos e o [guia de uso](docs/USER-GUIDE.pt-BR.md). Todas as mudanças: [CHANGELOG](CHANGELOG.md).
+A 2.8 trouxe a substituição (uma versão nova, grupo a grupo) e o status de instalação no Intune; a 2.7, a verificação de atualizações que funciona em redes corporativas e o [guia de uso](docs/USER-GUIDE.pt-BR.md). Todas as mudanças: [CHANGELOG](CHANGELOG.md).
 
 ## Evolução com qualidade
 
-Cada release passa por **437 testes automatizados** no Windows (scripts gerados validados pelo Windows PowerShell 5.1, empacotamento, detecção, a publicação de ponta a ponta contra um Microsoft Graph simulado, o status de instalação, leitura da Microsoft Store, planejamento do lote, idiomas), além de verificações que renderizam o editor, as configurações e as janelas de conexão, publicação, status e lote nos dois idiomas e temas. A pesquisa na Microsoft Store e a verificação de atualizações também foram exercitadas nos serviços reais. Veja a [revisão de qualidade](docs/QUALITY.md).
+Cada release passa por **456 testes automatizados** no Windows (scripts gerados validados pelo Windows PowerShell 5.1, empacotamento, detecção, a publicação de ponta a ponta contra um Microsoft Graph simulado, o status de instalação, leitura da Microsoft Store, planejamento do lote, idiomas), além de verificações que renderizam o editor, as configurações e as janelas de conexão, publicação, status e lote nos dois idiomas e temas. A pesquisa na Microsoft Store e a verificação de atualizações também foram exercitadas nos serviços reais. Veja a [revisão de qualidade](docs/QUALITY.md).
 
 Projetos antigos continuam legíveis. Atualizar o editor não altera automaticamente aplicativos já publicados no tenant. A identificação da revisão acompanha novos pacotes; regenere os antigos para recebê-la.
 
@@ -126,7 +126,7 @@ Projetos antigos continuam legíveis. Atualizar o editor não altera automaticam
 
 [Guia de uso](docs/USER-GUIDE.pt-BR.md) · [Novidades por versão](CHANGELOG.md) · [Análise técnica](docs/QUALITY.md) · [Publicação no Intune](docs/INTUNE-PUBLISH.md) · [Compilar](docs/BUILDING.md) · [Arquitetura / Architecture](docs/ARCHITECTURE.md)
 
-[Contribuir](CONTRIBUTING.md) · [Relatar um problema](https://github.com/sesantanajr/J365-IntunePSApp/issues) · [Security](SECURITY.md) · [SHA256SUMS.txt](https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v2.8.0/SHA256SUMS.txt)
+[Contribuir](CONTRIBUTING.md) · [Relatar um problema](https://github.com/sesantanajr/J365-IntunePSApp/issues) · [Security](SECURITY.md) · [SHA256SUMS.txt](https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v3.0.0/SHA256SUMS.txt)
 
 ---
 

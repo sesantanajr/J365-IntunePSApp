@@ -44,10 +44,29 @@ namespace J365.IntunePSApp.Core
         }
     }
 
+    /// <summary>The two ways a package reaches the user: without telling anyone, or telling the user.</summary>
+    public static class DeployModes
+    {
+        public const string Silent = "Silent";
+        public const string Notify = "Notify";
+        public static readonly string[] All = { Notify, Silent };
+
+        /// <summary>
+        /// The mode a stored value stands for. "Silent" in any case is silent; everything else is "Notify": the values of
+        /// versions before 3.0 (Auto, WhenNeeded, Interactive), an empty value and a value nobody knows.
+        /// </summary>
+        public static string Normalize(string mode)
+            => string.Equals((mode ?? "").Trim(), Silent, StringComparison.OrdinalIgnoreCase) ? Silent : Notify;
+
+        /// <summary>True when the text names one of the two modes (a command line that says something else is refused).</summary>
+        public static bool IsKnown(string mode)
+            => All.Any(m => string.Equals(m, (mode ?? "").Trim(), StringComparison.OrdinalIgnoreCase));
+    }
+
     /// <summary>Every option of a package (persisted as project.json).</summary>
     public class PackageSettings
     {
-        public const int CurrentSchema = 2;
+        public const int CurrentSchema = 3;
         public int SchemaVersion { get; set; }
 
         // Installer
@@ -75,18 +94,16 @@ namespace J365.IntunePSApp.Core
         /// <summary>Icon shown in Intune and in the Company Portal. Empty: the icon of the installer, or a tile with the initials.</summary>
         public string AppIconPath { get; set; } = "";
         // User experience
-        public string DeployMode { get; set; } = "Auto";      // Auto | WhenNeeded | Silent | Interactive
         /// <summary>
-        /// Toast notifications Intune shows for the assignment of the app: "showAll", "showReboot" or "hideAll".
-        /// Null (automatic): hidden for a silent package, all shown otherwise (<see cref="PackageBuilder.IntuneNotifications"/>).
-        /// Left out of project.json while automatic, so the revision record of a package generated before 2.6 still matches.
+        /// How the installation reaches the user. There are two ways (<see cref="DeployModes"/>):
+        /// "Silent" - nothing is shown: no window of the package and no toast of Intune;
+        /// "Notify" - the user is told: the windows of the package (close applications, progress, completion) and the
+        /// toasts of Intune. Nobody can defer or refuse the installation in either of them.
+        /// The values of earlier versions (Auto, WhenNeeded, Interactive) are read as "Notify".
         /// </summary>
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        public string IntuneNotifications { get; set; }
+        public string DeployMode { get; set; } = DeployModes.Notify;
         public List<string> ProcessesToClose { get; set; } = new List<string>();
         public int CloseAppsCountdown { get; set; } = 300;
-        public bool AllowDefer { get; set; } = true;
-        public int DeferTimes { get; set; } = 3;
         public bool BlockExecution { get; set; } = true;
         public bool CheckDiskSpace { get; set; } = true;
         public string WelcomeMessage { get; set; } = "";
@@ -121,16 +138,17 @@ namespace J365.IntunePSApp.Core
         /// removes that copy and installs this version.
         /// </summary>
         public bool DetectionRequireMark { get; set; } = true;
-        /// <summary>A newer version already installed is kept (the package does not downgrade it; it only writes its mark).</summary>
+        /// <summary>
+        /// A newer version already installed is kept (the package does not downgrade it; it only writes its mark). It is the
+        /// one copy the package does not remove: any other copy, the same version included, is removed before installing.
+        /// </summary>
         public bool KeepNewerVersion { get; set; } = true;
         /// <summary>
-        /// With <see cref="KeepNewerVersion"/>: the same version already installed (the same MSI product code, or the same
-        /// architecture) is kept too, instead of being removed and installed again. Null = yes (the default); false = install
-        /// it again (to repair it). Left out of project.json while null, so packages generated before 2.7 still match their
-        /// revision record.
+        /// What happens when a copy is still installed after its removal was tried (an .exe with no silent uninstaller, an
+        /// uninstaller that failed). False (the default): the installation stops with an error, so the new version is never
+        /// installed next to the old one and Intune reports the failure. True: the new version is installed over it.
         /// </summary>
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        public bool? KeepSameVersion { get; set; }
+        public bool InstallIfRemovalFails { get; set; }
         // Output
         public string OutputRoot { get; set; } = "";
 
@@ -180,14 +198,13 @@ namespace J365.IntunePSApp.Core
         public bool LogsInIntuneFolder { get; set; } = true;
         public string Author { get; set; } = "";
         // Experience defaults
-        public string DeployMode { get; set; } = "Auto";
-        public string IntuneNotifications { get; set; } = "";
-        public bool AllowDefer { get; set; } = true;
-        public int DeferTimes { get; set; } = 3;
+        public string DeployMode { get; set; } = DeployModes.Notify;
         public int CloseAppsCountdown { get; set; } = 300;
         public bool BlockExecution { get; set; } = true;
         public bool CheckDiskSpace { get; set; } = true;
         public bool RemovePreviousVersions { get; set; } = true;
+        /// <summary>Company default of <see cref="PackageSettings.InstallIfRemovalFails"/>.</summary>
+        public bool InstallIfRemovalFails { get; set; }
         public string WelcomeMessage { get; set; } = "";
         public string CompletionMessage { get; set; } = "";
         // Folders, catalog and Intune
@@ -235,14 +252,12 @@ namespace J365.IntunePSApp.Core
                 Language = Language,
                 LogsInIntuneFolder = LogsInIntuneFolder,
                 Author = Author,
-                DeployMode = DeployMode,
-                IntuneNotifications = string.IsNullOrWhiteSpace(IntuneNotifications) ? null : IntuneNotifications,
-                AllowDefer = AllowDefer,
-                DeferTimes = DeferTimes,
+                DeployMode = DeployModes.Normalize(DeployMode),
                 CloseAppsCountdown = CloseAppsCountdown,
                 BlockExecution = BlockExecution,
                 CheckDiskSpace = CheckDiskSpace,
                 RemovePreviousVersions = RemovePreviousVersions,
+                InstallIfRemovalFails = InstallIfRemovalFails,
                 WelcomeMessage = WelcomeMessage,
                 CompletionMessage = CompletionMessage,
                 OutputRoot = OutputFolder,

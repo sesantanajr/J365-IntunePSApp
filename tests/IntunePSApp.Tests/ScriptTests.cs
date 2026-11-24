@@ -23,8 +23,13 @@ namespace J365.IntunePSApp.Tests
             Assert.Equal("Invoke-AppDeployToolkit.exe -DeploymentType Install", ScriptGenerator.Commands(s).Install);
             s.DeployMode = "Silent";
             Assert.Equal("Invoke-AppDeployToolkit.exe -DeploymentType Uninstall -DeployMode Silent", ScriptGenerator.Commands(s).Uninstall);
-            s.DeployMode = "Interactive";
-            Assert.EndsWith("-DeployMode Interactive", ScriptGenerator.Commands(s).Repair);
+            // "Notify" needs no switch (the toolkit stays silent by itself with nobody signed in), and neither do the
+            // modes of versions before 3.0, which are read as "Notify".
+            foreach (var mode in new[] { "Notify", "Interactive", "Auto", "WhenNeeded" })
+            {
+                s.DeployMode = mode;
+                Assert.Equal("Invoke-AppDeployToolkit.exe -DeploymentType Repair", ScriptGenerator.Commands(s).Repair);
+            }
         }
 
         [Fact]
@@ -48,8 +53,8 @@ namespace J365.IntunePSApp.Tests
             Assert.Contains("Start-ADTProcess -FilePath (Join-Path -Path $adtSession.DirFiles -ChildPath 'setup.exe') -ArgumentList '/S' -WaitForChildProcesses", script);
             Assert.Contains("$saiwParams.Add('BlockExecution', $true)", script);
             Assert.Contains("CustomText = $true", script);
-            Assert.Contains("Uninstall-ADTApplication -Name 'Contoso App*' -NameMatch 'Wildcard' -ApplicationType 'MSI'", script);
-            Assert.Contains("-ApplicationType 'EXE' -ArgumentList '/S'", script);
+            Assert.Contains("$found = @(Get-ADTApplication -Name 'Contoso App*' -NameMatch 'Wildcard')", script);
+            Assert.Contains("Uninstall-ADTApplication -InstalledApplication $Application -ArgumentList '/S' -WaitForChildProcesses", script);
             Assert.Contains("Show-ADTInstallationRestartPrompt -CountdownSeconds 600", script);
             Assert.Contains("## MARK: Initialization", script);
             Assert.Single(System.Text.RegularExpressions.Regex.Matches(script, @"(?m)^function Install-ADTDeployment"));
@@ -67,17 +72,16 @@ namespace J365.IntunePSApp.Tests
             s.RemovePreviousVersions = true;
             string script = ScriptGenerator.DeployScript(Fakes.Template, s, "AcroRdrDCx642600322110_MUI.exe");
             Ps.AssertParses(script);
-            const string byCode = "Uninstall-ADTApplication -ProductCode '{AC76BA86-1033-FF00-7760-BC15014EA700}' -ApplicationType 'MSI'";
-            const string byName = "Uninstall-ADTApplication -Name 'Contoso App*' -NameMatch 'Wildcard' -ApplicationType 'MSI'";
-            // In the uninstallation and in the removal of existing versions before installing, each time before the name.
-            int install = script.IndexOf("function Install-ADTDeployment"), uninstall = script.IndexOf("function Uninstall-ADTDeployment");
-            Assert.True(install >= 0 && uninstall > install);
-            Assert.InRange(script.IndexOf(byCode, install), install, uninstall);
-            Assert.True(script.IndexOf(byCode, install) < script.IndexOf(byName, install));
-            Assert.True(script.IndexOf(byCode, uninstall) > uninstall);
-            Assert.True(script.IndexOf(byCode, uninstall) < script.IndexOf(byName, uninstall));
-            // Before installing, the product of this package is found by its code too, not only by its name.
-            Assert.Contains("$existingApps += @(Get-ADTApplication -ProductCode '{AC76BA86-1033-FF00-7760-BC15014EA700}' -ApplicationType 'MSI' | Where-Object { $existingApps.ProductCode -notcontains $_.ProductCode })", script);
+            // The product of this package is one of the installed copies by its code too, not only by its name: the
+            // installation and the uninstallation both remove what Get-J365InstalledCopies finds.
+            const string byCode = "$found += @(Get-ADTApplication -ProductCode '{AC76BA86-1033-FF00-7760-BC15014EA700}' -ApplicationType 'MSI' | Where-Object { $found.ProductCode -notcontains $_.ProductCode })";
+            Assert.Contains(byCode, script);
+            int helpers = script.IndexOf("function Get-J365InstalledCopies"), install = script.IndexOf("function Install-ADTDeployment"), uninstall = script.IndexOf("function Uninstall-ADTDeployment");
+            Assert.True(helpers > 0 && install > helpers && uninstall > install);
+            Assert.InRange(script.IndexOf("$existingApps = @(Get-J365InstalledCopies)", install), install, uninstall);
+            Assert.True(script.IndexOf("$installedCopies = @(Get-J365InstalledCopies)", uninstall) > uninstall);
+            // An MSI goes by its product code (msiexec /x): no switches, whatever the package has for .exe uninstallers.
+            Assert.Contains("Uninstall-ADTApplication -InstalledApplication $Application\r\n        return", script);
             // No switches needed: no warning (and no question) before generating.
             Assert.DoesNotContain(Loc.T("Val_Warn_NoUninstallArgs"), PackageBuilder.Validate(s).Warnings);
             Assert.Equal("{AC76BA86-1033-FF00-7760-BC15014EA700}", ScriptGenerator.ExeMsiCode(s));
@@ -85,7 +89,7 @@ namespace J365.IntunePSApp.Tests
             // Outside the catalog, a code typed for the detection may be the key of a setup that is not an MSI: the
             // removal by code is still tried (only an MSI with that code is touched), and the warning stays.
             s.CatalogId = "";
-            Assert.Contains(byCode, ScriptGenerator.DeployScript(Fakes.Template, s, "setup.exe"));
+            Assert.Contains("-ProductCode '{AC76BA86-1033-FF00-7760-BC15014EA700}' -ApplicationType 'MSI'", ScriptGenerator.DeployScript(Fakes.Template, s, "setup.exe"));
             Assert.Contains(Loc.T("Val_Warn_NoUninstallArgs"), PackageBuilder.Validate(s).Warnings);
             Assert.Null(ScriptGenerator.ExeMsiCode(s));
             s.CatalogId = "Adobe.Acrobat.Reader.64-bit";
@@ -107,7 +111,9 @@ namespace J365.IntunePSApp.Tests
             Ps.AssertParses(script);
             Assert.Contains("Start-ADTMsiProcess -Action 'Install' -FilePath (Join-Path -Path $adtSession.DirFiles -ChildPath 'app.msi') -AdditionalArgumentList 'ALLUSERS=1'", script);
             Assert.Contains("Start-ADTMsiProcess -Action 'Repair'", script);
-            Assert.Contains("-FilterScript { ![System.String]::IsNullOrWhiteSpace($_.QuietUninstallString) }", script);
+            // Without switches for .exe uninstallers: the silent command a program registered, then its setup technology.
+            Assert.Contains("if (-not [System.String]::IsNullOrWhiteSpace($Application.QuietUninstallString))", script);
+            Assert.Contains("$switches = Get-J365SilentSwitches -Application $Application", script);
         }
 
         [Fact]
@@ -126,7 +132,6 @@ namespace J365.IntunePSApp.Tests
         {
             var s = Fakes.Settings();
             s.ProcessesToClose.Clear();
-            s.AllowDefer = false;
             s.RemovePreviousVersions = false;
             string script = ScriptGenerator.DeployScript(Fakes.Template, s, "setup.exe");
             Ps.AssertParses(script);
@@ -148,15 +153,23 @@ namespace J365.IntunePSApp.Tests
             string install = script.Substring(start, end - start);
 
             // What is installed is listed (and logged), removed, and checked again; then the new version is installed.
-            int find = install.IndexOf("$existingApps = @(Get-ADTApplication -Name 'Contoso App*' -NameMatch 'Wildcard')");
-            int removeMsi = install.IndexOf("Uninstall-ADTApplication -Name 'Contoso App*' -NameMatch 'Wildcard' -ApplicationType 'MSI'");
-            int removeExe = install.IndexOf("Uninstall-ADTApplication -Name 'Contoso App*' -NameMatch 'Wildcard' -ApplicationType 'EXE'");
-            int verify = install.IndexOf("$remainingApps = @(Get-ADTApplication -Name 'Contoso App*' -NameMatch 'Wildcard')");
+            int find = install.IndexOf("$existingApps = @(Get-J365InstalledCopies)");
+            int remove = install.IndexOf("Remove-J365InstalledCopy -Application $existingApp");
+            int verify = install.IndexOf("$remainingApps = @(Wait-J365CopiesRemoved)");
+            int stop = install.IndexOf("throw ('Still installed after the removal: '");
             int installMsi = install.IndexOf("Start-ADTMsiProcess -Action 'Install'");
-            Assert.True(find > 0 && find < removeMsi && removeMsi < removeExe && removeExe < verify && verify < installMsi);
+            Assert.True(find > 0 && find < remove && remove < verify && verify < stop && stop < installMsi);
             Assert.Contains("No version already installed was found", install);
-            // A failed removal is logged and the installation goes on.
-            Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(install, "Could not remove the previous version").Count);
+            // A failed uninstaller is logged; what decides is what is still installed afterwards.
+            Assert.Single(System.Text.RegularExpressions.Regex.Matches(install, "Could not remove the previous version"));
+            Assert.DoesNotContain("the new version is installed over it", install);
+
+            // Allowed to install over a copy that cannot be removed: logged, and the installation goes on.
+            s.InstallIfRemovalFails = true;
+            string over = ScriptGenerator.DeployScript(Fakes.Template, s, "app.msi");
+            Ps.AssertParses(over);
+            Assert.DoesNotContain("throw ('Still installed after the removal", over);
+            Assert.Contains("Still installed after the removal (the new version is installed over it)", over);
         }
 
         [Fact]
@@ -206,7 +219,7 @@ namespace J365.IntunePSApp.Tests
             Assert.True(install.IndexOf("Start-Sleep -Seconds 1") < install.IndexOf(create), "The kept branch applies the post-install actions before its mark.");
             Assert.Contains("$markKey.SetValue('Version', '1.2.3')", install);
             Assert.Contains(create, repair);
-            Assert.True(uninstall.IndexOf("DeleteSubKeyTree('SOFTWARE\\J365\\IntunePSApp\\Apps\\Contoso App', $false)") > uninstall.IndexOf("-ApplicationType 'EXE'"));
+            Assert.True(uninstall.IndexOf("DeleteSubKeyTree('SOFTWARE\\J365\\IntunePSApp\\Apps\\Contoso App', $false)") > uninstall.IndexOf("throw ('Still installed after the uninstallation"));
             Assert.DoesNotContain("CreateSubKey", uninstall);
 
             s.InstallBehavior = "User";
@@ -218,23 +231,26 @@ namespace J365.IntunePSApp.Tests
         }
 
         [Fact]
-        public void Automatic_mode_shows_the_dialogs_even_when_no_application_must_be_closed()
+        public void A_package_that_notifies_shows_its_windows_even_when_no_application_must_be_closed()
         {
             // PSAppDeployToolkit's own Auto turns the deployment silent when none of the processes to close is running.
             var s = Fakes.Settings();
-            s.DeployMode = "Auto";
-            string auto = ScriptGenerator.DeployScript(Fakes.Template, s, "setup.exe");
-            Ps.AssertParses(auto);
-            Assert.Contains("NoProcessDetection = $true", auto);
+            s.DeployMode = "Notify";
+            string notify = ScriptGenerator.DeployScript(Fakes.Template, s, "setup.exe");
+            Ps.AssertParses(notify);
+            Assert.Contains("NoProcessDetection = $true", notify);
             Assert.Equal("Invoke-AppDeployToolkit.exe -DeploymentType Install", ScriptGenerator.Commands(s).Install);
 
-            s.DeployMode = "WhenNeeded";
-            Assert.DoesNotContain("NoProcessDetection", ScriptGenerator.DeployScript(Fakes.Template, s, "setup.exe"));
-            Assert.Equal("Invoke-AppDeployToolkit.exe -DeploymentType Install", ScriptGenerator.Commands(s).Install);
+            // The modes of versions before 3.0 generate the same package.
+            foreach (var mode in new[] { "Auto", "WhenNeeded", "Interactive" })
+            {
+                s.DeployMode = mode;
+                Assert.Contains("NoProcessDetection = $true", ScriptGenerator.DeployScript(Fakes.Template, s, "setup.exe"));
+            }
 
-            s.DeployMode = "Interactive";
+            s.DeployMode = "Silent";
             Assert.DoesNotContain("NoProcessDetection", ScriptGenerator.DeployScript(Fakes.Template, s, "setup.exe"));
-            Assert.EndsWith("-DeployMode Interactive", ScriptGenerator.Commands(s).Install);
+            Assert.EndsWith("-DeployMode Silent", ScriptGenerator.Commands(s).Install);
         }
 
         [Fact]
@@ -242,7 +258,6 @@ namespace J365.IntunePSApp.Tests
         {
             var s = Fakes.Settings();
             s.ProcessesToClose.Clear();
-            s.AllowDefer = false;
             s.WelcomeMessage = "";
             string script = ScriptGenerator.DeployScript(Fakes.Template, s, "setup.exe");
             Ps.AssertParses(script);
@@ -276,9 +291,11 @@ namespace J365.IntunePSApp.Tests
         {
             var s = Fakes.Settings();
             string script = ScriptGenerator.DeployScript(Fakes.Template, s, "setup.exe");
-            Assert.Contains("-ApplicationType 'EXE' -ArgumentList '/S' -WaitForChildProcesses", script);
+            Assert.Contains("-InstalledApplication $Application -ArgumentList '/S' -WaitForChildProcesses", script);
             s.UninstallExeArgs = "";
-            Assert.Contains("IsNullOrWhiteSpace($_.QuietUninstallString) } -WaitForChildProcesses", ScriptGenerator.DeployScript(Fakes.Template, s, "setup.exe"));
+            string registered = ScriptGenerator.DeployScript(Fakes.Template, s, "setup.exe");
+            Assert.Contains("Uninstall-ADTApplication -InstalledApplication $Application -WaitForChildProcesses", registered);
+            Assert.Contains("Uninstall-ADTApplication -InstalledApplication $Application -ArgumentList $switches -WaitForChildProcesses", registered);
         }
 
         [Theory]

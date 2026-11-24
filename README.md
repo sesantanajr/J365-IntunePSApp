@@ -1,10 +1,10 @@
 <p align="center"><strong>English</strong> · <a href="README.pt-BR.md">Português (Brasil)</a></p>
 
-<p align="center"><img src="docs/assets/hero-en.svg" alt="J365 IntunePSApp 2.8.0 — from installer to Intune, with control at every step" width="100%"></p>
+<p align="center"><img src="docs/assets/hero-en.svg" alt="J365 IntunePSApp 3.0.0 — from installer to Intune, with control at every step" width="100%"></p>
 
 <p align="center"><b>Fewer repetitive tasks. More consistent deployment packages.</b><br>A visual workspace to prepare, customize, test and publish Windows applications.</p>
-<p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v2.8.0/J365-IntunePSApp-2.8.0-win-x64.zip"><img src="docs/assets/download-en.svg" alt="Download J365 IntunePSApp 2.8.0 — Windows x64" width="400"></a></p>
-<p align="center"><a href="#features">Explore the features</a> · <a href="#get-started">Get started</a> · <a href="docs/USER-GUIDE.md">User guide</a> · <a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/tag/v2.8.0">Release notes</a></p>
+<p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v3.0.0/J365-IntunePSApp-3.0.0-win-x64.zip"><img src="docs/assets/download-en.svg" alt="Download J365 IntunePSApp 3.0.0 — Windows x64" width="400"></a></p>
+<p align="center"><a href="#features">Explore the features</a> · <a href="#get-started">Get started</a> · <a href="docs/USER-GUIDE.md">User guide</a> · <a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/tag/v3.0.0">Release notes</a></p>
 <p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/actions/workflows/build.yml"><img alt="Build and tests" src="https://github.com/sesantanajr/J365-IntunePSApp/actions/workflows/build.yml/badge.svg"></a> <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-315CF5?style=flat-square"></a> <img alt="Windows x64" src="https://img.shields.io/badge/Windows-x64-0A5CA8?style=flat-square"></p>
 
 ## Your next deployment package starts here
@@ -13,16 +13,16 @@ Turn an MSI or EXE installer — or any application of the winget catalog and th
 
 | Prepare faster | Standardize the experience | Stay in control |
 | --- | --- | --- |
-| A catalog of winget and the Microsoft Store, installer analysis, silent-switch suggestions and batch deploy. | Company logo, colors, messages, deferrals and reusable defaults. | Review before building, tests, logs and protection against stale package publishing. |
+| A catalog of winget and the Microsoft Store, installer analysis, silent-switch suggestions and batch deploy. | Silent installation or with notification, company logo, colors, messages and reusable defaults. | Review before building, tests, logs and protection against stale package publishing. |
 
-<a href="docs/screenshots/en/home-dark.png"><img src="docs/screenshots/en/home-dark.png" alt="J365 IntunePSApp 2.8: database, packages, toolkit and Intune connection at a glance" width="100%"></a>
+<a href="docs/screenshots/en/home-dark.png"><img src="docs/screenshots/en/home-dark.png" alt="J365 IntunePSApp 3.0: database, packages, toolkit and Intune connection at a glance" width="100%"></a>
 
 **One complete workflow:** catalog or installer → application → experience → actions → uninstall → detection → branding → build → test → publish. Every screen is explained in the **[user guide](docs/USER-GUIDE.md)**.
 
 <a id="features"></a>
 ## Explore the features
 
-Actual **2.8** captures with a demonstration company (Contoso) and the 7-Zip MSI, packaged for real. Click images to enlarge. The Intune connection is a sample: nothing was published to a tenant.
+Actual **3.0** captures with a demonstration company (Contoso) and the 7-Zip MSI, packaged for real. Click images to enlarge. The Intune connection is a sample: nothing was published to a tenant.
 
 ### 01 · Find any application
 
@@ -38,13 +38,13 @@ The installer is analysed and recognised; name, version, architecture, context a
 
 ### 03 · Shape the installation experience
 
-Choose display mode, app closing, deferrals and messages — or a **silent** installation with no dialogs and no Intune notifications — with a live preview of the real PSAppDeployToolkit dialog. Add pre/post-install actions for files, registry, services, dependencies and custom commands.
+Choose between an installation **with notification** (the windows of the package and the notifications of Intune) and a **silent** one (nothing shows), set app closing and messages, with a live preview of the real PSAppDeployToolkit dialog. The installation cannot be deferred. Add pre/post-install actions for files, registry, services, dependencies and custom commands.
 
-<table><tr><td width="50%"><b>User experience and deferrals</b><br><a href="docs/screenshots/en/experience.png"><img src="docs/screenshots/en/experience.png" alt="User experience and deferrals" width="100%"></a></td><td width="50%"><b>Ready-made actions and extra files</b><br><a href="docs/screenshots/en/actions.png"><img src="docs/screenshots/en/actions.png" alt="Ready-made actions and extra files" width="100%"></a></td></tr></table>
+<table><tr><td width="50%"><b>Silent installation or with notification</b><br><a href="docs/screenshots/en/experience.png"><img src="docs/screenshots/en/experience.png" alt="Silent installation or with notification" width="100%"></a></td><td width="50%"><b>Ready-made actions and extra files</b><br><a href="docs/screenshots/en/actions.png"><img src="docs/screenshots/en/actions.png" alt="Ready-made actions and extra files" width="100%"></a></td></tr></table>
 
 ### 04 · Plan updates and detection
 
-Remove previous versions, keep a newer one and — new in 2.7 — keep the same version already installed instead of reinstalling it. Detect by name/version, product code or file, with the package mark, and test the rule on your computer.
+Whatever is installed is removed before installing (only a newer version is kept), and if a copy cannot be removed the installation stops instead of leaving two versions side by side. Detect by name/version, product code or file, with the package mark, and test the rule on your computer.
 
 <table><tr><td width="50%"><b>Previous and kept versions</b><br><a href="docs/screenshots/en/uninstall.png"><img src="docs/screenshots/en/uninstall.png" alt="Previous version handling" width="100%"></a></td><td width="50%"><b>Detection rules and local checks</b><br><a href="docs/screenshots/en/detection.png"><img src="docs/screenshots/en/detection.png" alt="Detection rules and local checks" width="100%"></a></td></tr></table>
 
@@ -103,18 +103,17 @@ Test locally or in **Windows Sandbox**, where available, with results and logs. 
 2. Open **`J365.IntunePSApp.exe`** and complete tool preparation. The runtime is included; no .NET SDK is required.
 3. Select an installer or a catalog application, configure the project and review before building — or tick several applications (winget or Microsoft Store) and deploy them together. Validate in a pilot group before distribution. The [user guide](docs/USER-GUIDE.md) walks through every screen.
 
-## New in 2.8
+## New in 3.0
 
-- **A new version, group by group (supersedence):** publish the new version as a new Intune app that supersedes the earlier one. Intune moves to it only the devices where it is assigned — a pilot group first, then wider — and the earlier app stays for a rollback. *Update* installs over the earlier version (default); *Uninstall first* makes Intune remove it before. In the publishing dialog, the batch window and the command line (`--if-exists Supersede`).
-- **Status in Intune:** how many devices have the app installed, failed, pending, not installed or not applicable; its assignments and supersedence; and every device, problems first, with its error code explained (`0x87D1041C`: not detected after installing). From the result card of a published package and from *My packages*, with the permission the connection already has. Nothing is changed in the tenant.
-- **The publication tested end to end:** the publishing script now runs in the tests against a local stand-in of Microsoft Graph — creation, upload, commit, supersedence and assignment — in Windows PowerShell 5.1.
-- **Fixes:** the Portuguese summary of a batch agrees with any number ("Gerados: 4 de 6 · pulados: 1"), and an unknown choice on the command line is refused instead of becoming an update.
+- **Silent installation or with notification:** the four display modes, the choice of Intune notifications and the deferrals became one choice. *With notification* shows the windows of the package and the notifications of Intune; *Silent* shows nothing. Older projects still open.
+- **No deferral:** the option to let the user defer the installation (3 times by default) was removed.
+- **Removal guaranteed before installing:** whatever is installed goes first, the same version included. An MSI by its product code; an .exe by the switches of the package, by the silent command it registered or by the switches of Inno Setup and NSIS, recognised on the device. If a copy is still installed, the installation stops with an error (or installs over it, if you allow it).
+- **Less for an antivirus to doubt:** the executable is no longer compressed and the application no longer removes the "mark of the web" of the files it downloads. Smart App Control still requires a signed release ([how to sign](docs/SIGNING.md)).
 
-2.7 brought update checks that work on company networks, the same version kept instead of reinstalled, faster packages and the [user guide](docs/USER-GUIDE.md). All changes: [CHANGELOG](CHANGELOG.md).
-
+2.8 brought supersedence (a new version, group by group) and the install status in Intune; 2.7, update checks that work on company networks and the [user guide](docs/USER-GUIDE.md). All changes: [CHANGELOG](CHANGELOG.md).
 ## Quality as the product evolves
 
-Every release passes **437 automated tests** on Windows (generated scripts parsed by Windows PowerShell 5.1, packaging, detection, the publication end to end against a local stand-in of Microsoft Graph, the install status, the Microsoft Store parsing, batch planning, localization) plus interface checks that render the editor, settings, connection, publishing, status and batch windows in both languages and themes. The Microsoft Store search and the update check were also exercised against the live services. See the [quality review](docs/QUALITY.md).
+Every release passes **456 automated tests** on Windows (generated scripts parsed by Windows PowerShell 5.1, packaging, detection, the publication end to end against a local stand-in of Microsoft Graph, the install status, the Microsoft Store parsing, batch planning, localization) plus interface checks that render the editor, settings, connection, publishing, status and batch windows in both languages and themes. The Microsoft Store search and the update check were also exercised against the live services. See the [quality review](docs/QUALITY.md).
 
 Existing projects remain readable. Updating the editor does not change existing tenant applications. New packages carry a revision record; regenerate legacy packages to create one.
 
@@ -126,7 +125,7 @@ Existing projects remain readable. Updating the editor does not change existing 
 
 [User guide](docs/USER-GUIDE.md) · [Changelog](CHANGELOG.md) · [Quality review](docs/QUALITY.md) · [Intune publishing](docs/INTUNE-PUBLISH.md) · [Building](docs/BUILDING.md) · [Architecture](docs/ARCHITECTURE.md)
 
-[Contribute](CONTRIBUTING.md) · [Report an issue](https://github.com/sesantanajr/J365-IntunePSApp/issues) · [Security](SECURITY.md) · [SHA256SUMS.txt](https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v2.8.0/SHA256SUMS.txt)
+[Contribute](CONTRIBUTING.md) · [Report an issue](https://github.com/sesantanajr/J365-IntunePSApp/issues) · [Security](SECURITY.md) · [SHA256SUMS.txt](https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v3.0.0/SHA256SUMS.txt)
 
 ---
 
