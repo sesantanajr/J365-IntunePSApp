@@ -470,8 +470,14 @@ namespace J365.IntunePSApp.Views
         /// <summary>The options of a publication inside the application (the session is open).</summary>
         public PublishOptions InAppOptions { get; private set; }
 
-        public PublishDialog(string publishScript, string appTitle, string displayName, string appName, string appVersion = null)
+        /// <summary>The package mark line of the notes of this package (null for a package made before 3.0.6).</summary>
+        private readonly string _markNote;
+        /// <summary>The lookup found an app of the same product (same package mark).</summary>
+        private bool _sameProductFound;
+
+        public PublishDialog(string publishScript, string appTitle, string displayName, string appName, string appVersion = null, string markNote = null)
         {
+            _markNote = markNote;
             _script = publishScript;
             _displayName = string.IsNullOrWhiteSpace(displayName) ? appTitle : displayName;
             _appName = string.IsNullOrWhiteSpace(appName) ? _displayName : appName;
@@ -785,9 +791,10 @@ namespace J365.IntunePSApp.Views
         /// The apps of the tenant named like this one: update one of them (a new version keeps its assignments), create a new
         /// app that supersedes the newest earlier version (a gradual rollout), or create another app.
         /// </summary>
-        private void ShowMatches(List<(string Id, string Name, string Version)> found)
+        private void ShowMatches(List<(string Id, string Name, string Version, bool SameMark)> found)
         {
-            _existsNote.Text = T("Publish_RelatedFound", _appName, found.Count);
+            _sameProductFound = found.Any(f => f.SameMark);
+            _existsNote.Text = T("Publish_RelatedFound", _appName, found.Count) + (found.Any(f => f.SameMark && !string.Equals(f.Name, _displayName, StringComparison.OrdinalIgnoreCase)) ? " " + T("Publish_SameProductNote") : "");
             _existsNote.Visibility = Visibility.Visible;
             _matches.Children.Clear();
             RadioButton Choice(string tag, string text, bool chosen)
@@ -799,12 +806,14 @@ namespace J365.IntunePSApp.Views
             // Only an app with exactly this name is chosen for the user (the list starts with it); otherwise "create a new
             // app" is, so a click never replaces the content of an app with another name.
             bool preselected = false;
-            foreach (var (id, name, version) in found.Take(8))
+            foreach (var (id, name, version, sameMark) in found.Take(8))
             {
                 bool exact = string.Equals(name, _displayName, StringComparison.OrdinalIgnoreCase);
                 // Since 2.5 the name in Intune carries no version: "the same version" is told by the version itself.
                 bool sameVersion = _appVersion.Length > 0 && version.Length > 0 && VersionUtil.Compare(version, _appVersion) == 0;
-                _matches.Children.Add(Choice(id, sameVersion ? T("Publish_UpdateSame", name) : T("Publish_UpdateOlder", name, string.IsNullOrEmpty(version) ? "?" : version), exact && !preselected));
+                string label = sameMark && !exact ? T("Publish_UpdateSameProduct", name, string.IsNullOrEmpty(version) ? "?" : version)
+                    : sameVersion ? T("Publish_UpdateSame", name) : T("Publish_UpdateOlder", name, string.IsNullOrEmpty(version) ? "?" : version);
+                _matches.Children.Add(Choice(id, label, exact && !preselected));
                 preselected |= exact;
             }
             // The newest earlier version can also be superseded by a new app: Intune then moves the devices that have it to
@@ -819,7 +828,7 @@ namespace J365.IntunePSApp.Views
         }
 
         /// <summary>Capture mode: the list as it shows after the lookup, with the supersedence chosen (nothing is asked to Intune).</summary>
-        public void ShowSampleMatches(List<(string Id, string Name, string Version)> found)
+        public void ShowSampleMatches(List<(string Id, string Name, string Version, bool SameMark)> found)
         {
             ShowMatches(found);
             if (_matches.Children.OfType<RadioButton>().FirstOrDefault(r => (r.Tag as string)?.StartsWith("supersede:", StringComparison.Ordinal) == true) is RadioButton supersede)
@@ -845,7 +854,13 @@ namespace J365.IntunePSApp.Views
                 // Second click: the app chosen in the list (a previous version to update or to supersede, or a new app).
                 var chosen = ChosenMatch();
                 if (chosen == null) return;
-                if (chosen == "new") o.IfExists = "CreateNew";
+                if (chosen == "new")
+                {
+                    // A second app of the same product: both would install it on the same devices, compete for Windows Installer
+                    // and satisfy each other's detection. Said plainly before anything is created.
+                    if (_sameProductFound && !Ui.Confirm(T("Publish_DuplicateProduct"), T("Publish_CreateAnyway"), T("Common_Cancel"), danger: true)) return;
+                    o.IfExists = "CreateNew";
+                }
                 else if (chosen.StartsWith("supersede:", StringComparison.Ordinal)) { o.IfExists = "Supersede"; o.AppId = chosen.Substring("supersede:".Length); }
                 else { o.IfExists = "Update"; o.AppId = chosen; }
             }
@@ -854,7 +869,7 @@ namespace J365.IntunePSApp.Views
                 SetBusy(true, T("Publish_LookingForApp"));
                 try
                 {
-                    var found = await IntuneConnection.FindRelatedAppsAsync(_appName, _cts.Token);
+                    var found = await IntuneConnection.FindRelatedAppsAsync(_appName, _cts.Token, _markNote);
                     SetBusy(false);
                     _refusal = null;
                     RenderConnection();

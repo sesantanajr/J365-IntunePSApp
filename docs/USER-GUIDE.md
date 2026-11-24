@@ -181,6 +181,7 @@ When something fails, the window says why and what to do (role not active in PIM
 ![Publishing dialog: connection, app of the same name and assignment](screenshots/en/publish.png)
 
 - **If an app with this name already exists**: *Ask* lists the apps of the tenant named like this one. Choose to **update** one of them (it keeps its assignments and gets the new content at once), to publish a **new app that supersedes** the earlier version (new in 2.8), or to create another app. Only an app with exactly this name is preselected.
+- **An app of the same product under another name** is in the list too: since 3.0.6 the package mark goes into the notes of the app in Intune. Creating another app asks for confirmation, because two apps of the same product assigned to the same devices compete for Windows Installer and one satisfies the detection of the other.
 - **Assignment**: none (assign it later in Intune — recommended), *available* or *required*, for a group, all users or all devices. A broad *required* assignment asks for confirmation.
 - **Advanced options**: **Run in a PowerShell window**, or **Copy command** to run `Publish-ToIntune.ps1` yourself (it works without the application too).
 - **Validate package** checks everything without connecting.
@@ -279,6 +280,9 @@ J365.IntunePSApp.exe --version | --help
 | Symptom | What to do |
 | --- | --- |
 | Windows blocks the executable | SmartScreen: *More info > Run anyway*. Smart App Control / App Control: see [SIGNING.md](SIGNING.md). |
+| Failure **0x8007EA61** (60001) | An error in the script of the package: its log on the device says why. Packages made since 3.0.6 report a failed removal with **69001** and an uninstallation that left the app with **69002**; *Status in Intune* explains each code. |
+| Failure **0x80070002** | The setup ended with the code 2 (Intune shows "file not found"). When the log of the package exists on the device, the code came from the setup; when it does not, Intune could not start the package (antivirus, incomplete content). Since 3.0.6 a setup that fails while Windows Installer is busy ends with **1618** and Intune tries again in 5 minutes. |
+| Two apps of the same product in Intune | They install at the same time, compete for Windows Installer and one satisfies the detection of the other (and with *Reinstall also where the app is already installed* they reinstall one after the other). Update or supersede one of them, or assign only one. |
 | "Could not download the installer" (HTTP 404) or *Link unavailable* | The vendor took the file off the link registered in winget. The application offers the vendor's site: download the installer and drop it on **New package** (the analysis checks its signature and the database fills in the switches). The next update of the database uses a version whose link works, when there is one. |
 | The SHA256 of the file does not match | The vendor published another file at the same link: for safety it is not used. Download it from the vendor's site and drop it on **New package**. |
 | "Could not check for new versions" | Network or proxy; the message says why (and when a GitHub API limit frees up). |

@@ -110,7 +110,7 @@ namespace J365.IntunePSApp.Tests
             var s = Firefox();
             string script = ScriptGenerator.DeployScript(Fakes.Template, s, "setup.exe");
             Ps.AssertParses(script);
-            int verify = script.IndexOf("throw ('Still installed after the uninstallation", StringComparison.Ordinal);
+            int verify = script.IndexOf("Exit-J365Deployment -ExitCode 69002 -Message ('Still installed after the uninstallation", StringComparison.Ordinal);
             int markRemoved = script.IndexOf("Package mark removed", StringComparison.Ordinal);
             Assert.True(verify > 0, "The uninstallation checks that the application is gone.");
             Assert.True(verify < markRemoved, "The mark is only removed once the application is gone.");

@@ -1,10 +1,10 @@
 <p align="center"><strong>English</strong> · <a href="README.pt-BR.md">Português (Brasil)</a></p>
 
-<p align="center"><img src="docs/assets/hero-en.svg" alt="J365 IntunePSApp 3.0.5 — from installer to Intune, with control at every step" width="100%"></p>
+<p align="center"><img src="docs/assets/hero-en.svg" alt="J365 IntunePSApp 3.0.6 — from installer to Intune, with control at every step" width="100%"></p>
 
 <p align="center"><b>Fewer repetitive tasks. More consistent deployment packages.</b><br>A visual workspace to prepare, customize, test and publish Windows applications.</p>
-<p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v3.0.5/J365-IntunePSApp-3.0.5-win-x64.zip"><img src="docs/assets/download-en.svg" alt="Download J365 IntunePSApp 3.0.5 — Windows x64" width="400"></a></p>
-<p align="center"><a href="#features">Explore the features</a> · <a href="#get-started">Get started</a> · <a href="docs/USER-GUIDE.md"><b>User manual</b></a> · <a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/tag/v3.0.5">Release notes</a></p>
+<p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v3.0.6/J365-IntunePSApp-3.0.6-win-x64.zip"><img src="docs/assets/download-en.svg" alt="Download J365 IntunePSApp 3.0.6 — Windows x64" width="400"></a></p>
+<p align="center"><a href="#features">Explore the features</a> · <a href="#get-started">Get started</a> · <a href="docs/USER-GUIDE.md"><b>User manual</b></a> · <a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/tag/v3.0.6">Release notes</a></p>
 <p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/actions/workflows/build.yml"><img alt="Build and tests" src="https://github.com/sesantanajr/J365-IntunePSApp/actions/workflows/build.yml/badge.svg"></a> <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-315CF5?style=flat-square"></a> <img alt="Windows x64" src="https://img.shields.io/badge/Windows-x64-0A5CA8?style=flat-square"></p>
 
 ## Your next deployment package starts here
@@ -15,7 +15,7 @@ Turn an MSI or EXE installer — or any application of the winget catalog and th
 | --- | --- | --- |
 | A catalog of winget and the Microsoft Store, installer analysis, silent-switch suggestions and batch deploy. | Silent installation or with notification, company logo, colors, messages and reusable defaults. | Review before building, tests, logs and protection against stale package publishing. |
 
-<a href="docs/screenshots/en/home-dark.png"><img src="docs/screenshots/en/home-dark.png" alt="J365 IntunePSApp 3.0.4: database, packages, toolkit and Intune connection at a glance" width="100%"></a>
+<a href="docs/screenshots/en/home-dark.png"><img src="docs/screenshots/en/home-dark.png" alt="J365 IntunePSApp 3.0.5: database, packages, toolkit and Intune connection at a glance" width="100%"></a>
 
 **One complete workflow:** catalog or installer → application → experience → actions → uninstall → detection → branding → build → test → publish. Every screen is explained in the **[user manual](docs/USER-GUIDE.md)**.
 
@@ -26,7 +26,7 @@ Turn an MSI or EXE installer — or any application of the winget catalog and th
 <a id="features"></a>
 ## Explore the features
 
-Actual **3.0.4** captures with a demonstration company (Contoso) and the 7-Zip MSI, packaged for real. Click images to enlarge. The Intune connection is a sample: nothing was published to a tenant.
+Actual **3.0.5** captures with a demonstration company (Contoso) and the 7-Zip MSI, packaged for real. Click images to enlarge. The Intune connection is a sample: nothing was published to a tenant.
 
 ### 01 · Find any application
 
@@ -107,12 +107,13 @@ Test locally or in **Windows Sandbox**, where available, with results and logs. 
 2. Open **`J365.IntunePSApp.exe`** and complete tool preparation. The runtime is included; no .NET SDK is required.
 3. Select an installer or a catalog application, configure the project and review before building — or tick several applications (winget or Microsoft Store) and deploy them together. Validate in a pilot group before distribution. The [user manual](docs/USER-GUIDE.md) walks through every screen.
 
-## New in 3.0.1 to 3.0.5
+## New in 3.0.1 to 3.0.6
 
 - **Remove any installed version** (3.0.1): one choice, in the editor, the company defaults and the batch. The package removes older versions, the same one and newer ones before installing, silently or with notification; shared components are never removed.
 - **Reinstall also where the app is already installed** (3.0.3): Intune runs the package once on every device, even where an earlier package of the same app installed it (until now the mark of that package made Intune consider the app installed).
 - **Real percentage and time left** (3.0.2 and 3.0.4): while the `.intunewin` is created (the six passes of Microsoft's tool, measured by the actual work), on each application of the batch, during the upload to Intune (reported every 10% before) and on downloads.
 - **Every application of the catalog downloads** (3.0.5): the database checks every installer link each day. When the newest version in winget has a dead link (about 2% of them, Autodesk DWG TrueView 2027 among them), the earlier version that works takes its place; when none works, the application is marked *Link unavailable*, *Supported only* hides it, the batch skips it with the reason and the vendor's site is offered.
+- **Installations that collide are tried again** (3.0.6): an `.exe` setup waits for Windows Installer, and one that fails while another installation runs ends with 1618, which Intune retries, instead of a failure. A copy that cannot be removed ends with a code of its own (69001), explained in *Status in Intune*, and the publication finds an app of the same product under another name by its package mark (written in the notes of the app) before creating a second one.
 - **A clearer batch** (3.0.1): the catalog bar on one line, with the count, and texts in the singular for one application.
 
 ## New in 3.0
@@ -125,13 +126,13 @@ Test locally or in **Windows Sandbox**, where available, with results and logs. 
 2.8 brought supersedence (a new version, group by group) and the install status in Intune; 2.7, update checks that work on company networks and the [user manual](docs/USER-GUIDE.md). All changes: [CHANGELOG](CHANGELOG.md).
 ## Quality as the product evolves
 
-Every release passes **504 automated tests** on Windows (generated scripts parsed by Windows PowerShell 5.1, packaging, detection, the publication end to end against a local stand-in of Microsoft Graph, the install status, the Microsoft Store parsing, batch planning, localization) plus interface checks that render the editor, settings, connection, publishing, status and batch windows in both languages and themes. The Microsoft Store search and the update check were also exercised against the live services. See the [quality review](docs/QUALITY.md).
+Every release passes **517 automated tests** on Windows (generated scripts parsed by Windows PowerShell 5.1, packaging, detection, the publication end to end against a local stand-in of Microsoft Graph, the install status, the Microsoft Store parsing, batch planning, localization) plus interface checks that render the editor, settings, connection, publishing, status and batch windows in both languages and themes. The Microsoft Store search and the update check were also exercised against the live services. See the [quality review](docs/QUALITY.md).
 
 Existing projects remain readable. Updating the editor does not change existing tenant applications. New packages carry a revision record; regenerate legacy packages to create one.
 
 **Compatibility:** WPF/.NET 10 editor for Windows x64. ARM64 package settings do not imply a native ARM64 editor. Silent switches, detection and restart behavior depend on the installer and require testing. Publishing to a live tenant (packages and Microsoft Store apps) should be validated with a pilot group.
 
-**Signing:** releases are not Authenticode-signed yet (3.0.5 included). See the [code signing policy](#code-signing-policy) below and the [signing guidance](docs/SIGNING.md) if Windows policy blocks execution.
+**Signing:** releases are not Authenticode-signed yet (3.0.6 included). See the [code signing policy](#code-signing-policy) below and the [signing guidance](docs/SIGNING.md) if Windows policy blocks execution.
 
 ## Code signing policy
 
@@ -147,7 +148,7 @@ Signed releases start with the first version published after the project is acce
 
 [User manual](docs/USER-GUIDE.md) · [Changelog](CHANGELOG.md) · [Quality review](docs/QUALITY.md) · [Intune publishing](docs/INTUNE-PUBLISH.md) · [Building](docs/BUILDING.md) · [Architecture](docs/ARCHITECTURE.md)
 
-[Contribute](CONTRIBUTING.md) · [Report an issue](https://github.com/sesantanajr/J365-IntunePSApp/issues) · [Security](SECURITY.md) · [SHA256SUMS.txt](https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v3.0.5/SHA256SUMS.txt)
+[Contribute](CONTRIBUTING.md) · [Report an issue](https://github.com/sesantanajr/J365-IntunePSApp/issues) · [Security](SECURITY.md) · [SHA256SUMS.txt](https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v3.0.6/SHA256SUMS.txt)
 
 ---
 

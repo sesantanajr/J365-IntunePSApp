@@ -231,10 +231,10 @@ namespace J365.IntunePSApp
                         : Directory.CreateDirectory(Path.Combine(AppPaths.Temp, "publish-check-" + Guid.NewGuid().ToString("N"))).FullName;
                     string earlier = EarlierVersion(version);
                     var publish = new Views.PublishDialog(IntunePublisher.Prepare(folder), name + " " + version, null, name, version);
-                    publish.ShowSampleMatches(new System.Collections.Generic.List<(string Id, string Name, string Version)>
+                    publish.ShowSampleMatches(new System.Collections.Generic.List<(string Id, string Name, string Version, bool SameMark)>
                     {
-                        ("1d7e4c2b-9f3a-4b8e-a5c6-7e2f1d0b9a83", name, earlier),
-                        ("5a9c3e1f-2b4d-4c6e-8f1a-3b5d7e9f1a2c", name, EarlierVersion(earlier))
+                        ("1d7e4c2b-9f3a-4b8e-a5c6-7e2f1d0b9a83", name, earlier, true),
+                        ("5a9c3e1f-2b4d-4c6e-8f1a-3b5d7e9f1a2c", name, EarlierVersion(earlier), true)
                     });
                     await ShotDialog(publish, "09-publish-supersede");
                     var sample = Views.AppStatusWindow.Sample();

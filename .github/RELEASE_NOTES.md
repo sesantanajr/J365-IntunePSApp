@@ -1,29 +1,31 @@
-## J365 IntunePSApp 3.0.5
+## J365 IntunePSApp 3.0.6
 
 ### Português
 
-Todo aplicativo que o catálogo oferece baixa.
+Instalações que colidem são tentadas de novo, e dois apps do mesmo produto não disputam mais o dispositivo.
 
-- **Links conferidos todos os dias.** Cerca de 2% dos links de instaladores do winget davam 404: o fabricante tira o arquivo do ar e links temporários expiram antes de o manifesto mudar (o Autodesk DWG TrueView 2027 falhava com "404 (Not Found)"). O banco de dados agora confere cada link que o app empacota. Quando a versão mais nova do winget está com o link quebrado, a versão anterior que funciona entra no lugar; quando nenhuma funciona, o aplicativo fica marcado como **Link indisponível**.
-- **Nada de download que vai falhar.** *Somente compatíveis* esconde esses aplicativos, os detalhes explicam o motivo e o lote os pula com a razão. Um instalador cujo link funciona vem antes de um preferido que está fora do ar.
-- **Mensagens claras.** Um 404 não é mais tentado três vezes, e o app oferece abrir o site do fabricante para baixar o instalador e arrastá-lo em Novo pacote. Um arquivo cujo SHA256 não confere com o winget continua nunca sendo usado, agora com a explicação.
+- **Windows Installer ocupado vira "tentar de novo".** O instalador `.exe` agora espera o Windows Installer (`-WaitForMsiExec`), e um instalador que falha enquanto outra instalação roda termina com **1618**, que o Intune repete em 5 minutos, em vez de mostrar falha. Foi o que aconteceu com o Adobe Acrobat Reader: 0x80070002 (o instalador terminou com 2) enquanto outro app do mesmo produto instalava.
+- **Remoção que falhou tem código próprio.** A instalação que para porque uma versão anterior continuou instalada termina com **69001** (antes, o genérico 60001 = 0x8007EA61), e a desinstalação que deixa o aplicativo, com **69002**. O *Status no Intune* explica 60001, 69001, 69002 e 0x80070002.
+- **Dois apps do mesmo produto.** A marca do pacote vai nas observações do app no Intune. A publicação mostra os apps do mesmo produto com outro nome e pede confirmação antes de criar um segundo; no lote e na linha de comando, o app do mesmo produto é atualizado ou substituído conforme a escolha.
+- Capturas da documentação atualizadas.
 
-O banco de dados com os links conferidos é gerado logo depois desta versão e, a partir daí, todos os dias. Para buscá-lo na hora: Configurações > Componentes > Baixar novamente.
+Pacotes gerados antes da 3.0.6 não mudam: gere e publique de novo para receber as correções.
 
 ### English
 
-Every application the catalog offers downloads.
+Installations that collide are tried again, and two apps of the same product no longer compete on a device.
 
-- **Links checked every day.** About 2% of the installer links of winget answered 404: vendors take files off their servers and time-limited links expire before the manifest changes (Autodesk DWG TrueView 2027 failed with "404 (Not Found)"). The database now checks every link the application packages. When the newest version in winget has a broken link, the earlier version that works takes its place; when none works, the application is marked **Link unavailable**.
-- **No download that will fail.** *Supported only* hides those applications, the details say why and the batch skips them with the reason. An installer whose link works comes before a preferred one that is gone.
-- **Clear messages.** A 404 is no longer retried three times, and the application offers the vendor's site to download the installer and drop it on New package. A file whose SHA256 differs from winget's is still never used, now with an explanation.
+- **A busy Windows Installer becomes a retry.** An `.exe` setup now waits for Windows Installer (`-WaitForMsiExec`), and a setup that fails while another installation runs ends with **1618**, which Intune retries in 5 minutes, instead of a failure. This is what happened with Adobe Acrobat Reader: 0x80070002 (the setup ended with 2) while another app of the same product was installing.
+- **A failed removal has its own code.** The installation that stops because an earlier version is still installed ends with **69001** (it was the generic 60001 = 0x8007EA61), and an uninstallation that leaves the application with **69002**. *Status in Intune* explains 60001, 69001, 69002 and 0x80070002.
+- **Two apps of the same product.** The package mark goes into the notes of the app in Intune. The publication lists the apps of the same product under another name and asks before creating a second one; in a batch and on the command line, the app of the same product is updated or superseded as chosen.
+- Documentation screenshots refreshed.
 
-The database with the checked links is built right after this release and every day from then on. To get it at once: Settings > Components > Download again.
+Packages made before 3.0.6 do not change: generate and publish them again to get the fixes.
 
 ### Download
 
-- `J365-IntunePSApp-3.0.5-win-x64.zip`: extraia e execute `J365.IntunePSApp.exe` / extract and run the portable application.
-- `J365-IntunePSApp-3.0.5-source.zip`: código-fonte / source code.
+- `J365-IntunePSApp-3.0.6-win-x64.zip`: extraia e execute `J365.IntunePSApp.exe` / extract and run the portable application.
+- `J365-IntunePSApp-3.0.6-source.zip`: código-fonte / source code.
 - `SHA256SUMS.txt`: verificações SHA-256 / SHA-256 checksums.
 
 Já tem o J365 IntunePSApp? Em **Configurações > Geral > Verificar agora** ele baixa e instala esta versão. / Already using it? **Settings > General > Check now** downloads and installs this version.

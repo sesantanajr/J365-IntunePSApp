@@ -1654,7 +1654,8 @@ namespace J365.IntunePSApp.Views
             try { script = IntunePublisher.Prepare(intune); }
             catch (Exception ex) { Ui.Error(ex.Message); return; }
 
-            var dialog = new PublishDialog(script, HeaderTitle.Text, IntuneDisplayName(intune), Collect().AppName, IntuneMetadata(intune, "appVersion")) { Owner = Window.GetWindow(this) };
+            var dialog = new PublishDialog(script, HeaderTitle.Text, IntuneDisplayName(intune), Collect().AppName, IntuneMetadata(intune, "appVersion"),
+                ScriptGenerator.MarkNoteIn(IntuneMetadata(intune, "notes"))) { Owner = Window.GetWindow(this) };
             if (dialog.ShowDialog() != true) return;
             if (dialog.InAppOptions != null) { await PublishInAppAsync(script, intune, dialog.InAppOptions); return; }
             if (dialog.Started == null) return;

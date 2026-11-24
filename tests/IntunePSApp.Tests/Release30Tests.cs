@@ -156,6 +156,9 @@ function Uninstall-ADTApplication
     if (-not $InstalledApplication.Stays) { $script:installed = @($script:installed | Where-Object { $_.DisplayName -ne $InstalledApplication.DisplayName }) }
 }
 function Write-ADTLogEntry { param($Message, $Severity) $null = $script:log.Add([string]$Message) }
+$script:msiBusy = $false
+function Test-ADTMutexAvailability { param($MutexName, $MutexWaitTime) -not $script:msiBusy }
+function Close-ADTSession { param($ExitCode) $script:exitCode = $ExitCode; throw ('EXIT ' + $ExitCode) }
 $adtSession = New-Object psobject
 $adtSession | Add-Member -MemberType ScriptMethod -Name GetExitCode -Value { $script:exitCode }
 $adtSession | Add-Member -MemberType ScriptMethod -Name SetExitCode -Value { param($code) $script:exitCode = $code }
@@ -257,21 +260,24 @@ $script:calls -join ';'";
     {
         // The uninstaller "succeeds" and the program is still there.
         var stays = RemoveBeforeInstall(Fakes.Settings(), "(New-FakeApp 'Contoso App' -Stays)");
-        Assert.StartsWith("STOPPED: Still installed after the removal: Contoso App 1.0.", stays[0]);
-        Assert.Contains("two versions do not end up side by side", stays[0]);
+        // Since 3.0.6 the installation ends with a code of its own (69001), the reason in the log.
+        Assert.Equal("STOPPED: EXIT 69001", stays[0]);
+        Assert.Equal("69001", stays[3]);
+        Assert.Contains("Still installed after the removal: Contoso App 1.0.", stays[4]);
+        Assert.Contains("two versions do not end up side by side", stays[4]);
 
         // The uninstaller fails: logged, its exit code does not become the exit code of the installation, and what
         // decides is that the program is still installed.
         var fails = RemoveBeforeInstall(Fakes.Settings(), "(New-FakeApp 'Contoso App' -Fails -Stays)");
-        Assert.StartsWith("STOPPED: Still installed after the removal", fails[0]);
-        Assert.Equal("0", fails[3]);
+        Assert.Equal("STOPPED: EXIT 69001", fails[0]);
+        Assert.Equal("69001", fails[3]);   // not the 1603 of the uninstaller
         Assert.Contains("Could not remove the previous version: The uninstaller returned 1603.", fails[4]);
 
         // Nobody knows how to silence it: it is not started, and the installation stops as well.
         var s = Fakes.Settings();
         s.UninstallExeArgs = "";
         var unknown = RemoveBeforeInstall(s, "(New-FakeApp 'Contoso App')");
-        Assert.StartsWith("STOPPED: Still installed after the removal", unknown[0]);
+        Assert.Equal("STOPPED: EXIT 69001", unknown[0]);
         Assert.Equal("0", unknown[1]);
     }
 
@@ -297,7 +303,7 @@ $script:calls -join ';'";
             + "try {\r\n" + block + "\r\n'OK:' + $script:calls.Count } catch { 'FAILED: ' + $_.Exception.Message }");
         Assert.Equal("OK:2", Run("(New-FakeApp 'Contoso App 1.0'), (New-FakeApp 'Contoso App 2.0' -Msi)"));
         Assert.Equal("OK:0", Run(""));
-        Assert.StartsWith("FAILED: Still installed after the uninstallation", Run("(New-FakeApp 'Contoso App' -Stays)"));
+        Assert.Equal("FAILED: EXIT 69002", Run("(New-FakeApp 'Contoso App' -Stays)"));
         // A failed uninstaller fails the uninstallation (nothing swallows it there).
         Assert.Equal("FAILED: The uninstaller returned 1603.", Run("(New-FakeApp 'Contoso App' -Fails)"));
     }

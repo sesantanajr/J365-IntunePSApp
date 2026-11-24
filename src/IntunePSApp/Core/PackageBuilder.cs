@@ -529,7 +529,8 @@ namespace J365.IntunePSApp.Core
                 PrivacyInformationUrl = s.PrivacyUrl ?? "",
                 Developer = string.IsNullOrWhiteSpace(s.Developer) ? s.AppVendor : s.Developer,
                 Owner = string.IsNullOrWhiteSpace(s.Owner) ? s.CompanyName : s.Owner,
-                Notes = $"Packaged with {AppInfo.Name} {AppInfo.Version} ({AppInfo.PsadtName} {r.PsadtVersion})",
+                // The second line names the package mark: the publication finds by it another app of the same product.
+                Notes = $"Packaged with {AppInfo.Name} {AppInfo.Version} ({AppInfo.PsadtName} {r.PsadtVersion})\n{ScriptGenerator.MarkNote(s)}",
                 IntuneWinFile = Path.GetFileName(r.IntuneWinFile),
                 IntuneWinSha256 = r.Sha256,
                 DetectionScript = Path.GetFileName(r.DetectionScript),

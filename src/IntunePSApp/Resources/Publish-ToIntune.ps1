@@ -195,6 +195,23 @@ function Get-VersionKey([string]$Version)
 }
 
 # "7-Zip" (25.01), or "7-Zip 25.01" when the name already carries the version (apps made before 2.5).
+function Find-AppsWithMark([string]$Line)
+{
+    # The Win32 apps of the tenant whose notes name the same package mark (the line "J365 package mark: ...", written since
+    # 3.0.6): the same product under another name. Microsoft Graph cannot filter on the notes, so every page is read.
+    $found = @()
+    $base = $GraphUrl.TrimEnd('/') + '/beta'
+    $path = '/deviceAppManagement/mobileApps?$filter=' + [uri]::EscapeDataString("isof('microsoft.graph.win32LobApp')") + '&$top=999'
+    for ($page = 0; $path -and $page -lt 20; $page++)
+    {
+        $data = Invoke-Graph -Method 'GET' -Path $path
+        $found += @($data.value | Where-Object { @(([string]$_.notes) -split "`n" | ForEach-Object { $_.Trim() }) -contains $Line })
+        $next = [string]$data.'@odata.nextLink'
+        $path = if ($next -and $next.StartsWith($base, [System.StringComparison]::OrdinalIgnoreCase)) { $next.Substring($base.Length) } else { $null }
+    }
+    return $found
+}
+
 function Get-AppLabel($App)
 {
     $name = [string]$App.displayName
@@ -784,9 +801,23 @@ try
     $found = Invoke-Graph -Method 'GET' -Path ('/deviceAppManagement/mobileApps?$filter=' + [uri]::EscapeDataString($filter))
     $existing = @($found.value)
     $targetId = $null
+    # No app of this name: an app of the same product under another name (same package mark) is the same question. Two apps
+    # installing one product on the same devices compete for Windows Installer and satisfy each other's detection.
+    $sameProduct = $false
+    $markLine = @(([string]$app.notes) -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -like 'J365 package mark: *' }) | Select-Object -First 1
+    if ($existing.Count -eq 0 -and $markLine)
+    {
+        try
+        {
+            $existing = @(Find-AppsWithMark $markLine)
+            $sameProduct = $existing.Count -gt 0
+        }
+        catch { Write-Note ('Could not look for apps of the same product: ' + $_.Exception.Message) }
+    }
     if ($existing.Count -gt 0)
     {
-        Write-Note ($existing.Count.ToString() + ' app(s) named "' + $app.displayName + '" already exist in this tenant (version: ' + (($existing | ForEach-Object { [string]$_.displayVersion }) -join ', ') + ').')
+        if ($sameProduct) { Write-Note ($existing.Count.ToString() + ' app(s) of the same product (same package mark) already exist under another name: ' + (($existing | ForEach-Object { '"' + [string]$_.displayName + '" ' + [string]$_.displayVersion }) -join ', ') + '.') }
+        else { Write-Note ($existing.Count.ToString() + ' app(s) named "' + $app.displayName + '" already exist in this tenant (version: ' + (($existing | ForEach-Object { [string]$_.displayVersion }) -join ', ') + ').') }
         $choice = $IfExists
         if ($choice -eq 'Ask')
         {
@@ -803,7 +834,12 @@ try
             Save-Result 'cancelled' ''
             Stop-Script 2
         }
-        if ($choice -eq 'Fail') { throw ('An app named "' + $app.displayName + '" already exists. Use -IfExists Update, Supersede or CreateNew.') }
+        if ($choice -eq 'Fail')
+        {
+            if ($sameProduct) { throw ('An app of the same product already exists (' + (($existing | ForEach-Object { [string]$_.displayName }) -join ', ') + '). Use -IfExists Update, Supersede or CreateNew.') }
+            throw ('An app named "' + $app.displayName + '" already exists. Use -IfExists Update, Supersede or CreateNew.')
+        }
+        if ($choice -eq 'CreateNew') { Write-Note 'Another app of this product will exist: two apps assigned to the same devices compete for Windows Installer and satisfy each other''s detection. Update or supersede the existing one instead, or assign only one of them.' }
         if ($choice -eq 'Update')
         {
             if ($existing.Count -gt 1) { throw 'More than one app has this name: update the right one in the Intune admin center, or use -IfExists Supersede or CreateNew.' }

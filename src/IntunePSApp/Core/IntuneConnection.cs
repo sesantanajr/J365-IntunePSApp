@@ -1112,13 +1112,14 @@ namespace J365.IntunePSApp.Core
 
         /// <summary>
         /// Win32 apps of the tenant whose name starts with the name of the application ("7-Zip" finds "7-Zip 26.06" and
-        /// "7-Zip 25.01"): the earlier versions this package can update, so a new version does not become a second app.
+        /// "7-Zip 25.01"), and apps of any name whose notes carry the same package mark (<paramref name="markNote"/>): the
+        /// earlier versions this package can update, so a new version does not become a second app of the same product.
         /// </summary>
-        public static async Task<List<(string Id, string Name, string Version)>> FindRelatedAppsAsync(string appName, CancellationToken ct)
+        public static async Task<List<(string Id, string Name, string Version, bool SameMark)>> FindRelatedAppsAsync(string appName, CancellationToken ct, string markNote = null)
         {
             var t = await RenewAsync(ct) ?? throw new AuthException(T("Auth_ErrNotSignedIn"));
             var g = new Graph(t.AccessToken);
-            var result = new List<(string Id, string Name, string Version)>();
+            var result = new List<(string Id, string Name, string Version, bool SameMark)>();
             string name = (appName ?? "").Trim();
             if (name.Length == 0) return result;
             // No $select: displayVersion is a property of Win32 apps only, and Intune refuses to select it on the list of
@@ -1131,8 +1132,9 @@ namespace J365.IntunePSApp.Core
                 foreach (var a in data?["value"]?.AsArray() ?? new JsonArray())
                 {
                     string dn = a?["displayName"]?.GetValue<string>() ?? "";
-                    if (IsRelatedName(dn, name))
-                        result.Add((a?["id"]?.GetValue<string>() ?? "", dn, a?["displayVersion"]?.GetValue<string>() ?? ""));
+                    bool sameMark = HasMarkNote(a?["notes"]?.GetValue<string>(), markNote);
+                    if (IsRelatedName(dn, name) || sameMark)
+                        result.Add((a?["id"]?.GetValue<string>() ?? "", dn, a?["displayVersion"]?.GetValue<string>() ?? "", sameMark));
                 }
                 string next = data?["@odata.nextLink"]?.GetValue<string>();
                 path = next != null && next.StartsWith(EntraAuth.GraphUrl, StringComparison.OrdinalIgnoreCase) ? next.Substring(EntraAuth.GraphUrl.Length) : null;
@@ -1140,9 +1142,14 @@ namespace J365.IntunePSApp.Core
             // The app with exactly this name first (the one a new version updates), then the newest.
             return result
                 .OrderByDescending(r => r.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+                .ThenByDescending(r => r.SameMark)
                 .ThenByDescending(r => r.Version, Comparer<string>.Create(VersionUtil.Compare))
                 .ToList();
         }
+
+        /// <summary>The notes of an app name the same package mark: the same product, whatever the name of the app.</summary>
+        internal static bool HasMarkNote(string notes, string markNote)
+            => !string.IsNullOrWhiteSpace(markNote) && ScriptGenerator.MarkNoteIn(notes) is string line && line.Equals(markNote.Trim(), StringComparison.OrdinalIgnoreCase);
 
         /// <summary>
         /// An app of the tenant named like the application, as a whole word: "Git" finds "Git" and "Git 2.45", not "GitHub

@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1440" height="620" viewBox="0 0 1440 620" role="img" aria-labelledby="title desc">
-<title id="title">J365 IntunePSApp 3.0.5</title><desc id="desc">Do instalador ao Intune. Controle em cada etapa. Prepare, personalize, teste e publique aplicativos Windows em um fluxo visual baseado no PSAppDeployToolkit.</desc>
+<title id="title">J365 IntunePSApp 3.0.6</title><desc id="desc">Do instalador ao Intune. Controle em cada etapa. Prepare, personalize, teste e publique aplicativos Windows em um fluxo visual baseado no PSAppDeployToolkit.</desc>
 <defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#091325"/><stop offset=".6" stop-color="#102145"/><stop offset="1" stop-color="#142e62"/></linearGradient><linearGradient id="accent" x2="1" y2="1"><stop stop-color="#56ddff"/><stop offset="1" stop-color="#4976ff"/></linearGradient><radialGradient id="glow"><stop stop-color="#315cf5" stop-opacity=".3"/><stop offset="1" stop-color="#315cf5" stop-opacity="0"/></radialGradient></defs>
 <rect width="1440" height="620" rx="28" fill="url(#bg)"/>
 <circle cx="1200" cy="220" r="470" fill="url(#glow)"/>
@@ -8,7 +8,7 @@
 <path d="m71 70 12-6 12 6v16l-12 6-12-6zM71 70l12 7 12-7M83 77v15" fill="none" stroke="#07162e" stroke-width="2.5" stroke-linejoin="round"/>
 <g font-family="Segoe UI,Arial,sans-serif">
 <text x="124" y="77" fill="#ffffff" font-size="23" font-weight="700">J365 IntunePSApp</text><text x="124" y="100" fill="#a6b9d9" font-size="15">JORNADA 365</text>
-<rect x="1273" y="58" width="108" height="36" rx="18" fill="#243d73" stroke="#4a6fab"/><text x="1327" y="82" text-anchor="middle" fill="#e4efff" font-size="17" font-weight="600">v3.0.5</text>
+<rect x="1273" y="58" width="108" height="36" rx="18" fill="#243d73" stroke="#4a6fab"/><text x="1327" y="82" text-anchor="middle" fill="#e4efff" font-size="17" font-weight="600">v3.0.6</text>
 <text x="58" y="171" fill="#63d5f5" font-size="15" letter-spacing="1.5" font-weight="700">EMPACOTAMENTO PARA MICROSOFT INTUNE</text>
 <text x="54" y="242" fill="#ffffff" font-size="53" font-weight="700">Do instalador ao Intune.</text>
 <text x="54" y="307" fill="#8aaeff" font-size="53" font-weight="700">Controle em cada etapa.</text>

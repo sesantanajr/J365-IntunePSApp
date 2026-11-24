@@ -80,6 +80,23 @@ namespace J365.IntunePSApp.Core
             return "(" + string.Join(" + ", parts) + ")";
         }
 
+        // ------------------------------------------------------------------ exit codes
+
+        /// <summary>A copy already installed could not be removed before the installation (the new version is not installed next to it).</summary>
+        public const int ExitRemovalFailed = 69001;
+        /// <summary>The uninstallation left the application installed.</summary>
+        public const int ExitUninstallLeftCopy = 69002;
+        /// <summary>Windows Installer or another setup of the application was busy: Intune tries again (its default return code "Retry").</summary>
+        public const int ExitRetry = 1618;
+
+        /// <summary>The file name of the installer in the package ("setup.exe" of "Files\\setup.exe"), whatever the separator.</summary>
+        internal static string SetupName(string installerRel)
+        {
+            string name = installerRel ?? "";
+            int cut = Math.Max(name.LastIndexOf('/'), name.LastIndexOf('\\'));
+            return cut >= 0 ? name.Substring(cut + 1) : name;
+        }
+
         // ------------------------------------------------------------------ package mark
 
         /// <summary>Registry key, under HKLM (64-bit view) or HKCU, where every package writes its mark.</summary>
@@ -100,6 +117,16 @@ namespace J365.IntunePSApp.Core
         }
 
         public static string MarkKey(PackageSettings s) => MarkRoot + "\\" + MarkId(s);
+
+        /// <summary>First words of the line of the Intune notes that names the package mark: every app of one product carries the same line.</summary>
+        public const string MarkNotePrefix = "J365 package mark: ";
+
+        /// <summary>"J365 package mark: HKLM\SOFTWARE\J365\IntunePSApp\Apps\7zip.7zip": tells the apps of the same product apart in Intune.</summary>
+        public static string MarkNote(PackageSettings s) => MarkNotePrefix + MarkDisplayPath(s);
+
+        /// <summary>The mark line of the notes of an app; null when they have none (published before 3.0.6, or by hand).</summary>
+        public static string MarkNoteIn(string notes)
+            => (notes ?? "").Split('\n').Select(l => l.Trim()).FirstOrDefault(l => l.StartsWith(MarkNotePrefix, StringComparison.OrdinalIgnoreCase));
 
         /// <summary>Where the mark is, as shown to people: HKLM\SOFTWARE\J365\IntunePSApp\Apps\7-Zip.</summary>
         public static string MarkDisplayPath(PackageSettings s) => (s.InstallBehavior == "User" ? "HKCU\\" : "HKLM\\") + MarkKey(s);
@@ -327,7 +354,7 @@ namespace J365.IntunePSApp.Core
             // Pre-install actions prepare the device (stop a service, install a dependency): they run before the
             // removal of the versions already installed, so they can help it.
             AddActions(L, s, "PreInstall");
-            if (s.RemovePreviousVersions) { L.AddRange(RemoveBeforeInstallLines(s)); L.Add(""); }
+            if (s.RemovePreviousVersions) { L.AddRange(RemoveBeforeInstallLines(s, installerRel)); L.Add(""); }
             L.Add("");
             Mark(L, "Install", "$adtSession.DeploymentType");
             L.Add("    ## Installs " + Comment($"{s.AppName} {s.AppVersion}".Trim()) + ".");
@@ -493,10 +520,27 @@ namespace J365.IntunePSApp.Core
                 if (args.Length > 0 && action == "Install") c += $" -AdditionalArgumentList {Lit(args)}";
                 return c;
             }
-            string cmd = $"    Start-ADTProcess -FilePath (Join-Path -Path $adtSession.DirFiles -ChildPath {rel})";
+            string cmd = $"        Start-ADTProcess -FilePath (Join-Path -Path $adtSession.DirFiles -ChildPath {rel})";
             if (args.Length > 0) cmd += $" -ArgumentList {Lit(args)}";
             if (s.WaitForChildProcesses) cmd += " -WaitForChildProcesses";
-            return cmd;
+            cmd += " -WaitForMsiExec";
+            string setup = Lit(SetupName(installerRel));
+            return string.Join("\r\n", new[]
+            {
+                "    ## -WaitForMsiExec: a setup that runs an MSI inside (Adobe, InstallShield, WiX Burn...) waits for Windows Installer",
+                "    ## instead of colliding with another installation; still busy after the wait, the toolkit ends with 1618 (retry).",
+                "    try",
+                "    {",
+                cmd,
+                "    }",
+                "    catch",
+                "    {",
+                "        ## The setup failed while Windows Installer or another copy of it was busy (two apps of the same product at",
+                "        ## once, an update): Intune tries again in 5 minutes (1618) instead of reporting a failure.",
+                $"        if (Test-J365InstallerBusy -SetupName {setup}) {{ Exit-J365Deployment -ExitCode {ExitRetry} -Message ('The setup failed while Windows Installer or another setup was busy: ' + $_.Exception.Message + ' Intune tries again') }}",
+                "        throw",
+                "    }"
+            });
         }
 
         /// <summary>
@@ -510,7 +554,8 @@ namespace J365.IntunePSApp.Core
             "    $remainingApps = @(Wait-J365CopiesRemoved)",
             "    if ($remainingApps.Count -gt 0)",
             "    {",
-            "        throw ('Still installed after the uninstallation (no silent uninstaller was found, or it failed): ' + (Format-J365Copies -Application $remainingApps))",
+            $"        if (Test-J365InstallerBusy) {{ Exit-J365Deployment -ExitCode {ExitRetry} -Message ('Still installed after the uninstallation while Windows Installer was busy: ' + (Format-J365Copies -Application $remainingApps) + '. Intune tries again') }}",
+            $"        Exit-J365Deployment -ExitCode {ExitUninstallLeftCopy} -Message ('Still installed after the uninstallation (no silent uninstaller was found, or it failed): ' + (Format-J365Copies -Application $remainingApps))",
             "    }",
             ""
         };
@@ -676,6 +721,25 @@ namespace J365.IntunePSApp.Core
                 "        $remaining = @(Get-J365InstalledCopies)",
                 "    }",
                 "    $remaining",
+                "}",
+                "",
+                "function Test-J365InstallerBusy",
+                "{",
+                "    ## True while Windows Installer is busy (another installation holds its mutex: an app Intune installs at the same",
+                "    ## time, an update) or while another copy of this setup runs: the deployment then asks Intune to try again.",
+                "    param ([System.String]$SetupName)",
+                "    if (!(Test-ADTMutexAvailability -MutexName 'Global\\_MSIExecute')) { return $true }",
+                "    if ($SetupName -and @(Get-Process -Name ([System.IO.Path]::GetFileNameWithoutExtension($SetupName)) -ErrorAction Ignore).Count -gt 0) { return $true }",
+                "    return $false",
+                "}",
+                "",
+                "function Exit-J365Deployment",
+                "{",
+                "    ## Ends the deployment with an exit code of this package (PSAppDeployToolkit keeps 60000-68999 for itself and",
+                "    ## 60001 for any error): Intune shows the code, and the log says why.",
+                "    param ([System.Int32]$ExitCode, [System.String]$Message)",
+                "    Write-ADTLogEntry -Message ($Message + ' (exit code ' + $ExitCode + ')') -Severity 3",
+                "    Close-ADTSession -ExitCode $ExitCode",
                 "}"
             });
             return L;
@@ -687,8 +751,9 @@ namespace J365.IntunePSApp.Core
         /// failure with the reason in the log); with <see cref="PackageSettings.InstallIfRemovalFails"/> the new version is
         /// installed over the copy that could not be removed.
         /// </summary>
-        private static List<string> RemoveBeforeInstallLines(PackageSettings s)
+        private static List<string> RemoveBeforeInstallLines(PackageSettings s, string installerRel = null)
         {
+            string setup = Lit(SetupName(installerRel));
             var L = new List<string>
             {
                 "    ## Existing versions: every copy already installed is removed first, then the new version is installed.",
@@ -727,8 +792,10 @@ namespace J365.IntunePSApp.Core
             }
             else
             {
-                L.Add("            ## The new version is never installed next to a copy that could not be removed: the installation stops here.");
-                L.Add("            throw ('Still installed after the removal: ' + (Format-J365Copies -Application $remainingApps) + '. The installation was stopped so that two versions do not end up side by side. Give the package the silent switches of the uninstaller, or allow it to install over a copy that cannot be removed.')");
+                L.Add("            ## The new version is never installed next to a copy that could not be removed: the installation stops here,");
+                L.Add($"            ## with a code of its own ({ExitRemovalFailed}), or asks Intune to try again (1618) while something else installs.");
+                L.Add($"            if (Test-J365InstallerBusy -SetupName {setup}) {{ Exit-J365Deployment -ExitCode {ExitRetry} -Message ('Still installed after the removal while Windows Installer or another setup was busy: ' + (Format-J365Copies -Application $remainingApps) + '. Intune tries again') }}");
+                L.Add($"            Exit-J365Deployment -ExitCode {ExitRemovalFailed} -Message ('Still installed after the removal: ' + (Format-J365Copies -Application $remainingApps) + '. The installation was stopped so that two versions do not end up side by side. Give the package the silent switches of the uninstaller, or allow it to install over a copy that cannot be removed.')");
             }
             L.Add("        }");
             L.Add("    }");

@@ -156,7 +156,8 @@ namespace J365.IntunePSApp.Tests
             int find = install.IndexOf("$existingApps = @(Get-J365InstalledCopies)");
             int remove = install.IndexOf("Remove-J365InstalledCopy -Application $existingApp");
             int verify = install.IndexOf("$remainingApps = @(Wait-J365CopiesRemoved)");
-            int stop = install.IndexOf("throw ('Still installed after the removal: '");
+            // Since 3.0.6 a copy that stays ends the installation with a code of its own (69001), or 1618 while something else installs.
+            int stop = install.IndexOf("Exit-J365Deployment -ExitCode 69001 -Message ('Still installed after the removal: '");
             int installMsi = install.IndexOf("Start-ADTMsiProcess -Action 'Install'");
             Assert.True(find > 0 && find < remove && remove < verify && verify < stop && stop < installMsi);
             Assert.Contains("No version already installed was found", install);
@@ -168,7 +169,7 @@ namespace J365.IntunePSApp.Tests
             s.InstallIfRemovalFails = true;
             string over = ScriptGenerator.DeployScript(Fakes.Template, s, "app.msi");
             Ps.AssertParses(over);
-            Assert.DoesNotContain("throw ('Still installed after the removal", over);
+            Assert.DoesNotContain("Exit-J365Deployment -ExitCode 69001", over);
             Assert.Contains("Still installed after the removal (the new version is installed over it)", over);
         }
 
@@ -219,7 +220,7 @@ namespace J365.IntunePSApp.Tests
             Assert.True(install.IndexOf("Start-Sleep -Seconds 1") < install.IndexOf(create), "The kept branch applies the post-install actions before its mark.");
             Assert.Contains("$markKey.SetValue('Version', '1.2.3')", install);
             Assert.Contains(create, repair);
-            Assert.True(uninstall.IndexOf("DeleteSubKeyTree('SOFTWARE\\J365\\IntunePSApp\\Apps\\Contoso App', $false)") > uninstall.IndexOf("throw ('Still installed after the uninstallation"));
+            Assert.True(uninstall.IndexOf("DeleteSubKeyTree('SOFTWARE\\J365\\IntunePSApp\\Apps\\Contoso App', $false)") > uninstall.IndexOf("Exit-J365Deployment -ExitCode 69002 -Message ('Still installed after the uninstallation"));
             Assert.DoesNotContain("CreateSubKey", uninstall);
 
             s.InstallBehavior = "User";

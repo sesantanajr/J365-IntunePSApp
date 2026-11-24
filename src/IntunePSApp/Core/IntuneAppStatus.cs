@@ -390,6 +390,13 @@ namespace J365.IntunePSApp.Core
                 case 0x80070642: return T("AppStatus_Err1602");
                 case 0x80070652: return T("AppStatus_Err1618");
                 case 0x80070643: return T("AppStatus_Err1603");
+                // PSAppDeployToolkit: any error of the script (60001); the codes of this application since 3.0.6 (69001,
+                // 69002), as Intune may show a code above 65535: masked like a Windows error, or as it is.
+                case 0x8007EA61: return T("AppStatus_Err60001");
+                case 0x80070D89: case 0x00010D89: case 0x80080D89: return T("AppStatus_Err69001");
+                case 0x80070D8A: case 0x00010D8A: case 0x80080D8A: return T("AppStatus_Err69002");
+                // "File not found" is also what Intune shows when a setup ends with the code 2.
+                case 0x80070002: return T("AppStatus_ErrExit2");
             }
             // An error of Windows (0x8007xxxx): its text, in the language of Windows.
             if ((code & 0xFFFF0000) == 0x80070000)

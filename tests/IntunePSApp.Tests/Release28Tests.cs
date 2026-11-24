@@ -31,6 +31,8 @@ internal sealed class IntuneGraphMock : IDisposable
     public const string NewAppId = "aaaaaaaa-0000-4000-8000-000000000001";
     /// <summary>Win32 apps of the tenant: the lookup by name answers them, and each is read by its id.</summary>
     public List<JsonObject> Existing { get; } = new List<JsonObject>();
+    /// <summary>Answers "displayName eq '...'" with the apps of that name only, as Intune does (off: every app, as before 3.0.6).</summary>
+    public bool FilterByName { get; set; }
     public bool RefuseRelationships { get; set; }
 
     public JsonObject App { get; set; }
@@ -121,7 +123,25 @@ internal sealed class IntuneGraphMock : IDisposable
         const string apps = "/beta/deviceAppManagement/mobileApps";
         const string reports = "/beta/deviceManagement/reports/";
         string method = req.HttpMethod;
-        if (path == apps && method == "GET") { Reply(ctx, 200, new JsonObject { ["value"] = new JsonArray(Existing.Select(a => (JsonNode)a.DeepClone()).ToArray()) }.ToJsonString()); return; }
+        if (path == apps && method == "GET")
+        {
+            var listed = Existing.AsEnumerable();
+            int eq = query.IndexOf("displayName eq '", StringComparison.Ordinal);
+            if (FilterByName && eq >= 0)
+            {
+                string rest = query.Substring(eq + "displayName eq '".Length);
+                var name = new StringBuilder();
+                for (int i = 0; i < rest.Length; i++)
+                {
+                    if (rest[i] == '\'' && i + 1 < rest.Length && rest[i + 1] == '\'') { name.Append('\''); i++; }
+                    else if (rest[i] == '\'') break;
+                    else name.Append(rest[i]);
+                }
+                listed = listed.Where(a => string.Equals((string)a["displayName"], name.ToString(), StringComparison.OrdinalIgnoreCase));
+            }
+            Reply(ctx, 200, new JsonObject { ["value"] = new JsonArray(listed.Select(a => (JsonNode)a.DeepClone()).ToArray()) }.ToJsonString());
+            return;
+        }
         if (path == apps && method == "POST")
         {
             var created = JsonNode.Parse(body)!.AsObject();
@@ -266,7 +286,7 @@ public class Release28Tests
         + "<ProfileIdentifier>ProfileVersion1</ProfileIdentifier><FileDigest>ZGlnZXN0</FileDigest><FileDigestAlgorithm>SHA256</FileDigestAlgorithm></EncryptionInfo></ApplicationInfo>";
 
     /// <summary>The Intune folder of a package "Contoso Tool 2.0.0", with its .intunewin, detection, intune-app.json and the current script.</summary>
-    private static string Package(TempFolder tmp)
+    private static string Package(TempFolder tmp, string notes = "Packaged with J365 IntunePSApp")
     {
         string intune = Path.Combine(tmp.Path, PackageLayout.IntuneDir);
         Directory.CreateDirectory(intune);
@@ -283,7 +303,7 @@ public class Release28Tests
             ["intuneWinFile"] = "Contoso_Tool_2.0.0.intunewin", ["detectionScript"] = "Detection_Contoso_Tool.ps1",
             ["installCommandLine"] = "Invoke-AppDeployToolkit.exe -DeploymentType Install", ["uninstallCommandLine"] = "Invoke-AppDeployToolkit.exe -DeploymentType Uninstall",
             ["installExperience"] = "system", ["architecture"] = "x64", ["minimumSupportedWindowsRelease"] = "W10_1607",
-            ["restartBehavior"] = "basedOnReturnCode", ["notifications"] = "showAll", ["maximumInstallationTimeInMinutes"] = 60, ["notes"] = "Packaged with J365 IntunePSApp"
+            ["restartBehavior"] = "basedOnReturnCode", ["notifications"] = "showAll", ["maximumInstallationTimeInMinutes"] = 60, ["notes"] = notes
         };
         File.WriteAllText(Path.Combine(intune, PackageLayout.MetadataFile), meta.ToJsonString(), new UTF8Encoding(false));
         return IntunePublisher.Prepare(intune);
@@ -374,6 +394,39 @@ public class Release28Tests
         Assert.False(r.Supersedes);
         Assert.Empty(mock.Requests("POST", "/updateRelationships"));
         Assert.Contains("no earlier version to supersede", output);
+    }
+
+    [Fact]
+    public void An_app_of_the_same_product_under_another_name_is_updated_instead_of_duplicated()
+    {
+        // 3.0.6: the notes of a package name its mark. Two apps of one product assigned to the same devices compete for
+        // Windows Installer and satisfy each other's detection (two Adobe Acrobat Reader apps did): the publication finds
+        // the other one by its mark when no app has this name.
+        const string mark = "J365 package mark: HKLM\\SOFTWARE\\J365\\IntunePSApp\\Apps\\Contoso.Tool";
+        using var tmp = new TempFolder();
+        using var mock = new IntuneGraphMock { FilterByName = true };
+        var sameProduct = IntuneGraphMock.Win32App("bbbbbbbb-0000-4000-8000-000000000002", "Contoso Tool (64-bit)", "1.0.0", "2026-11-01T10:00:00Z");
+        sameProduct["notes"] = "Packaged with J365 IntunePSApp 3.0.6\n" + mark;
+        mock.Existing.Add(sameProduct);
+        mock.Existing.Add(IntuneGraphMock.Win32App("cccccccc-0000-4000-8000-000000000003", "Fabrikam Viewer", "3.0", "2026-11-01T10:00:00Z"));
+        string script = Package(tmp, "Packaged with J365 IntunePSApp 3.0.6\n" + mark);
+        var (exit, output, r) = Publish(script, mock, "-IfExists Update");
+
+        Assert.True(exit == 0, output);
+        Assert.True(r.IsPublished, r.Error);
+        Assert.Equal("updated", r.Action);
+        Assert.Equal("bbbbbbbb-0000-4000-8000-000000000002", r.AppId);
+        Assert.Contains("of the same product (same package mark)", output);
+        Assert.DoesNotContain(mock.Requests("POST", "/mobileApps"), c => c.Path.EndsWith("/deviceAppManagement/mobileApps", StringComparison.Ordinal));
+
+        // Created anyway on purpose: published, and the output says the two apps will compete.
+        using var tmp2 = new TempFolder();
+        using var mock2 = new IntuneGraphMock { FilterByName = true };
+        mock2.Existing.Add(sameProduct);
+        var (exit2, output2, r2) = Publish(Package(tmp2, "Packaged with J365 IntunePSApp 3.0.6\n" + mark), mock2, "-IfExists CreateNew");
+        Assert.True(exit2 == 0, output2);
+        Assert.Equal("created", r2.Action);
+        Assert.Contains("Another app of this product will exist", output2);
     }
 
     [Fact]

@@ -2,6 +2,18 @@
 
 All notable changes to J365 IntunePSApp. Versions follow [Semantic Versioning](https://semver.org).
 
+## 3.0.6 - 2026-11-24
+
+### Fixed
+
+- **Installations that collide are tried again instead of failing.** An `.exe` setup now runs with `-WaitForMsiExec` (PSAppDeployToolkit waits for Windows Installer, and ends with 1618 when it stays busy), and a setup that fails while Windows Installer is busy or another copy of it runs ends the deployment with 1618, which Intune retries in 5 minutes. Seen with Adobe Acrobat Reader: a device failed with 0x80070002 (the setup ended with 2) while another app of the same product was installing.
+- **A copy that cannot be removed ends with a code of its own.** The installation that stops because a copy is still installed after the removal ends with **69001**, and an uninstallation that leaves the application with **69002** (the range PSAppDeployToolkit leaves to a deployment script), instead of the generic 60001 (0x8007EA61). While something else installs, they end with 1618. *Status in Intune* explains 60001, 69001, 69002 and 0x80070002.
+- **Two apps of the same product.** The notes of the app in Intune carry its package mark (`J365 package mark: ...`). The publishing dialog lists the apps of the same product under another name and asks before creating a second one; `Publish-ToIntune.ps1` (batch, command line, PowerShell window) finds such an app when none has the name, updates or supersedes it as asked, and says that two apps of one product compete when one is created anyway.
+
+### Documentation
+
+- Screenshots of 3.0.5 at 1440x900, rendered on GitHub by the *Documentation screenshots* workflow.
+
 ## 3.0.5 - 2026-11-24
 
 ### Fixed

@@ -1,10 +1,10 @@
 <p align="center"><a href="README.md">English</a> · <strong>Português (Brasil)</strong></p>
 
-<p align="center"><img src="docs/assets/hero-pt-BR.svg" alt="J365 IntunePSApp 3.0.5 — do instalador ao Intune, com controle em cada etapa" width="100%"></p>
+<p align="center"><img src="docs/assets/hero-pt-BR.svg" alt="J365 IntunePSApp 3.0.6 — do instalador ao Intune, com controle em cada etapa" width="100%"></p>
 
 <p align="center"><b>Menos tarefas repetitivas. Mais consistência nos seus pacotes.</b><br>Uma interface visual para preparar, personalizar, testar e publicar aplicativos Windows.</p>
-<p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v3.0.5/J365-IntunePSApp-3.0.5-win-x64.zip"><img src="docs/assets/download-pt-BR.svg" alt="Baixar J365 IntunePSApp 3.0.5 — Windows x64" width="400"></a></p>
-<p align="center"><a href="#recursos">Conheça os recursos</a> · <a href="#comecar">Como começar</a> · <a href="docs/USER-GUIDE.pt-BR.md"><b>Manual de uso</b></a> · <a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/tag/v3.0.5">Notas da versão</a></p>
+<p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v3.0.6/J365-IntunePSApp-3.0.6-win-x64.zip"><img src="docs/assets/download-pt-BR.svg" alt="Baixar J365 IntunePSApp 3.0.6 — Windows x64" width="400"></a></p>
+<p align="center"><a href="#recursos">Conheça os recursos</a> · <a href="#comecar">Como começar</a> · <a href="docs/USER-GUIDE.pt-BR.md"><b>Manual de uso</b></a> · <a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/tag/v3.0.6">Notas da versão</a></p>
 <p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/actions/workflows/build.yml"><img alt="Build and tests" src="https://github.com/sesantanajr/J365-IntunePSApp/actions/workflows/build.yml/badge.svg"></a> <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-315CF5?style=flat-square"></a> <img alt="Windows x64" src="https://img.shields.io/badge/Windows-x64-0A5CA8?style=flat-square"></p>
 
 ## Seu próximo pacote começa aqui
@@ -15,7 +15,7 @@ Transforme um instalador MSI ou EXE — ou qualquer aplicativo do catálogo do w
 | --- | --- | --- |
 | Catálogo do winget e da Microsoft Store, análise de instaladores, sugestões de parâmetros silenciosos e deploy em lote. | Instalação silenciosa ou com notificação, logo, cores, mensagens e padrões reutilizáveis da sua empresa. | Revisão antes de gerar, testes, logs e proteção contra publicação de pacotes desatualizados. |
 
-<a href="docs/screenshots/pt-BR/home-dark.png"><img src="docs/screenshots/pt-BR/home-dark.png" alt="J365 IntunePSApp 3.0.4: banco de dados, pacotes, toolkit e conexão com o Intune num relance" width="100%"></a>
+<a href="docs/screenshots/pt-BR/home-dark.png"><img src="docs/screenshots/pt-BR/home-dark.png" alt="J365 IntunePSApp 3.0.5: banco de dados, pacotes, toolkit e conexão com o Intune num relance" width="100%"></a>
 
 **Um fluxo completo:** catálogo ou instalador → aplicativo → experiência → ações → desinstalação → detecção → visual → geração → teste → publicação. Cada tela está explicada no **[manual de uso](docs/USER-GUIDE.pt-BR.md)**.
 
@@ -26,7 +26,7 @@ Transforme um instalador MSI ou EXE — ou qualquer aplicativo do catálogo do w
 <a id="recursos"></a>
 ## Conheça o que você pode fazer
 
-Capturas reais da **3.0.4** com uma empresa demonstrativa (Contoso) e o MSI do 7-Zip, empacotado de verdade. Clique nas imagens para ampliar. A conexão com o Intune é um exemplo: nada foi publicado em um tenant.
+Capturas reais da **3.0.5** com uma empresa demonstrativa (Contoso) e o MSI do 7-Zip, empacotado de verdade. Clique nas imagens para ampliar. A conexão com o Intune é um exemplo: nada foi publicado em um tenant.
 
 ### 01 · Encontre qualquer aplicativo
 
@@ -107,12 +107,13 @@ O teste pode ser executado localmente ou no **Windows Sandbox**, quando disponí
 2. Abra **`J365.IntunePSApp.exe`** e conclua a preparação das ferramentas. O runtime está incluído; não é necessário instalar o SDK .NET.
 3. Escolha um instalador ou um aplicativo do catálogo, configure o projeto e revise antes de gerar — ou marque vários aplicativos (winget ou Microsoft Store) e faça o deploy de todos juntos. Valide em um grupo piloto antes de distribuir. O [manual de uso](docs/USER-GUIDE.pt-BR.md) percorre cada tela.
 
-## Novidades da 3.0.1 à 3.0.5
+## Novidades da 3.0.1 à 3.0.6
 
 - **Remover qualquer versão instalada** (3.0.1): uma escolha só, no editor, nos padrões da empresa e no lote. O pacote remove a versão mais antiga, a mesma e a mais nova antes de instalar, no modo silencioso ou com notificação; componentes compartilhados nunca são removidos.
 - **Reinstalar também onde o app já está instalado** (3.0.3): o Intune executa o pacote uma vez em cada dispositivo, mesmo onde um pacote anterior do mesmo app já o instalou (antes, a marca desse pacote fazia o Intune considerar o app instalado).
 - **Porcentagem real e tempo restante** (3.0.2 e 3.0.4): na criação do `.intunewin` (as seis passagens da ferramenta da Microsoft, medidas pelo trabalho real), em cada aplicativo do lote, no envio ao Intune (antes informado a cada 10%) e nos downloads.
 - **Todo aplicativo do catálogo baixa** (3.0.5): o banco de dados confere os links dos instaladores todos os dias. Quando a versão mais nova do winget está com o link quebrado (cerca de 2% deles, o Autodesk DWG TrueView 2027 entre eles), a versão anterior que funciona entra no lugar; quando nenhuma funciona, o aplicativo fica marcado como *Link indisponível*, o *Somente compatíveis* o esconde, o lote o pula com o motivo e o site do fabricante é oferecido.
+- **Instalações que colidem são tentadas de novo** (3.0.6): um instalador `.exe` espera o Windows Installer, e um que falha enquanto outra instalação roda termina com 1618, que o Intune repete, em vez de falhar. Uma cópia que não pôde ser removida termina com um código próprio (69001), explicado no *Status no Intune*, e a publicação encontra um app do mesmo produto com outro nome pela marca do pacote (gravada nas observações do app) antes de criar um segundo.
 - **Lote mais claro** (3.0.1): a barra do catálogo numa linha, com a contagem, e os textos no singular quando há um só aplicativo.
 
 ## Novidades da 3.0
@@ -126,13 +127,13 @@ A 2.8 trouxe a substituição (uma versão nova, grupo a grupo) e o status de in
 
 ## Evolução com qualidade
 
-Cada release passa por **504 testes automatizados** no Windows (scripts gerados validados pelo Windows PowerShell 5.1, empacotamento, detecção, a publicação de ponta a ponta contra um Microsoft Graph simulado, o status de instalação, leitura da Microsoft Store, planejamento do lote, idiomas), além de verificações que renderizam o editor, as configurações e as janelas de conexão, publicação, status e lote nos dois idiomas e temas. A pesquisa na Microsoft Store e a verificação de atualizações também foram exercitadas nos serviços reais. Veja a [revisão de qualidade](docs/QUALITY.md).
+Cada release passa por **517 testes automatizados** no Windows (scripts gerados validados pelo Windows PowerShell 5.1, empacotamento, detecção, a publicação de ponta a ponta contra um Microsoft Graph simulado, o status de instalação, leitura da Microsoft Store, planejamento do lote, idiomas), além de verificações que renderizam o editor, as configurações e as janelas de conexão, publicação, status e lote nos dois idiomas e temas. A pesquisa na Microsoft Store e a verificação de atualizações também foram exercitadas nos serviços reais. Veja a [revisão de qualidade](docs/QUALITY.md).
 
 Projetos antigos continuam legíveis. Atualizar o editor não altera automaticamente aplicativos já publicados no tenant. A identificação da revisão acompanha novos pacotes; regenere os antigos para recebê-la.
 
 **Compatibilidade:** editor WPF/.NET 10 para Windows x64. A arquitetura ARM64 nos pacotes não equivale a um editor nativo ARM64. Parâmetros silenciosos, detecção e reinício dependem do instalador e precisam de teste. A publicação em tenant real (pacotes e apps da Microsoft Store) deve ser validada com um grupo piloto.
 
-**Assinatura:** as releases ainda não são assinadas com Authenticode (a 3.0.5 inclusive). Consulte a [política de assinatura de código](#política-de-assinatura-de-código-code-signing-policy) abaixo e as [orientações de assinatura](docs/SIGNING.md) se uma política do Windows impedir a execução.
+**Assinatura:** as releases ainda não são assinadas com Authenticode (a 3.0.6 inclusive). Consulte a [política de assinatura de código](#política-de-assinatura-de-código-code-signing-policy) abaixo e as [orientações de assinatura](docs/SIGNING.md) se uma política do Windows impedir a execução.
 
 ## Política de assinatura de código (Code signing policy)
 
@@ -148,7 +149,7 @@ As releases assinadas começam na primeira versão publicada depois que o projet
 
 [Manual de uso](docs/USER-GUIDE.pt-BR.md) · [Novidades por versão](CHANGELOG.md) · [Análise técnica](docs/QUALITY.md) · [Publicação no Intune](docs/INTUNE-PUBLISH.md) · [Compilar](docs/BUILDING.md) · [Arquitetura / Architecture](docs/ARCHITECTURE.md)
 
-[Contribuir](CONTRIBUTING.md) · [Relatar um problema](https://github.com/sesantanajr/J365-IntunePSApp/issues) · [Security](SECURITY.md) · [SHA256SUMS.txt](https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v3.0.5/SHA256SUMS.txt)
+[Contribuir](CONTRIBUTING.md) · [Relatar um problema](https://github.com/sesantanajr/J365-IntunePSApp/issues) · [Security](SECURITY.md) · [SHA256SUMS.txt](https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v3.0.6/SHA256SUMS.txt)
 
 ---
 

@@ -181,6 +181,7 @@ Quando algo falha, a janela diz o motivo e o que fazer (função não ativa no P
 ![Janela de publicação: conexão, app com o mesmo nome e atribuição](screenshots/pt-BR/publish.png)
 
 - **Se já existir um app com este nome**: *Perguntar* lista os apps do tenant com esse nome. Escolha **atualizar** um deles (ele mantém as atribuições e recebe o conteúdo novo de uma vez), publicar um **app novo que substitui** a versão anterior (novidade da 2.8) ou criar outro app. Só um app com exatamente este nome vem pré-selecionado.
+- **Um app do mesmo produto com outro nome** também aparece na lista: a partir da 3.0.6 a marca do pacote vai nas observações do app no Intune. Criar outro app pede confirmação, porque dois apps do mesmo produto atribuídos aos mesmos dispositivos disputam o Windows Installer e um satisfaz a detecção do outro.
 - **Atribuição**: nenhuma (atribua depois no Intune — recomendado), *disponível* ou *obrigatória*, para um grupo, todos os usuários ou todos os dispositivos. Uma atribuição obrigatória ampla pede confirmação.
 - **Opções avançadas**: **Executar numa janela do PowerShell**, ou **Copiar comando** para executar o `Publish-ToIntune.ps1` você mesmo (ele funciona também sem o aplicativo).
 - **Validar pacote** confere tudo sem conectar.
@@ -279,6 +280,9 @@ O `--batch` aceita IDs do winget e IDs de produto da Microsoft Store. `--existin
 | Sintoma | O que fazer |
 | --- | --- |
 | O Windows bloqueia o executável | SmartScreen: *Mais informações > Executar assim mesmo*. Controle Inteligente de Aplicativos / App Control: veja o [SIGNING.md](SIGNING.md). |
+| Falha **0x8007EA61** (60001) | Erro no script do pacote: o log do pacote no dispositivo diz a causa. Pacotes gerados a partir da 3.0.6 informam a remoção que falhou com **69001** e a desinstalação que deixou o app com **69002**; o *Status no Intune* explica cada código. |
+| Falha **0x80070002** | O instalador terminou com o código 2 (o Intune mostra "arquivo não encontrado"). Se o log do pacote existe no dispositivo, o código veio do instalador; se não, o Intune não conseguiu iniciar o pacote (antivírus, conteúdo incompleto). A partir da 3.0.6, um instalador que falha com o Windows Installer ocupado termina com **1618** e o Intune tenta de novo em 5 minutos. |
+| Dois apps do mesmo produto no Intune | Eles instalam ao mesmo tempo, disputam o Windows Installer e um satisfaz a detecção do outro (e, com *Reinstalar também onde o app já está instalado*, reinstalam um depois do outro). Atualize ou substitua um deles, ou atribua só um. |
 | "Não foi possível baixar o instalador" (HTTP 404) ou *Link indisponível* | O fabricante tirou o arquivo do link registrado no winget. O aplicativo oferece abrir o site do fabricante: baixe o instalador e arraste-o em **Novo pacote** (a análise confere a assinatura e o banco de dados completa os parâmetros). A próxima atualização do banco de dados usa uma versão cujo link funciona, quando existe. |
 | O SHA256 do arquivo não confere | O fabricante publicou outro arquivo no mesmo link: por segurança ele não é usado. Baixe-o no site do fabricante e arraste-o em **Novo pacote**. |
 | "Não foi possível verificar novas versões" | Rede ou proxy; a mensagem diz o motivo (e quando um limite da API do GitHub libera). |

@@ -1,4 +1,4 @@
-# Screenshots — J365 IntunePSApp 2.8
+# Screenshots — J365 IntunePSApp 3.0.5
 
 Unmodified PNG captures rendered by the application itself (its `--snapshot` mode), in English (`en/`) and Portuguese (`pt-BR/`), used by the [README](../../README.md) and the user guide ([English](../USER-GUIDE.md), [Português](../USER-GUIDE.pt-BR.md)).
 
