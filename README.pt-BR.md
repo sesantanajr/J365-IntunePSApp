@@ -120,7 +120,17 @@ Projetos antigos continuam legíveis. Atualizar o editor não altera automaticam
 
 **Compatibilidade:** editor WPF/.NET 10 para Windows x64. A arquitetura ARM64 nos pacotes não equivale a um editor nativo ARM64. Parâmetros silenciosos, detecção e reinício dependem do instalador e precisam de teste. A publicação em tenant real (pacotes e apps da Microsoft Store) deve ser validada com um grupo piloto.
 
-**Assinatura:** o executável desta release ainda não é assinado com Authenticode. Consulte as [orientações de assinatura](docs/SIGNING.md) se uma política do Windows impedir a execução.
+**Assinatura:** as releases até a 3.0.0 não são assinadas com Authenticode. Consulte a [política de assinatura de código](#política-de-assinatura-de-código-code-signing-policy) abaixo e as [orientações de assinatura](docs/SIGNING.md) se uma política do Windows impedir a execução.
+
+## Política de assinatura de código (Code signing policy)
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org) — assinatura de código gratuita fornecida pelo SignPath.io, com certificado da SignPath Foundation.
+
+- **O que é assinado:** somente o executável de release compilado pelo GitHub Actions a partir deste repositório público, depois de os testes passarem. Cada pedido de assinatura é aprovado à mão.
+- **Commits e revisão (*committers and reviewers*):** [Sérgio Sant'Ana Junior](https://github.com/sesantanajr). **Aprovação (*approvers*):** [Sérgio Sant'Ana Junior](https://github.com/sesantanajr).
+- **Política de privacidade:** este programa não transfere nenhuma informação para outros sistemas em rede, a não ser quando solicitado especificamente pelo usuário ou por quem o instala ou opera.
+
+As releases assinadas começam na primeira versão publicada depois que o projeto for aceito pela fundação; até lá, as releases não são assinadas. A política completa: [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md).
 
 ## Documentação e comunidade
 

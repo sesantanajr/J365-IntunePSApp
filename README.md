@@ -119,7 +119,17 @@ Existing projects remain readable. Updating the editor does not change existing 
 
 **Compatibility:** WPF/.NET 10 editor for Windows x64. ARM64 package settings do not imply a native ARM64 editor. Silent switches, detection and restart behavior depend on the installer and require testing. Publishing to a live tenant (packages and Microsoft Store apps) should be validated with a pilot group.
 
-**Signing:** this release is not Authenticode-signed yet. See [signing guidance](docs/SIGNING.md) if Windows policy blocks execution.
+**Signing:** releases up to 3.0.0 are not Authenticode-signed. See the [code signing policy](#code-signing-policy) below and the [signing guidance](docs/SIGNING.md) if Windows policy blocks execution.
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+
+- **What is signed:** only the release executable built by GitHub Actions from this public repository, after the tests pass. Every signing request is approved by hand.
+- **Committers and reviewers:** [Sérgio Sant'Ana Junior](https://github.com/sesantanajr). **Approvers:** [Sérgio Sant'Ana Junior](https://github.com/sesantanajr).
+- **Privacy policy:** this program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.
+
+Signed releases start with the first version published after the project is accepted by the foundation; until then the releases are unsigned. The full policy: [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md).
 
 ## Documentation & community
 
