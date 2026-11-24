@@ -339,6 +339,12 @@ namespace J365.IntunePSApp.Views
             c.SelectedIndex = 0;
         }
 
+        /// <summary>Installing over the copies already there has nothing that can fail to be removed.</summary>
+        private void Existing_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (ChkInstallOver != null) ChkInstallOver.IsEnabled = TagOf(CmbExisting) != ExistingVersions.InstallOver;
+        }
+
         public static string TagOf(ComboBox c) => (c.SelectedItem as ComboBoxItem)?.Tag as string ?? "";
 
         /// <summary>The selection box of a ComboBox keeps the text it had when the item was selected: select again after a language change.</summary>
@@ -377,7 +383,8 @@ namespace J365.IntunePSApp.Views
             TxtCountdown.Text = c.CloseAppsCountdown.ToString();
             ChkBlock.IsChecked = c.BlockExecution;
             ChkDisk.IsChecked = c.CheckDiskSpace;
-            ChkRemovePrev.IsChecked = c.RemovePreviousVersions;
+            SelectTag(CmbExisting, ExistingVersions.Of(c));
+            ChkInstallOver.IsEnabled = TagOf(CmbExisting) != ExistingVersions.InstallOver;
             ChkInstallOver.IsChecked = c.InstallIfRemovalFails;
             TxtWelcome.Text = c.WelcomeMessage;
             TxtCompletion.Text = c.CompletionMessage;
@@ -397,7 +404,7 @@ namespace J365.IntunePSApp.Views
         public void OnLanguageChanged()
         {
             _loading = true;
-            RefreshSelection(CmbUiLanguage, CmbStyle, CmbLanguage, CmbMode, CmbArch);
+            RefreshSelection(CmbUiLanguage, CmbStyle, CmbLanguage, CmbMode, CmbArch, CmbExisting);
             _loading = false;
             // The names of the colors (tooltips of the swatches) follow the language too.
             BuildSwatches();
@@ -568,7 +575,7 @@ namespace J365.IntunePSApp.Views
             c.CloseAppsCountdown = int.TryParse(TxtCountdown.Text, out var cd) ? Math.Clamp(cd, 0, 3000) : 300;
             c.BlockExecution = ChkBlock.IsChecked == true;
             c.CheckDiskSpace = ChkDisk.IsChecked == true;
-            c.RemovePreviousVersions = ChkRemovePrev.IsChecked == true;
+            ExistingVersions.Set(c, TagOf(CmbExisting));
             c.InstallIfRemovalFails = ChkInstallOver.IsChecked == true;
             c.WelcomeMessage = TxtWelcome.Text.Trim();
             c.CompletionMessage = TxtCompletion.Text.Trim();

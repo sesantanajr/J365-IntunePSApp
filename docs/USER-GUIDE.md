@@ -102,8 +102,10 @@ Ready-made actions, each in its phase (*before/after install*, *before/after uni
 
 ![Step 5: previous versions, kept versions and the uninstall name](screenshots/en/uninstall.png)
 
-- **Uninstall any version already installed before installing the new one** keeps a single copy on the device.
-- **Keep a newer version that is already installed** never downgrades an application that updated itself.
+- **Versions already installed on the device** — one choice:
+  - **Remove any installed version (older, the same or newer) and install this one**: a clean reinstall, silent or with notification. Shared components (Visual C++ and .NET runtimes, WebView2, Edge) are never removed; an application the database advises not to remove (self-updating browsers, Adobe Acrobat 64-bit, whose name is also the name of Acrobat Pro) is removed too, with a note.
+  - **Remove older versions and the same one; keep a newer version** (default): never downgrades an application that updated itself.
+  - **Do not remove: install over what is there.**
 - **If the removal fails, install over the existing copy anyway** (off by default): off, if a copy is still installed the installation stops with an error, the log names the copy that stayed and Intune reports the failure, so the new version never ends up next to the old one. On, the new version is installed over it. Everything found is removed, the same version included: an MSI by its product code; an .exe by the switches typed here, by the silent command the program registered or, without one, by the switches of Inno Setup and NSIS, recognised on the device.
 - **Program name in "Installed apps"** (wildcards allowed) is used to find, remove and detect the application; **Show matches on this PC** lists what it would match. MSI packages uninstall by product code; an `.exe` needs its silent uninstall switches.
 
@@ -210,7 +212,7 @@ Once no device runs the earlier version, unassign and delete it: Intune keeps at
 ![Batch window: shared settings and every application with its state](screenshots/en/batch.png)
 
 1. In the catalog, tick several applications (or **Add to batch** on the details) and click **Batch package**.
-2. Set what they share: company, owner, and the type of installation (silent or with notification).
+2. Set what they share: company, owner, the type of installation (silent or with notification) and what every package does with the **versions already installed** — *Remove any installed version and install this one* reinstalls every application from scratch.
 3. Optionally **Publish each package to Intune as soon as it is generated**, with what to do with an app of the same name (update it, **create a new app that supersedes it**, create another, or do not publish) and the assignment. The tenant and the assignment are confirmed before anything starts.
 4. **Generate N packages**. Each installer is downloaded from its official link, checked against its SHA256 and packaged as in the editor. An `.exe` without known silent switches, or a name that also matches other applications, is **skipped with the reason** — open it in the editor to finish it by hand. A failed publication can be retried alone; **Copy report** gives a table of the results.
 

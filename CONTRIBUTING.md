@@ -26,7 +26,8 @@ The database comes from winget and already has silent switches and URLs. [`catal
 | `installArgs` | Replaces the winget install switches when needed |
 | `detectionFile` | Recommended file for detection (for example apps that update themselves) |
 | `checkVersion` | `false` to detect presence only |
-| `removePrevious` | `false` for shared libraries (for example the VC++ Redistributable) |
+| `removePrevious` | `false` when removing the installed versions is not advised (the package removes them only with *Remove any installed version*) |
+| `neverRemove` | `true` for shared components and parts of Windows (Edge, WebView2, VC++ and .NET runtimes): never removed, whatever the choice |
 | `notesEn` / `notes` | Important warnings for whoever packages the app, in English / Portuguese |
 
 The key is the **winget ID** (`winget search <name>`). Before opening the pull request, test the generated package: *Test in Sandbox*, or on a test computer with `Invoke-AppDeployToolkit.exe -DeploymentType Install` and `-DeploymentType Uninstall`.
@@ -54,7 +55,7 @@ Obrigado por ajudar o J365 IntunePSApp! Código, correções no banco de dados, 
 
 ## A forma mais rápida de ajudar: curadoria de aplicativos
 
-O banco de dados vem do winget e já traz os parâmetros silenciosos e os endereços. O [`catalog/curated.json`](catalog/curated.json) acrescenta o que falta para um bom pacote corporativo: processos a fechar (`processes`), nome em *Aplicativos instalados* (`namePattern`), parâmetros do desinstalador (`uninstallArgs`), parâmetros de instalação (`installArgs`), arquivo para detecção (`detectionFile`), `checkVersion`, `removePrevious` e observações em português (`notes`) e inglês (`notesEn`). Veja o exemplo e a tabela na seção em inglês acima.
+O banco de dados vem do winget e já traz os parâmetros silenciosos e os endereços. O [`catalog/curated.json`](catalog/curated.json) acrescenta o que falta para um bom pacote corporativo: processos a fechar (`processes`), nome em *Aplicativos instalados* (`namePattern`), parâmetros do desinstalador (`uninstallArgs`), parâmetros de instalação (`installArgs`), arquivo para detecção (`detectionFile`), `checkVersion`, `removePrevious`, `neverRemove` (componentes compartilhados que nunca são removidos) e observações em português (`notes`) e inglês (`notesEn`). Veja o exemplo e a tabela na seção em inglês acima.
 
 A chave é o **ID do winget** (`winget search <nome>`). Antes de abrir o pull request, teste o pacote gerado: *Testar no Sandbox*, ou em um computador de teste com `Invoke-AppDeployToolkit.exe -DeploymentType Install` e `-DeploymentType Uninstall`.
 

@@ -50,6 +50,7 @@ namespace J365.IntunePSApp.Views
             TxtCompany.Text = o.CompanyName;
             TxtOwner.Text = "";
             SelectTag(CmbMode, o.DeployMode);
+            SelectTag(CmbExisting, Core.ExistingVersions.Of(cfg));
             SelectTag(CmbIfExists, o.IfExists);
             SelectTag(CmbAssign, "none|AllUsers");
             if (_storeOnly)
@@ -75,9 +76,9 @@ namespace J365.IntunePSApp.Views
 
         public void OnLanguageChanged()
         {
-            SettingsView.RefreshSelection(CmbMode, CmbIfExists, CmbAssign);
+            SettingsView.RefreshSelection(CmbExisting, CmbMode, CmbIfExists, CmbAssign);
             Title = T("Batch_Title");
-            Heading.Text = _storeOnly ? T("Batch_HeadingStore", _items.Count) : T("Batch_Heading", _items.Count);
+            Heading.Text = _storeOnly ? Loc.Count("Batch_HeadingStore", _items.Count) : Loc.Count("Batch_Heading", _items.Count);
             foreach (var i in _items) i.Changed();
             UpdateHints();
             UpdatePublish();
@@ -91,6 +92,21 @@ namespace J365.IntunePSApp.Views
         }
 
         private static string TagOf(ComboBox c) => (c.SelectedItem as ComboBoxItem)?.Tag as string ?? "";
+
+        private void Existing_Changed(object sender, SelectionChangedEventArgs e) { if (IsLoaded) UpdateExistingHint(); }
+
+        /// <summary>What every package does with the copies already installed, and the applications the database protects.</summary>
+        private void UpdateExistingHint()
+        {
+            if (ExistingHint == null) return;
+            string choice = TagOf(CmbExisting);
+            ExistingHint.Text = choice switch
+            {
+                Core.ExistingVersions.RemoveAll => T("Batch_ExistingHintRemoveAll"),
+                Core.ExistingVersions.KeepNewer => T("Batch_ExistingHintKeepNewer"),
+                _ => T("Ed_ExistingFlowOff")
+            } + (ConfigStore.Current.InstallIfRemovalFails ? " " + T("Batch_ExistingFailOver") : choice != Core.ExistingVersions.InstallOver ? " " + T("Batch_ExistingFailStops") : "");
+        }
 
         private void Mode_Changed(object sender, SelectionChangedEventArgs e) { if (IsLoaded) UpdateHints(); }
 
@@ -107,6 +123,7 @@ namespace J365.IntunePSApp.Views
             var cfg = ConfigStore.Current;
             DefaultsHint.Text = T("Batch_DefaultsHint", string.IsNullOrWhiteSpace(cfg.AccentColor) ? "—" : cfg.AccentColor, cfg.DialogStyle, cfg.OutputFolder);
             ListTitle.Text = T("Batch_ListTitle", _items.Count);
+            UpdateExistingHint();
         }
 
         /// <summary>The publication: the connection it will use, or what to do first; the group only for a group assignment.</summary>
@@ -131,9 +148,9 @@ namespace J365.IntunePSApp.Views
             int pending = _items.Count(i => !i.Succeeded && i.Installer != null);
             bool publish = ChkPublish.IsChecked == true;
             BtnStart.Content = _running ? T("Batch_Running")
-                : _items.Any(i => i.IsFinished) && pending > 0 ? T("Batch_Retry", pending)
-                : _storeOnly ? T("Batch_StartStore", pending)
-                : publish ? T("Batch_StartPublish", pending) : T("Batch_Start", pending);
+                : _items.Any(i => i.IsFinished) && pending > 0 ? Loc.Count("Batch_Retry", pending)
+                : _storeOnly ? Loc.Count("Batch_StartStore", pending)
+                : publish ? Loc.Count("Batch_StartPublish", pending) : Loc.Count("Batch_Start", pending);
             BtnStart.IsEnabled = !_running && !_preparing && pending > 0;
             BtnClose.Content = _running ? T("Common_Cancel") : T("Common_Close");
             SettingsCard.IsEnabled = !_running;
@@ -141,7 +158,7 @@ namespace J365.IntunePSApp.Views
             BtnReport.Visibility = _items.Any(i => i.IsFinished) && !_running ? Visibility.Visible : Visibility.Collapsed;
             if (!_items.Any(i => i.IsFinished))
             {
-                Summary.Text = T("Batch_SummaryReady", _items.Count(i => i.Installer != null));
+                Summary.Text = Loc.Count("Batch_SummaryReady", _items.Count(i => i.Installer != null));
                 return;
             }
             int built = _items.Count(i => i.Built), warn = _items.Count(i => i.State == BatchState.Warning);
@@ -158,6 +175,7 @@ namespace J365.IntunePSApp.Views
                 CompanyName = TxtCompany.Text.Trim(),
                 Owner = TxtOwner.Text.Trim(),
                 DeployMode = DeployModes.Normalize(TagOf(CmbMode)),
+                ExistingVersions = Core.ExistingVersions.Normalize(TagOf(CmbExisting)),
                 Publish = ChkPublish.IsChecked == true,
                 IfExists = TagOf(CmbIfExists),
                 AssignIntent = assign[0],
@@ -220,6 +238,7 @@ namespace J365.IntunePSApp.Views
                 var cfg = ConfigStore.Current;
                 cfg.CompanyName = o.CompanyName;
                 cfg.DeployMode = o.DeployMode;
+                Core.ExistingVersions.Set(cfg, o.ExistingVersions);
                 ConfigStore.Save();
             }
             _running = true;

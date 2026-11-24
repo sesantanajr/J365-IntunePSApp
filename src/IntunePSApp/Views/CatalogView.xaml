@@ -48,17 +48,32 @@
       <DockPanel>
         <TextBlock x:Name="ResultInfo" DockPanel.Dock="Top" Style="{StaticResource MutedText}" Margin="2,0,0,8"/>
         <!-- Batch: the applications ticked in the list are packaged together with the same settings -->
-        <Border x:Name="BatchBar" DockPanel.Dock="Bottom" Background="{DynamicResource BrandSoft}" CornerRadius="12" Padding="14,10" Margin="0,10,0,0" Visibility="Collapsed">
-          <DockPanel>
-            <Button DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Click="Batch_Click" Margin="8,0,0,0">
-              <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE896;" Style="{StaticResource Icon}" Foreground="White" Margin="0,0,8,0"/><TextBlock Text="{l:T Catalog_BatchPackage}"/></StackPanel>
-            </Button>
-            <Button DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Content="{l:T Catalog_BatchClear}" Click="BatchClear_Click"/>
-            <StackPanel VerticalAlignment="Center">
-              <TextBlock x:Name="BatchCount" FontWeight="SemiBold" Foreground="{DynamicResource BrandText}"/>
-              <TextBlock x:Name="BatchNames" Style="{StaticResource MutedText}" FontSize="12" TextTrimming="CharacterEllipsis"/>
+        <!-- Batch: the applications ticked in the list are packaged (or published) together with the same settings.
+             One line whatever the number of applications: the names are trimmed (all of them in the tooltip). -->
+        <Border x:Name="BatchBar" DockPanel.Dock="Bottom" Background="{DynamicResource BrandSoft}" BorderBrush="{DynamicResource Line}" BorderThickness="1"
+                CornerRadius="12" Padding="12,10" Margin="0,10,0,0" Visibility="Collapsed">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto"/>
+              <ColumnDefinition Width="*"/>
+              <ColumnDefinition Width="Auto"/>
+              <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Border Width="34" Height="34" CornerRadius="17" Background="{DynamicResource Brand}" VerticalAlignment="Center">
+              <TextBlock x:Name="BatchBadge" Foreground="White" FontWeight="SemiBold" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <StackPanel Grid.Column="1" Margin="10,0,8,0" VerticalAlignment="Center">
+              <TextBlock x:Name="BatchCount" FontWeight="SemiBold" Foreground="{DynamicResource BrandText}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+              <TextBlock x:Name="BatchNames" Foreground="{DynamicResource Muted}" FontSize="12" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
             </StackPanel>
-          </DockPanel>
+            <Button Grid.Column="2" Style="{StaticResource GhostButton}" Content="{l:T Catalog_BatchClear}" Click="BatchClear_Click" VerticalAlignment="Center"/>
+            <Button Grid.Column="3" Style="{StaticResource PrimaryButton}" Click="Batch_Click" Margin="6,0,0,0" VerticalAlignment="Center" MinWidth="150">
+              <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <TextBlock Text="&#xE896;" Style="{StaticResource Icon}" Foreground="White" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                <TextBlock Text="{l:T Catalog_BatchPackage}" VerticalAlignment="Center"/>
+              </StackPanel>
+            </Button>
+          </Grid>
         </Border>
         <ListBox x:Name="Results" BorderThickness="0" Background="Transparent" ItemContainerStyle="{StaticResource AppListItem}"
                  VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" ScrollViewer.HorizontalScrollBarVisibility="Disabled"

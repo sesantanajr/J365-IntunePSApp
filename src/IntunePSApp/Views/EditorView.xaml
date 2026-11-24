@@ -404,14 +404,16 @@
               <StackPanel>
                 <TextBlock Text="{l:T Ed_Uninstall}" Style="{StaticResource H2}"/>
                 <TextBlock Text="{l:T Ed_UninstallHint}" Style="{StaticResource MutedText}"/>
-                <CheckBox x:Name="ChkRemovePrev" Style="{StaticResource Switch}" Content="{l:T Ed_RemovePrev}" FontWeight="SemiBold" Margin="0,16,0,0"
-                          Checked="RemovePrev_Changed" Unchecked="RemovePrev_Changed"/>
-                <TextBlock Text="{l:T Ed_RemovePrevHint}" Style="{StaticResource Hint}" Margin="52,6,0,0"/>
-                <CheckBox x:Name="ChkInstallOver" Style="{StaticResource Switch}" Content="{l:T Ed_InstallOver}" Margin="0,14,0,0"
-                          IsEnabled="{Binding IsChecked, ElementName=ChkRemovePrev}"/>
+                <!-- One choice for the copies already installed: remove any version (a clean reinstall), keep a newer one, or none -->
+                <TextBlock Text="{l:T Ed_ExistingLabel}" Style="{StaticResource Label}" Margin="0,16,0,6"/>
+                <ComboBox x:Name="CmbExisting" SelectionChanged="Existing_Changed">
+                  <ComboBoxItem Tag="RemoveAll" Content="{l:T Opt_ExistingRemoveAll}"/>
+                  <ComboBoxItem Tag="KeepNewer" Content="{l:T Opt_ExistingKeepNewer}"/>
+                  <ComboBoxItem Tag="InstallOver" Content="{l:T Opt_ExistingInstallOver}"/>
+                </ComboBox>
+                <TextBlock x:Name="ExistingHint" Style="{StaticResource Hint}" TextWrapping="Wrap"/>
+                <CheckBox x:Name="ChkInstallOver" Style="{StaticResource Switch}" Content="{l:T Ed_InstallOver}" Margin="0,14,0,0"/>
                 <TextBlock Text="{l:T Ed_InstallOverHint}" Style="{StaticResource Hint}" Margin="52,6,0,0"/>
-                <CheckBox x:Name="ChkKeepNewer" Style="{StaticResource Switch}" Content="{l:T Ed_KeepNewer}" Margin="0,14,0,0"/>
-                <TextBlock Text="{l:T Ed_KeepNewerHint}" Style="{StaticResource Hint}" Margin="52,6,0,0"/>
                 <TextBlock Text="{l:T Ed_ProgramName}" Style="{StaticResource Label}"/>
                 <Grid>
                   <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>

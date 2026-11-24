@@ -102,9 +102,11 @@ Ações prontas, cada uma na sua fase (*antes/depois da instalação*, *antes/de
 
 ![Etapa 5: versões anteriores, versões mantidas e o nome usado na desinstalação](screenshots/pt-BR/uninstall.png)
 
-- **Desinstalar qualquer versão já instalada antes de instalar a nova** mantém uma única cópia no dispositivo. Tudo o que for encontrado sai, inclusive a mesma versão: MSI pelo código do produto; .exe pelos parâmetros informados, pelo comando silencioso que o programa registrou ou, na falta dele, pelos parâmetros do Inno Setup e do NSIS, reconhecidos no dispositivo.
+- **Versões já instaladas no dispositivo** — uma escolha:
+  - **Remover qualquer versão instalada (mais antiga, a mesma ou mais nova) e instalar esta**: reinstalação limpa, no modo silencioso ou com notificação. MSI sai pelo código do produto; .exe pelos parâmetros informados, pelo comando silencioso que o programa registrou ou, na falta dele, pelos parâmetros do Inno Setup e do NSIS. Componentes compartilhados (runtimes do Visual C++ e do .NET, WebView2, Edge) nunca são removidos; um aplicativo que o banco de dados recomenda não remover (navegadores que se atualizam sozinhos, Adobe Acrobat 64 bits, cujo nome é também o do Acrobat Pro) é removido também, com aviso.
+  - **Remover versões mais antigas e a mesma; manter uma versão mais nova** (padrão): nunca rebaixa um aplicativo que se atualizou sozinho.
+  - **Não remover: instalar por cima do que existir.**
 - **Se a remoção falhar, instalar por cima mesmo assim** (desligado por padrão): desligado, se uma cópia continuar instalada a instalação para com erro, o log diz qual cópia ficou e o Intune informa a falha, de modo que a versão nova nunca fica ao lado da antiga. Ligado, a versão nova é instalada por cima.
-- **Manter uma versão mais nova que já esteja instalada** nunca rebaixa um aplicativo que se atualizou sozinho. É a única cópia que o pacote não remove.
 - **Nome do programa em "Aplicativos instalados"** (aceita curingas) é usado para encontrar, remover e detectar o aplicativo; **Ver correspondências neste PC** mostra o que ele encontraria. Pacotes MSI desinstalam pelo código do produto; um `.exe` precisa dos seus parâmetros silenciosos de desinstalação.
 
 ### Etapa 6 — Detecção
@@ -210,7 +212,7 @@ Quando nenhum dispositivo usar mais a versão anterior, remova as atribuições 
 ![Janela de lote: configurações em comum e cada aplicativo com o seu estado](screenshots/pt-BR/batch.png)
 
 1. No catálogo, marque vários aplicativos (ou **Adicionar ao lote** nos detalhes) e clique em **Gerar em lote**.
-2. Defina o que eles têm em comum: empresa, proprietário, e o tipo de instalação (silenciosa ou com notificação).
+2. Defina o que eles têm em comum: empresa, proprietário, o tipo de instalação (silenciosa ou com notificação) e o que cada pacote faz com as **versões já instaladas** — *Remover qualquer versão instalada e instalar esta* reinstala todos os aplicativos do zero.
 3. Se quiser, ligue **Publicar cada pacote no Intune assim que for gerado (deploy)**, com o que fazer com um app do mesmo nome (atualizá-lo, **criar um app novo que substitui o existente**, criar outro ou não publicar) e a atribuição. O tenant e a atribuição são confirmados antes de qualquer coisa começar.
 4. **Gerar N pacotes**. Cada instalador é baixado do link oficial, conferido pelo SHA256 e empacotado como no editor. Um `.exe` sem parâmetros silenciosos conhecidos, ou um nome que também corresponde a outros aplicativos, é **pulado com o motivo** — abra-o no editor para terminar manualmente. Uma publicação que falhou pode ser repetida sozinha; **Copiar relatório** gera uma tabela com os resultados.
 

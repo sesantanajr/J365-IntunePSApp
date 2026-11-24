@@ -82,6 +82,14 @@
           </StackPanel>
         </Grid>
         <TextBlock x:Name="ModeHint" Style="{StaticResource Hint}" TextWrapping="Wrap"/>
+        <!-- What every package does with the copies already installed: "remove any version" reinstalls cleanly -->
+        <TextBlock Text="{l:T Ed_ExistingLabel}" Style="{StaticResource Label}"/>
+        <ComboBox x:Name="CmbExisting" SelectionChanged="Existing_Changed">
+          <ComboBoxItem Tag="RemoveAll" Content="{l:T Opt_ExistingRemoveAll}"/>
+          <ComboBoxItem Tag="KeepNewer" Content="{l:T Opt_ExistingKeepNewer}"/>
+          <ComboBoxItem Tag="InstallOver" Content="{l:T Opt_ExistingInstallOver}"/>
+        </ComboBox>
+        <TextBlock x:Name="ExistingHint" Style="{StaticResource Hint}" TextWrapping="Wrap"/>
         <TextBlock x:Name="DefaultsHint" Style="{StaticResource Hint}" TextWrapping="Wrap"/>
         <CheckBox x:Name="ChkSaveDefaults" Style="{StaticResource Switch}" Content="{l:T Batch_SaveDefaults}" Margin="0,10,0,0"/>
 

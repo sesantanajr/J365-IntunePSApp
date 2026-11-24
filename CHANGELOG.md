@@ -2,6 +2,21 @@
 
 All notable changes to J365 IntunePSApp. Versions follow [Semantic Versioning](https://semver.org).
 
+## 3.0.1 - 2026-11-24
+
+### Added
+
+- **Remove any installed version and install again.** What a package does with the copies already on the device is one choice, the same in the editor (step 5), the company defaults and the batch window, and `--existing` on the command line:
+  - **Remove any installed version (older, the same or newer) and install this one** — a clean reinstall, silent or with notification. Until now a newer version was always kept, and the batch window and the company defaults had no way to change that.
+  - **Remove older versions and the same one; keep a newer version** — the behaviour of 3.0.0, still the default.
+  - **Do not remove: install over what is there.**
+- **Shared components are never removed.** The database marks the Visual C++ and .NET runtimes, WebView2 and Edge (`neverRemove`): no choice removes their installed copies, which other applications use or Windows needs, and the analysis says so. An application the database only advises not to remove (self-updating browsers, OneDrive, Adobe Acrobat 64-bit, whose name is also the name of Acrobat Pro) is removed when *remove any version* is chosen, with a note on the analysis and on the item of the batch. The database builder carries the new field.
+
+### Fixed
+
+- **The *Batch package* button of the catalog** stretched to the height of the list of names, which wrapped over several lines with many applications ticked. The bar keeps one line: a badge with the count, the names trimmed (all of them in the tooltip), *Clear* and *Batch package* centered.
+- **Counts of one in the singular**: "Gerar 1 pacote", "1 aplicativo selecionado", "1 aplicativo pronto para gerar" (and in English "Generate 1 package"), instead of the plural.
+
 ## 3.0.0 - 2026-11-23
 
 Two ways to install instead of four modes and a deferral count; whatever is installed is removed before the installation, and the package says so when it cannot; a release that gives security products less to doubt. **Breaking:** packages generated from now on behave differently (below), and `--notifications` left the command line.

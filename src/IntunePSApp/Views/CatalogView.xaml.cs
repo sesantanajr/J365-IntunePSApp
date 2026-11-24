@@ -52,7 +52,8 @@ namespace J365.IntunePSApp.Views
         private void UpdateBatchBar()
         {
             BatchBar.Visibility = _queue.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-            BatchCount.Text = T("Catalog_BatchCount", _queue.Count);
+            BatchCount.Text = Loc.Count("Catalog_BatchCount", _queue.Count);
+            BatchBadge.Text = _queue.Count.ToString(Loc.Instance.Culture);
             BatchNames.Text = string.Join(", ", _queue.Select(a => a.Name));
             BatchNames.ToolTip = string.Join("\n", _queue.Select(a => $"{a.Name} {a.Version}"));
             UpdateQueueButton();

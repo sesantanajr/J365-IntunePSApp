@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
@@ -60,6 +61,16 @@ namespace J365.IntunePSApp.Localization
         }
 
         /// <summary>Text in the current language.</summary>
+        /// <summary>
+        /// A text with a count: the key followed by "_One" when the count is 1 and the language has it ("Gerar 1 pacote"),
+        /// otherwise the key itself ("Gerar 3 pacotes"). The count is the first value of the text.
+        /// </summary>
+        public static string Count(string key, int count, params object[] more)
+        {
+            var values = new object[] { count }.Concat(more ?? System.Array.Empty<object>()).ToArray();
+            return T(count == 1 && Instance.Has(key + "_One") ? key + "_One" : key, values);
+        }
+
         public static string T(string key) => Instance.Get(key);
 
         /// <summary>Formatted text in the current language (numbers and dates follow the language culture).</summary>

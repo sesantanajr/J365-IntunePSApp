@@ -338,7 +338,9 @@ namespace J365.IntunePSApp.Core
             s.Description = info.Description ?? "";
             s.Homepage = info.Homepage ?? "";
             s.PrivacyUrl = info.PrivacyUrl ?? "";
-            if (info.RemovePrevious.HasValue) s.RemovePreviousVersions = info.RemovePrevious.Value;
+            // The database over the choice of the company (or of the batch): shared components never removed, "remove any
+            // version" kept even for an application the database advises not to remove.
+            ExistingVersions.FromDatabase(s, info);
         }
 
         /// <summary>

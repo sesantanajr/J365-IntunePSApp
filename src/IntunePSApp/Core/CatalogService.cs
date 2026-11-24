@@ -455,6 +455,7 @@ namespace J365.IntunePSApp.Core
             if (!string.IsNullOrEmpty(x.DetectionFile)) { info.DetectionMethod = "File"; info.DetectionFilePath = x.DetectionFile; }
             if (x.CheckVersion.HasValue) info.DetectionCheckVersion = x.CheckVersion.Value;
             if (x.RemovePrevious.HasValue) info.RemovePrevious = x.RemovePrevious.Value;
+            info.NeverRemove = x.NeverRemove == true;
             if (!string.IsNullOrEmpty(x.LocalizedNotes) && !info.Notes.Contains(x.LocalizedNotes)) info.Notes.Add(x.LocalizedNotes);
         }
 

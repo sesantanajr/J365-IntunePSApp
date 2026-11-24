@@ -150,7 +150,7 @@ Afterwards: open the link (or the [Intune admin center](https://intune.microsoft
 Supersedence follows the rules of Intune ([documentation](https://learn.microsoft.com/intune/app-management/deployment/configure-win32-supersedence)):
 
 - The new app acts only where it is assigned. There, it supersedes the earlier version whether or not the earlier app is assigned too.
-- **Update** (default) installs the new version over the earlier one: J365 packages remove earlier versions themselves when *Uninstall any version already installed* is on (step 5 of the editor). **Uninstall first** (`-SupersedenceType Replace`) makes Intune run the uninstall command of the earlier app before, even on devices where it is not assigned.
+- **Update** (default) installs the new version over the earlier one: J365 packages remove earlier versions themselves according to *Versions already installed on the device* (step 5 of the editor, the company defaults and the batch window). **Uninstall first** (`-SupersedenceType Replace`) makes Intune run the uninstall command of the earlier app before, even on devices where it is not assigned.
 - With an *available* assignment, the Company Portal shows only the new app.
 - A chain (A superseded by B, B by C) is superseded by its last app. Intune keeps at most 10 apps in one chain: once no device runs a version any more, unassign and delete it.
 - With your account, linking apps takes the Intune permission to relate apps (*Mobile apps > Relate*; Intune Administrator and Application Manager have it). The app certificate uses the application permission `DeviceManagementApps.ReadWrite.All`, which covers it.
@@ -344,7 +344,7 @@ Depois: abra o link (ou o [centro de administração do Intune](https://intune.m
 A substituição segue as regras do Intune ([documentação](https://learn.microsoft.com/intune/app-management/deployment/configure-win32-supersedence)):
 
 - O app novo só age onde estiver atribuído. Ali, ele substitui a versão anterior, esteja o app anterior atribuído ou não.
-- **Atualizar** (padrão) instala a versão nova por cima da anterior: os pacotes do J365 removem as versões anteriores sozinhos quando *Desinstalar qualquer versão já instalada* está ligado (etapa 5 do editor). **Desinstalar antes** (`-SupersedenceType Replace`) faz o Intune executar antes o comando de desinstalação do app anterior, mesmo nos dispositivos onde ele não está atribuído.
+- **Atualizar** (padrão) instala a versão nova por cima da anterior: os pacotes do J365 removem as versões anteriores sozinhos conforme *Versões já instaladas no dispositivo* (etapa 5 do editor, padrões da empresa e janela de lote). **Desinstalar antes** (`-SupersedenceType Replace`) faz o Intune executar antes o comando de desinstalação do app anterior, mesmo nos dispositivos onde ele não está atribuído.
 - Com uma atribuição *disponível*, o Portal da Empresa mostra só o app novo.
 - Uma cadeia (A substituído por B, B por C) é substituída pelo último app dela. O Intune aceita no máximo 10 apps numa cadeia: quando nenhum dispositivo usar mais uma versão, remova as atribuições dela e exclua-a.
 - Com a sua conta, ligar apps exige a permissão do Intune de relacionar apps (*Aplicativos móveis > Relacionar*; Administrador do Intune e Gerenciador de Aplicativos têm). O certificado do aplicativo usa a permissão de aplicativo `DeviceManagementApps.ReadWrite.All`, que cobre isso.

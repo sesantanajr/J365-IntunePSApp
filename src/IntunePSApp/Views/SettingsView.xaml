@@ -271,8 +271,14 @@
               <TextBlock Text="{l:T Settings_NotifyHint}" Style="{StaticResource Hint}"/>
               <CheckBox x:Name="ChkBlock" Style="{StaticResource Switch}" Content="{l:T Opt_BlockExecution}" Margin="0,18,0,0"/>
               <CheckBox x:Name="ChkDisk" Style="{StaticResource Switch}" Content="{l:T Opt_CheckDisk}"/>
-              <CheckBox x:Name="ChkRemovePrev" Style="{StaticResource Switch}" Content="{l:T Opt_RemovePrevious}"/>
-              <CheckBox x:Name="ChkInstallOver" Style="{StaticResource Switch}" Content="{l:T Ed_InstallOver}" IsEnabled="{Binding IsChecked, ElementName=ChkRemovePrev}"/>
+              <TextBlock Text="{l:T Ed_ExistingLabel}" Style="{StaticResource Label}"/>
+              <ComboBox x:Name="CmbExisting" MaxWidth="620" HorizontalAlignment="Left" MinWidth="360" SelectionChanged="Existing_Changed">
+                <ComboBoxItem Tag="RemoveAll" Content="{l:T Opt_ExistingRemoveAll}"/>
+                <ComboBoxItem Tag="KeepNewer" Content="{l:T Opt_ExistingKeepNewer}"/>
+                <ComboBoxItem Tag="InstallOver" Content="{l:T Opt_ExistingInstallOver}"/>
+              </ComboBox>
+              <TextBlock Text="{l:T Settings_ExistingHint}" Style="{StaticResource Hint}" TextWrapping="Wrap"/>
+              <CheckBox x:Name="ChkInstallOver" Style="{StaticResource Switch}" Content="{l:T Ed_InstallOver}"/>
               <TextBlock Text="{l:T Settings_Welcome}" Style="{StaticResource Label}"/>
               <TextBox x:Name="TxtWelcome" TextChanged="Brand_Changed" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60" VerticalContentAlignment="Top"/>
               <TextBlock Text="{l:T Settings_Completion}" Style="{StaticResource Label}"/>

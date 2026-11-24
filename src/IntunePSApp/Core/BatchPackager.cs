@@ -43,6 +43,11 @@ namespace J365.IntunePSApp.Core
         /// <summary>AllUsers | AllDevices | Group</summary>
         public string AssignTo { get; set; } = "AllUsers";
         public string GroupId { get; set; } = "";
+        /// <summary>
+        /// What every package does with the copies already installed (<see cref="Core.ExistingVersions"/>): RemoveAll removes
+        /// any version, the same and newer ones included, and installs again; null keeps the company default.
+        /// </summary>
+        public string ExistingVersions { get; set; }
 
         public static BatchOptions FromConfig(AppConfig c) => new BatchOptions
         {
@@ -179,6 +184,9 @@ namespace J365.IntunePSApp.Core
         public static PackageSettings Settings(InstallerInfo info, AppConfig cfg, BatchOptions o)
         {
             var s = (cfg ?? new AppConfig()).NewPackage();
+            // The choice of the batch stands where the company default would: the database speaks after it (shared
+            // components are never removed), exactly as for a package made in the editor.
+            if (o?.ExistingVersions is string choice) Core.ExistingVersions.Set(s, choice);
             InstallerAnalyzer.ApplyTo(s, info);
             ApplyOptions(s, o);
             return s;
@@ -222,6 +230,10 @@ namespace J365.IntunePSApp.Core
             if (!knowsName && s.DetectionMethod == "Registry") notes.Add(T("Batch_GuessedName", s.DetectionNamePattern));
             var deps = CatalogService.Instance.DependenciesOf(app, inst);
             if (deps.Count > 0) notes.Add(T("Batch_Dependencies", string.Join(", ", deps.Select(d => d.Title))));
+            // Removal against the advice of the database ("remove any version" chosen), or none for a shared component.
+            if (app?.Extra?.NeverRemove == true) notes.Add(T("Batch_NeverRemove"));
+            else if (s.RemovePreviousVersions && app?.Extra?.RemovePrevious == false)
+                notes.Add(T("Batch_RemoveAllOverDatabase", (app.Extra.LocalizedNotes ?? "").Trim()).Trim());
             return notes;
         }
 

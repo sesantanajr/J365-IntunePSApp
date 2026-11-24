@@ -454,6 +454,7 @@ public class CuratedEntry
     [JsonPropertyName("detectionFile")] public string DetectionFile { get; set; }
     [JsonPropertyName("checkVersion")] public bool? CheckVersion { get; set; }
     [JsonPropertyName("removePrevious")] public bool? RemovePrevious { get; set; }
+    [JsonPropertyName("neverRemove")] public bool? NeverRemove { get; set; }
     [JsonPropertyName("notes")] public string Notes { get; set; }
     [JsonPropertyName("notesEn")] public string NotesEn { get; set; }
 }

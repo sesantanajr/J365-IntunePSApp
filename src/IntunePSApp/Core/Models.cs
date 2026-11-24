@@ -63,6 +63,72 @@ namespace J365.IntunePSApp.Core
             => All.Any(m => string.Equals(m, (mode ?? "").Trim(), StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>
+    /// What a package does with the copies of the application already on the device: one choice over
+    /// <see cref="PackageSettings.RemovePreviousVersions"/> and <see cref="PackageSettings.KeepNewerVersion"/>.
+    /// </summary>
+    public static class ExistingVersions
+    {
+        /// <summary>Every copy found is removed (older versions, the same version and newer versions), then this one is installed.</summary>
+        public const string RemoveAll = "RemoveAll";
+        /// <summary>Older copies and the same version are removed; a newer version is kept (the default since 3.0).</summary>
+        public const string KeepNewer = "KeepNewer";
+        /// <summary>Nothing is removed: the installer runs over what is installed.</summary>
+        public const string InstallOver = "InstallOver";
+        public static readonly string[] All = { RemoveAll, KeepNewer, InstallOver };
+
+        public static string Of(bool removePrevious, bool keepNewer) => !removePrevious ? InstallOver : keepNewer ? KeepNewer : RemoveAll;
+        public static string Of(PackageSettings s) => Of(s.RemovePreviousVersions, s.KeepNewerVersion);
+        public static string Of(AppConfig c) => Of(c.RemovePreviousVersions, c.KeepNewerVersion);
+
+        /// <summary>One of the three choices, typed in any case; null for anything else (a command line that says something else is refused).</summary>
+        public static string Normalize(string value) => All.FirstOrDefault(v => string.Equals(v, (value ?? "").Trim(), StringComparison.OrdinalIgnoreCase));
+
+        /// <summary>The choice over a package. Installing over leaves "keep a newer version" as it was (a newer copy is still not downgraded).</summary>
+        public static void Set(PackageSettings s, string choice)
+        {
+            switch (Normalize(choice))
+            {
+                case RemoveAll: s.RemovePreviousVersions = true; s.KeepNewerVersion = false; break;
+                case KeepNewer: s.RemovePreviousVersions = true; s.KeepNewerVersion = true; break;
+                case InstallOver: s.RemovePreviousVersions = false; break;
+            }
+        }
+
+        public static void Set(AppConfig c, string choice)
+        {
+            switch (Normalize(choice))
+            {
+                case RemoveAll: c.RemovePreviousVersions = true; c.KeepNewerVersion = false; break;
+                case KeepNewer: c.RemovePreviousVersions = true; c.KeepNewerVersion = true; break;
+                case InstallOver: c.RemovePreviousVersions = false; break;
+            }
+        }
+
+        /// <summary>
+        /// What the application database says, over the choice a new package got from the company defaults (or the batch):
+        /// a shared component or a part of Windows (Visual C++ runtimes, .NET, WebView2, Edge) is never removed; an application
+        /// the database advises not to remove (self-updating browsers, Adobe Acrobat 64-bit) keeps its copy, unless "remove
+        /// any version" was chosen, which is said in the notes of the analysis.
+        /// </summary>
+        public static void FromDatabase(PackageSettings s, InstallerInfo info)
+        {
+            if (info == null) return;
+            if (info.NeverRemove)
+            {
+                if (s.RemovePreviousVersions) info.Notes.Add(T("Analysis_NeverRemove"));
+                s.RemovePreviousVersions = false;
+                return;
+            }
+            if (info.RemovePrevious == false)
+            {
+                if (Of(s) == RemoveAll) info.Notes.Add(T("Analysis_RemoveAllOverDatabase"));
+                else s.RemovePreviousVersions = false;
+            }
+            else if (info.RemovePrevious == true) s.RemovePreviousVersions = true;
+        }
+    }
+
     /// <summary>Every option of a package (persisted as project.json).</summary>
     public class PackageSettings
     {
@@ -203,6 +269,11 @@ namespace J365.IntunePSApp.Core
         public bool BlockExecution { get; set; } = true;
         public bool CheckDiskSpace { get; set; } = true;
         public bool RemovePreviousVersions { get; set; } = true;
+        /// <summary>
+        /// Company default of <see cref="PackageSettings.KeepNewerVersion"/>. False with <see cref="RemovePreviousVersions"/>:
+        /// every package removes any version already installed (older, the same or newer) and installs its own.
+        /// </summary>
+        public bool KeepNewerVersion { get; set; } = true;
         /// <summary>Company default of <see cref="PackageSettings.InstallIfRemovalFails"/>.</summary>
         public bool InstallIfRemovalFails { get; set; }
         public string WelcomeMessage { get; set; } = "";
@@ -257,6 +328,7 @@ namespace J365.IntunePSApp.Core
                 BlockExecution = BlockExecution,
                 CheckDiskSpace = CheckDiskSpace,
                 RemovePreviousVersions = RemovePreviousVersions,
+                KeepNewerVersion = KeepNewerVersion,
                 InstallIfRemovalFails = InstallIfRemovalFails,
                 WelcomeMessage = WelcomeMessage,
                 CompletionMessage = CompletionMessage,
@@ -291,6 +363,8 @@ namespace J365.IntunePSApp.Core
         public string DetectionVersion { get; set; } = "";
         public bool DetectionCheckVersion { get; set; } = true;
         public bool? RemovePrevious { get; set; }
+        /// <summary>The database marks the application as a shared component or a part of Windows: installed copies are never removed.</summary>
+        public bool NeverRemove { get; set; }
         public string InstallBehavior { get; set; } = "System";
         public string Signer { get; set; }
         public string Sha256 { get; set; }
@@ -479,6 +553,8 @@ namespace J365.IntunePSApp.Core
         [JsonPropertyName("detectionFile")] public string DetectionFile { get; set; }
         [JsonPropertyName("checkVersion")] public bool? CheckVersion { get; set; }
         [JsonPropertyName("removePrevious")] public bool? RemovePrevious { get; set; }
+        /// <summary>A shared component or a part of Windows: no choice of a package removes its installed copies.</summary>
+        [JsonPropertyName("neverRemove")] public bool? NeverRemove { get; set; }
         [JsonPropertyName("notes")] public string Notes { get; set; }
         [JsonPropertyName("notesEn")] public string NotesEn { get; set; }
 

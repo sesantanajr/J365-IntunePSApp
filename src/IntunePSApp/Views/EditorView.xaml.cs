@@ -77,7 +77,7 @@ namespace J365.IntunePSApp.Views
         public void OnLanguageChanged()
         {
             _loading = true;
-            SettingsView.RefreshSelection(CmbArch, CmbBehavior, CmbStyle, CmbLanguage);
+            SettingsView.RefreshSelection(CmbArch, CmbBehavior, CmbStyle, CmbLanguage, CmbExisting);
             _loading = false;
             BuildSwatches();
             BuildQuickActions();
@@ -140,9 +140,8 @@ namespace J365.IntunePSApp.Views
                 TxtRestart.Text = s.RestartCountdown.ToString();
                 _actions.Clear(); foreach (var a in s.Actions) _actions.Add(a);
                 _extraFiles.Clear(); foreach (var f in s.ExtraFiles) _extraFiles.Add(f);
-                ChkRemovePrev.IsChecked = s.RemovePreviousVersions;
+                SelectTag(CmbExisting, ExistingVersions.Of(s));
                 ChkInstallOver.IsChecked = s.InstallIfRemovalFails;
-                ChkKeepNewer.IsChecked = s.KeepNewerVersion;
                 TxtPattern.Text = s.UninstallPattern;
                 TxtUninstallArgs.Text = s.UninstallExeArgs;
                 RbDetName.IsChecked = s.DetectionMethod == "Registry";
@@ -349,9 +348,9 @@ namespace J365.IntunePSApp.Views
             s.RestartCountdown = Int(TxtRestart.Text, 600);
             s.Actions = _actions.ToList();
             s.ExtraFiles = _extraFiles.ToList();
-            s.RemovePreviousVersions = ChkRemovePrev.IsChecked == true;
+            // Installing over keeps "keep a newer version" as loaded: the project does not change by being shown.
+            ExistingVersions.Set(s, TagOf(CmbExisting));
             s.InstallIfRemovalFails = ChkInstallOver.IsChecked == true;
-            s.KeepNewerVersion = ChkKeepNewer.IsChecked != false;
             s.UninstallPattern = TxtPattern.Text.Trim();
             s.UninstallExeArgs = TxtUninstallArgs.Text.Trim();
             s.DetectionMethod = RbDetCode.IsChecked == true ? "ProductCode" : RbDetFile.IsChecked == true ? "File" : "Registry";
@@ -634,7 +633,7 @@ namespace J365.IntunePSApp.Views
         // ------------------------------------------------------------------ versions already installed
 
         /// <summary>The switch is on step 5 (with its details); step 1 only says what it does and links there.</summary>
-        private void RemovePrev_Changed(object sender, RoutedEventArgs e)
+        private void Existing_Changed(object sender, SelectionChangedEventArgs e)
         {
             if (_loading) return;
             UpdateExistingFlow();
@@ -670,8 +669,18 @@ namespace J365.IntunePSApp.Views
             var others = CatalogService.Instance.OthersMatching(pattern, _s?.CatalogId);
             PatternOthers.Visibility = others.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             PatternOthersText.Text = others.Count > 0 ? T("Ed_PatternOthers", pattern, string.Join(", ", others)) : "";
-            if (ChkRemovePrev.IsChecked != true) { ExistingFlow.Text = T("Ed_ExistingFlowOff"); return; }
-            ExistingFlow.Text = T("Ed_ExistingFlowOn") + (pattern.Length > 0 ? " " + T("Ed_ExistingFlowName", pattern) : "");
+            // What the choice does, on step 5 and in the summary of step 1. Installing over has nothing to fail.
+            string choice = TagOf(CmbExisting);
+            ChkInstallOver.IsEnabled = choice != ExistingVersions.InstallOver;
+            ExistingHint.Text = choice switch
+            {
+                ExistingVersions.RemoveAll => T("Ed_ExistingHintRemoveAll"),
+                ExistingVersions.KeepNewer => T("Ed_ExistingHintKeepNewer"),
+                _ => T("Ed_ExistingFlowOff")
+            };
+            if (choice == ExistingVersions.InstallOver) { ExistingFlow.Text = T("Ed_ExistingFlowOff"); return; }
+            ExistingFlow.Text = T(choice == ExistingVersions.RemoveAll ? "Ed_ExistingFlowOn" : "Ed_ExistingFlowKeepNewer")
+                + (pattern.Length > 0 ? " " + T("Ed_ExistingFlowName", pattern) : "");
         }
 
         private void UpdateHeader()
@@ -959,7 +968,7 @@ namespace J365.IntunePSApp.Views
                 Number(s => s.CloseAppsCountdown, v => TxtCountdown.Text = v.ToString());
                 Flag(s => s.BlockExecution, v => ChkBlock.IsChecked = v);
                 Flag(s => s.CheckDiskSpace, v => ChkDisk.IsChecked = v);
-                Flag(s => s.RemovePreviousVersions, v => ChkRemovePrev.IsChecked = v);
+                Text(s => ExistingVersions.Of(s), v => SelectTag(CmbExisting, v));
                 Flag(s => s.InstallIfRemovalFails, v => ChkInstallOver.IsChecked = v);
                 Text(s => s.WelcomeMessage, v => TxtWelcome.Text = v);
                 Text(s => s.CompletionMessage, v => TxtCompletion.Text = v);
@@ -1239,7 +1248,8 @@ namespace J365.IntunePSApp.Views
                 Tuple.Create(T("Ed_InstallFor"), (s.InstallBehavior == "User" ? T("Rev_V_User") : T("Rev_V_System")) + "  ·  " + PackageBuilder.MinimumOsLabel(s.MinimumOs) + "+"),
                 Tuple.Create(T("Rev_Experience"), mode + (s.ProcessesToClose.Count > 0 ? T("Rev_V_Closes", string.Join(", ", s.ProcessesToClose)) : "")),
                 Tuple.Create(T("Ed_IntuneNotify"), NotifyLabel(PackageBuilder.IntuneNotifications(s)) + (PackageBuilder.RestartBehavior(s) == "suppress" ? T("Rev_V_NoRestart") : "")),
-                Tuple.Create(T("Rev_Previous"), s.RemovePreviousVersions ? T("Rev_V_Removes", s.UninstallPattern) + T(s.InstallIfRemovalFails ? "Rev_V_RemovesOrOver" : "Rev_V_RemovesOrStops") : T("Rev_V_Keeps")),
+                Tuple.Create(T("Rev_Previous"), !s.RemovePreviousVersions ? T("Rev_V_Keeps")
+                    : T(s.KeepNewerVersion ? "Rev_V_Removes" : "Rev_V_RemovesAll", s.UninstallPattern) + T(s.InstallIfRemovalFails ? "Rev_V_RemovesOrOver" : "Rev_V_RemovesOrStops")),
                 Tuple.Create(T("Rev_Actions"), s.Actions.Count == 0 ? T("Rev_V_None") : string.Join("; ", s.Actions.Select(a => a.TypeLabel))),
                 Tuple.Create(T("Rev_Detection"), s.DetectionMethod switch { "File" => s.DetectionFilePath, "ProductCode" => s.MsiProductCode, _ => s.DetectionNamePattern } + (s.DetectionCheckVersion ? $"  ≥ {s.DetectionVersion}" : "") + (s.DetectionRequireMark ? T("Rev_V_Mark") : "")),
                 Tuple.Create(T("Rev_Branding"), $"{(string.IsNullOrEmpty(s.CompanyName) ? T("Rev_V_NoCompany") : s.CompanyName)} · {s.DialogStyle} · {s.AccentColor}"),
