@@ -1,0 +1,65 @@
+name: Documentation screenshots
+
+# Renders the screenshots of the README and of the user manual (docs/screenshots/<language>) with
+# tools/Render-Screenshots.ps1 on Windows, as the application draws them, and uploads them as the artifact
+# "documentation-screenshots". Nothing is committed: a maintainer looks at the captures and commits them.
+# Runs when this workflow or the rendering script changes on main, and on demand (Actions > Run workflow).
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths: [ '.github/workflows/screenshots.yml', 'tools/Render-Screenshots.ps1' ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: documentation-screenshots
+  cancel-in-progress: true
+
+jobs:
+  render:
+    name: Render the documentation screenshots
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build the application
+        run: dotnet build src/IntunePSApp -c Release
+
+      - name: Download the sample installers
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'installers'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          # 7-Zip: the x64 MSI of its latest release (github.com/ip7z/7zip); 24.09 from 7-zip.org when that cannot be read.
+          $url = gh api repos/ip7z/7zip/releases/latest --jq '[.assets[] | select(.name | test("^7z[0-9]+-x64\\.msi$")) | .browser_download_url][0] // empty'
+          if ($LASTEXITCODE -ne 0 -or -not $url) { $url = 'https://www.7-zip.org/a/7z2409-x64.msi' }
+          Write-Host "7-Zip MSI: $url"
+          Invoke-WebRequest -Uri $url -OutFile (Join-Path $dir (Split-Path $url -Leaf))
+          # A second package made before the captures, so Home and My packages are not empty.
+          Invoke-WebRequest -Uri 'https://aka.ms/vs/17/release/vc_redist.x64.exe' -OutFile (Join-Path $dir 'VC_redist.x64.exe')
+          Get-ChildItem $dir | Format-Table Name, Length
+
+      - name: Render the screenshots
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'installers'
+          $msi = (Get-ChildItem $dir -Filter '7z*-x64.msi' | Select-Object -First 1).FullName
+          ./tools/Render-Screenshots.ps1 -Installer $msi -Extra (Join-Path $dir 'VC_redist.x64.exe')
+          Get-ChildItem docs/screenshots -Recurse -Filter *.png | Measure-Object | ForEach-Object { "Screenshots: $($_.Count)" }
+
+      - name: Upload the screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation-screenshots
+          path: docs/screenshots/
+          if-no-files-found: error

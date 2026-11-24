@@ -4,7 +4,7 @@
 
 <p align="center"><b>Fewer repetitive tasks. More consistent deployment packages.</b><br>A visual workspace to prepare, customize, test and publish Windows applications.</p>
 <p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v3.0.4/J365-IntunePSApp-3.0.4-win-x64.zip"><img src="docs/assets/download-en.svg" alt="Download J365 IntunePSApp 3.0.4 — Windows x64" width="400"></a></p>
-<p align="center"><a href="#features">Explore the features</a> · <a href="#get-started">Get started</a> · <a href="docs/USER-GUIDE.md">User guide</a> · <a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/tag/v3.0.4">Release notes</a></p>
+<p align="center"><a href="#features">Explore the features</a> · <a href="#get-started">Get started</a> · <a href="docs/USER-GUIDE.md"><b>User manual</b></a> · <a href="https://github.com/sesantanajr/J365-IntunePSApp/releases/tag/v3.0.4">Release notes</a></p>
 <p align="center"><a href="https://github.com/sesantanajr/J365-IntunePSApp/actions/workflows/build.yml"><img alt="Build and tests" src="https://github.com/sesantanajr/J365-IntunePSApp/actions/workflows/build.yml/badge.svg"></a> <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-315CF5?style=flat-square"></a> <img alt="Windows x64" src="https://img.shields.io/badge/Windows-x64-0A5CA8?style=flat-square"></p>
 
 ## Your next deployment package starts here
@@ -15,14 +15,18 @@ Turn an MSI or EXE installer — or any application of the winget catalog and th
 | --- | --- | --- |
 | A catalog of winget and the Microsoft Store, installer analysis, silent-switch suggestions and batch deploy. | Silent installation or with notification, company logo, colors, messages and reusable defaults. | Review before building, tests, logs and protection against stale package publishing. |
 
-<a href="docs/screenshots/en/home-dark.png"><img src="docs/screenshots/en/home-dark.png" alt="J365 IntunePSApp 3.0: database, packages, toolkit and Intune connection at a glance" width="100%"></a>
+<a href="docs/screenshots/en/home-dark.png"><img src="docs/screenshots/en/home-dark.png" alt="J365 IntunePSApp 3.0.4: database, packages, toolkit and Intune connection at a glance" width="100%"></a>
 
-**One complete workflow:** catalog or installer → application → experience → actions → uninstall → detection → branding → build → test → publish. Every screen is explained in the **[user guide](docs/USER-GUIDE.md)**.
+**One complete workflow:** catalog or installer → application → experience → actions → uninstall → detection → branding → build → test → publish. Every screen is explained in the **[user manual](docs/USER-GUIDE.md)**.
+
+## User manual
+
+**[Open the user manual](docs/USER-GUIDE.md)**: every screen, step by step and with captures — installation and first run, the catalog (winget and Microsoft Store), the eight steps of the editor, tests, connecting and publishing to Intune, supersedence, the install status, batch deploy, settings, updating the application, the command line and troubleshooting. *Em português: [Manual de uso](docs/USER-GUIDE.pt-BR.md).*
 
 <a id="features"></a>
 ## Explore the features
 
-Actual **3.0** captures with a demonstration company (Contoso) and the 7-Zip MSI, packaged for real. Click images to enlarge. The Intune connection is a sample: nothing was published to a tenant.
+Actual **3.0.4** captures with a demonstration company (Contoso) and the 7-Zip MSI, packaged for real. Click images to enlarge. The Intune connection is a sample: nothing was published to a tenant.
 
 ### 01 · Find any application
 
@@ -44,7 +48,7 @@ Choose between an installation **with notification** (the windows of the package
 
 ### 04 · Plan updates and detection
 
-Whatever is installed is removed before installing (only a newer version is kept), and if a copy cannot be removed the installation stops instead of leaving two versions side by side. Detect by name/version, product code or file, with the package mark, and test the rule on your computer.
+Choose what each package does with the versions already installed: **remove any version** (older, the same or newer) and install again, **keep a newer version**, or **install over** what is there. Shared components (Visual C++ and .NET runtimes, WebView2, Edge) are never removed, and if a copy cannot be removed the installation stops instead of leaving two versions side by side. With **Reinstall also where the app is already installed**, Intune runs the package once on every device, also where an earlier package installed the app. Detect by name/version, product code or file, with the package mark, and test the rule on your computer.
 
 <table><tr><td width="50%"><b>Previous and kept versions</b><br><a href="docs/screenshots/en/uninstall.png"><img src="docs/screenshots/en/uninstall.png" alt="Previous version handling" width="100%"></a></td><td width="50%"><b>Detection rules and local checks</b><br><a href="docs/screenshots/en/detection.png"><img src="docs/screenshots/en/detection.png" alt="Detection rules and local checks" width="100%"></a></td></tr></table>
 
@@ -56,19 +60,19 @@ Use your company name, logo and accent color in the PSAppDeployToolkit dialogs, 
 
 ### 06 · Generate, test and know when to rebuild
 
-One click builds the PSAppDeployToolkit package, the detection script and the `.intunewin`, with the commands and the instructions for Intune. Test it here or in Windows Sandbox. Changed settings mark the result as outdated and disable publishing and testing until you generate it again.
+One click builds the PSAppDeployToolkit package, the detection script and the `.intunewin`, with the commands and the instructions for Intune, showing the real percentage and the time left while it works. Test it here or in Windows Sandbox. Changed settings mark the result as outdated and disable publishing and testing until you generate it again.
 
 <table><tr><td width="50%"><b>Package ready for Intune</b><br><a href="docs/screenshots/en/generated.png"><img src="docs/screenshots/en/generated.png" alt="Package ready for Intune" width="100%"></a></td><td width="50%"><b>Outdated package: generate again</b><br><a href="docs/screenshots/en/needs-rebuild.png"><img src="docs/screenshots/en/needs-rebuild.png" alt="Outdated package warning" width="100%"></a></td></tr></table>
 
 ### 07 · Connect, publish and follow the installation
 
-Connect with your account, an app certificate kept in the TPM, an existing registration or Azure Cloud Shell. Create or update the app in Intune with upload progress, the icon, detection, requirements and an optional assignment — or, new in 2.8, publish the new version as a new app that **supersedes** the earlier one and roll it out group by group. **Status in Intune** then shows the devices installed, failed and pending, with every error code explained. [Publishing guide](docs/INTUNE-PUBLISH.md).
+Connect with your account, an app certificate kept in the TPM, an existing registration or Azure Cloud Shell. Create or update the app in Intune with the upload percentage and time left, the icon, detection, requirements and an optional assignment — or, new in 2.8, publish the new version as a new app that **supersedes** the earlier one and roll it out group by group. **Status in Intune** then shows the devices installed, failed and pending, with every error code explained. [Publishing guide](docs/INTUNE-PUBLISH.md).
 
 <table><tr><td width="50%"><b>Ways to connect</b><br><a href="docs/screenshots/en/connection.png"><img src="docs/screenshots/en/connection.png" alt="Microsoft Intune connection options" width="100%"></a></td><td width="50%"><b>Publish to Intune</b><br><a href="docs/screenshots/en/publish.png"><img src="docs/screenshots/en/publish.png" alt="Publishing dialog" width="100%"></a></td></tr><tr><td width="50%"><b>A new version that supersedes the earlier one</b><br><a href="docs/screenshots/en/publish-supersede.png"><img src="docs/screenshots/en/publish-supersede.png" alt="Update an earlier version, supersede it, or create another app" width="100%"></a></td><td width="50%"><b>Status in Intune</b><br><a href="docs/screenshots/en/status.png"><img src="docs/screenshots/en/status.png" alt="Devices installed, failed and pending, with the error codes explained" width="100%"></a></td></tr></table>
 
 ### 08 · Deploy many applications at once
 
-Tick applications of the catalog (winget or Microsoft Store), set what they share, and generate — and optionally publish — them all. Anything that would need a guess is skipped with the reason and can be finished in the editor.
+Tick applications of the catalog (winget or Microsoft Store), set what they share, and generate — and optionally publish — them all. The shared choices include what to do with the versions already installed and the reinstall where the app already is; each application shows its step, percentage and time left. Anything that would need a guess is skipped with the reason and can be finished in the editor.
 
 <a href="docs/screenshots/en/batch.png"><img src="docs/screenshots/en/batch.png" alt="Batch packaging and deploy with the state of every application" width="100%"></a>
 
@@ -101,7 +105,14 @@ Test locally or in **Windows Sandbox**, where available, with results and logs. 
 
 1. Use the download button at the top and extract the ZIP.
 2. Open **`J365.IntunePSApp.exe`** and complete tool preparation. The runtime is included; no .NET SDK is required.
-3. Select an installer or a catalog application, configure the project and review before building — or tick several applications (winget or Microsoft Store) and deploy them together. Validate in a pilot group before distribution. The [user guide](docs/USER-GUIDE.md) walks through every screen.
+3. Select an installer or a catalog application, configure the project and review before building — or tick several applications (winget or Microsoft Store) and deploy them together. Validate in a pilot group before distribution. The [user manual](docs/USER-GUIDE.md) walks through every screen.
+
+## New in 3.0.1 to 3.0.4
+
+- **Remove any installed version** (3.0.1): one choice, in the editor, the company defaults and the batch. The package removes older versions, the same one and newer ones before installing, silently or with notification; shared components are never removed.
+- **Reinstall also where the app is already installed** (3.0.3): Intune runs the package once on every device, even where an earlier package of the same app installed it (until now the mark of that package made Intune consider the app installed).
+- **Real percentage and time left** (3.0.2 and 3.0.4): while the `.intunewin` is created (the six passes of Microsoft's tool, measured by the actual work), on each application of the batch, during the upload to Intune (reported every 10% before) and on downloads.
+- **A clearer batch** (3.0.1): the catalog bar on one line, with the count, and texts in the singular for one application.
 
 ## New in 3.0
 
@@ -110,16 +121,16 @@ Test locally or in **Windows Sandbox**, where available, with results and logs. 
 - **Removal guaranteed before installing:** whatever is installed goes first, the same version included. An MSI by its product code; an .exe by the switches of the package, by the silent command it registered or by the switches of Inno Setup and NSIS, recognised on the device. If a copy is still installed, the installation stops with an error (or installs over it, if you allow it).
 - **Less for an antivirus to doubt:** the executable is no longer compressed and the application no longer removes the "mark of the web" of the files it downloads. Smart App Control still requires a signed release ([how to sign](docs/SIGNING.md)).
 
-2.8 brought supersedence (a new version, group by group) and the install status in Intune; 2.7, update checks that work on company networks and the [user guide](docs/USER-GUIDE.md). All changes: [CHANGELOG](CHANGELOG.md).
+2.8 brought supersedence (a new version, group by group) and the install status in Intune; 2.7, update checks that work on company networks and the [user manual](docs/USER-GUIDE.md). All changes: [CHANGELOG](CHANGELOG.md).
 ## Quality as the product evolves
 
-Every release passes **456 automated tests** on Windows (generated scripts parsed by Windows PowerShell 5.1, packaging, detection, the publication end to end against a local stand-in of Microsoft Graph, the install status, the Microsoft Store parsing, batch planning, localization) plus interface checks that render the editor, settings, connection, publishing, status and batch windows in both languages and themes. The Microsoft Store search and the update check were also exercised against the live services. See the [quality review](docs/QUALITY.md).
+Every release passes **496 automated tests** on Windows (generated scripts parsed by Windows PowerShell 5.1, packaging, detection, the publication end to end against a local stand-in of Microsoft Graph, the install status, the Microsoft Store parsing, batch planning, localization) plus interface checks that render the editor, settings, connection, publishing, status and batch windows in both languages and themes. The Microsoft Store search and the update check were also exercised against the live services. See the [quality review](docs/QUALITY.md).
 
 Existing projects remain readable. Updating the editor does not change existing tenant applications. New packages carry a revision record; regenerate legacy packages to create one.
 
 **Compatibility:** WPF/.NET 10 editor for Windows x64. ARM64 package settings do not imply a native ARM64 editor. Silent switches, detection and restart behavior depend on the installer and require testing. Publishing to a live tenant (packages and Microsoft Store apps) should be validated with a pilot group.
 
-**Signing:** releases up to 3.0.0 are not Authenticode-signed. See the [code signing policy](#code-signing-policy) below and the [signing guidance](docs/SIGNING.md) if Windows policy blocks execution.
+**Signing:** releases are not Authenticode-signed yet (3.0.4 included). See the [code signing policy](#code-signing-policy) below and the [signing guidance](docs/SIGNING.md) if Windows policy blocks execution.
 
 ## Code signing policy
 
@@ -133,7 +144,7 @@ Signed releases start with the first version published after the project is acce
 
 ## Documentation & community
 
-[User guide](docs/USER-GUIDE.md) · [Changelog](CHANGELOG.md) · [Quality review](docs/QUALITY.md) · [Intune publishing](docs/INTUNE-PUBLISH.md) · [Building](docs/BUILDING.md) · [Architecture](docs/ARCHITECTURE.md)
+[User manual](docs/USER-GUIDE.md) · [Changelog](CHANGELOG.md) · [Quality review](docs/QUALITY.md) · [Intune publishing](docs/INTUNE-PUBLISH.md) · [Building](docs/BUILDING.md) · [Architecture](docs/ARCHITECTURE.md)
 
 [Contribute](CONTRIBUTING.md) · [Report an issue](https://github.com/sesantanajr/J365-IntunePSApp/issues) · [Security](SECURITY.md) · [SHA256SUMS.txt](https://github.com/sesantanajr/J365-IntunePSApp/releases/download/v3.0.4/SHA256SUMS.txt)
 

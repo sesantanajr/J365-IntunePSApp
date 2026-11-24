@@ -1,8 +1,8 @@
 <p align="center"><a href="USER-GUIDE.md">English</a> · <strong>Português (Brasil)</strong></p>
 
-# J365 IntunePSApp — Guia de uso
+# J365 IntunePSApp — Manual de uso
 
-De um instalador (`.msi` ou `.exe`) ou de um aplicativo do catálogo até um app Win32 no Microsoft Intune: este guia percorre todas as telas do **J365 IntunePSApp 3.0** com capturas reais. Os exemplos usam uma empresa fictícia, a *Contoso*, e o MSI do 7-Zip.
+De um instalador (`.msi` ou `.exe`) ou de um aplicativo do catálogo até um app Win32 no Microsoft Intune: este manual percorre todas as telas do **J365 IntunePSApp 3.0.4** com capturas reais. Os exemplos usam uma empresa fictícia, a *Contoso*, e o MSI do 7-Zip.
 
 | Você quer… | Vá para |
 | --- | --- |
@@ -116,7 +116,7 @@ Ações prontas, cada uma na sua fase (*antes/depois da instalação*, *antes/de
 
 O Intune executa a regra de detecção antes e depois de instalar. Detecte pelo **nome e versão mínima** em *Aplicativos instalados* (recomendado), pelo **código do produto MSI** ou por um **arquivo** (com versão mínima opcional).
 
-**Exigir a marca deste pacote (recomendado)**: o pacote grava `HKLM\SOFTWARE\J365\IntunePSApp\Apps\<app>` ao terminar, e a detecção exige essa marca. Assim, uma cópia instalada manualmente ou por outra ferramenta conta como *não instalada* e o Intune executa o seu pacote ali (que então a substitui, ou a mantém quando é a mesma versão ou uma mais nova). **Testar neste computador** executa a regra aqui; **Ver o script** mostra exatamente o que o Intune vai executar.
+**Exigir a marca deste pacote (recomendado)**: o pacote grava `HKLM\SOFTWARE\J365\IntunePSApp\Apps\<app>` ao terminar, e a detecção exige essa marca. Assim, uma cópia instalada manualmente ou por outra ferramenta conta como *não instalada* e o Intune executa o seu pacote ali, que trata as versões instaladas conforme a etapa 5. Uma cópia instalada por um pacote anterior deste app já tem a marca e conta como instalada — para reinstalar também nesses dispositivos, ligue **Reinstalar também onde o app já está instalado** (etapa 5). **Testar neste computador** executa a regra aqui; **Ver o script** mostra exatamente o que o Intune vai executar.
 
 ### Etapa 7 — Visual
 
@@ -130,7 +130,9 @@ Nome da empresa, logo, cor de destaque, estilo das janelas (*Fluent* ou *Clássi
 
 A revisão lista cada escolha e qualquer aviso (por exemplo, um `.exe` sem parâmetros silenciosos). **Gerar pacote** (ou **F5**) monta a pasta:
 
-![Gerando: cada etapa com o seu progresso](screenshots/pt-BR/progress.png)
+![Gerando: a porcentagem real e o tempo restante](screenshots/pt-BR/progress.png)
+
+Enquanto gera, o editor mostra a porcentagem real e o tempo restante — inclusive na criação do `.intunewin`, a etapa mais longa, medida pelo trabalho real da ferramenta da Microsoft ou do empacotador interno.
 
 ```
 <Pacotes>\7-Zip_26.06\
@@ -230,7 +232,7 @@ Todos os pacotes da pasta de saída, do mais recente ao mais antigo (ou *Nome A�
 | **Geral** | Idioma da interface, **verificar novas versões** (e **Verificar agora**), instalação para o usuário, atalho na área de trabalho, a pasta dos pacotes e a pasta de dados (com **Logs**). |
 | **Aparência** | Claro, escuro ou igual ao Windows. |
 | **Empresa** | Nome da empresa, logo, cor de destaque e estilo das janelas dos pacotes novos. |
-| **Padrões** | Tipo de instalação (silenciosa ou com notificação), contagem regressiva, bloqueio, verificação de disco, versões anteriores e o que fazer se a remoção falhar, mensagens, arquitetura e idioma preferidos dos instaladores. |
+| **Padrões** | Tipo de instalação (silenciosa ou com notificação), contagem regressiva, bloqueio, verificação de disco, o que fazer com as versões já instaladas (remover qualquer versão, manter uma mais nova ou instalar por cima) e se a remoção falhar, mensagens, arquitetura e idioma preferidos dos instaladores. |
 | **Microsoft Intune** | A conexão: conta ou certificado, tenant, **Verificar a assinatura**, **Renovar o certificado**, **Desconectar**. |
 | **Componentes** | O banco de dados de aplicativos (**Endereço de atualização**, frequência da verificação, **Baixar novamente**, **Importar arquivo (offline)...**), o PSAppDeployToolkit e o IntuneWinAppUtil. |
 | **Sobre** | Versão, assinatura do executável, autor e licenças. |
@@ -249,11 +251,13 @@ O aplicativo procura uma versão nova ao iniciar (no máximo uma vez por dia, e 
 
 A verificação lê os arquivos da última versão no github.com, então funciona em redes corporativas onde o limite da API do GitHub (60 consultas por hora, divididas por todos que saem pelo mesmo endereço) se esgota. Cópias até a 2.6.0 só consultavam essa API: se uma continuar dizendo *você tem a versão mais recente*, baixe a versão mais recente uma vez e use **Configurações > Geral > Atualizar a cópia instalada**.
 
+Uma versão publicada há menos de um ou dois minutos pode ainda não aparecer: se uma versão acabou de sair e o aplicativo diz *você tem a versão mais recente*, verifique de novo em instantes.
+
 ## 12. Linha de comando
 
 ```powershell
 J365.IntunePSApp.exe --build <project.json|instalador> [--out <pasta>] [--native]
-J365.IntunePSApp.exe --batch <id1,id2,...> [--mode Silent|Notify] [--company <nome>] [--out <pasta>]
+J365.IntunePSApp.exe --batch <id1,id2,...> [--mode Silent|Notify] [--company <nome>] [--existing RemoveAll|KeepNewer|InstallOver] [--reinstall] [--out <pasta>]
                      [--publish [--if-exists Update|Supersede|CreateNew|Fail [--supersedence Update|Replace]]
                                 [--assign none|available|required] [--assign-to AllUsers|AllDevices|Group] [--group <id>]]
 J365.IntunePSApp.exe --sandbox <pasta do pacote>
@@ -262,7 +266,7 @@ J365.IntunePSApp.exe --install [--desktop-shortcut] [--quiet] | --uninstall [--p
 J365.IntunePSApp.exe --version | --help
 ```
 
-O `--batch` aceita IDs do winget e IDs de produto da Microsoft Store. O `--publish` usa a conexão deste computador (o certificado é a escolha natural para execuções agendadas); `--if-exists Supersede` publica cada versão nova como um app novo que substitui o anterior.
+O `--batch` aceita IDs do winget e IDs de produto da Microsoft Store. `--existing` escolhe o que cada pacote faz com as versões já instaladas (`RemoveAll` remove qualquer versão) e `--reinstall` reinstala também onde o app já está instalado. O `--publish` usa a conexão deste computador (o certificado é a escolha natural para execuções agendadas); `--if-exists Supersede` publica cada versão nova como um app novo que substitui o anterior.
 
 ## 13. Logs e solução de problemas
 
@@ -279,6 +283,8 @@ O `--batch` aceita IDs do winget e IDs de produto da Microsoft Store. O `--publi
 | O IntuneWinAppUtil falhou | O empacotador interno gera o mesmo `.intunewin` automaticamente; caminhos muito longos vão direto para ele. Uma pasta de pacotes mais curta permite usar a ferramenta da Microsoft. |
 | O Intune diz *não detectado* depois de instalar | Confira o nome do programa das etapas 5 e 6 com **Ver correspondências neste PC** e **Testar neste computador**; a saída da detecção explica uma marca do pacote ausente. |
 | O Intune recusa (401/403) | A janela explica: função não ativa (PIM), sem licença ou assinatura do Intune, consentimento ausente. A conexão por certificado dispensa funções de usuário. |
+| O Intune diz *instalado*, mas o app não foi reinstalado | Um pacote anterior do mesmo app deixou a marca, e o Intune não executa o pacote onde o app já está na versão exigida. Ligue **Reinstalar também onde o app já está instalado** (etapa 5), gere e publique de novo. |
+| *Você tem a versão mais recente* logo depois de uma versão nova sair | Espere um ou dois minutos e clique em **Verificar agora** de novo. |
 | Testes ou publicação falham com "Constrained Language" | Uma política de App Control restringe o PowerShell; versões assinadas do aplicativo mantêm o PowerShell completo. |
 
 Dúvidas e problemas: [abra uma issue](https://github.com/sesantanajr/J365-IntunePSApp/issues) com o log do aplicativo (remova dados sensíveis antes).

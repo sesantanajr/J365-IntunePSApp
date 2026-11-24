@@ -1,4 +1,4 @@
-# Revisão de qualidade — versão 2.8
+# Revisão de qualidade — versão 3.0.4
 
 *English summary below.*
 
@@ -6,12 +6,23 @@
 
 | Etapa | O que verifica |
 | --- | --- |
-| Testes automatizados (Windows, a cada push) | **456 testes**: geração do script do PSAppDeployToolkit (validado pelo Windows PowerShell 5.1), detecção, marca do pacote, `.intunewin`, metadados do Intune, a publicação de ponta a ponta (o `Publish-ToIntune.ps1` no Windows PowerShell 5.1 contra um Microsoft Graph simulado: criação, envio, confirmação, substituição, atribuição), o status de instalação (páginas do relatório, função renomeada, exportação, recusa), leitura da Microsoft Store, planejamento e regras do lote, ícones genéricos, idiomas (chaves e marcadores nos dois idiomas), verificação de versões sem a API do GitHub, versões mantidas pelo pacote, caminhos longos, publicação sem duplicatas. `J365_LIVE_TESTS=1` inclui as verificações contra o GitHub real. |
+| Testes automatizados (Windows, a cada push) | **496 testes**: geração do script do PSAppDeployToolkit (validado pelo Windows PowerShell 5.1), detecção, marca do pacote, `.intunewin`, metadados do Intune, a publicação de ponta a ponta (o `Publish-ToIntune.ps1` no Windows PowerShell 5.1 contra um Microsoft Graph simulado: criação, envio, confirmação, substituição, atribuição), o status de instalação (páginas do relatório, função renomeada, exportação, recusa), leitura da Microsoft Store, planejamento e regras do lote, ícones genéricos, idiomas (chaves e marcadores nos dois idiomas), verificação de versões sem a API do GitHub, versões mantidas pelo pacote, caminhos longos, publicação sem duplicatas. `J365_LIVE_TESTS=1` inclui as verificações contra o GitHub real. |
 | Verificações de interface | O aplicativo renderiza início, catálogo, janela de lote, as 8 etapas do editor, pacotes, configurações, conexão, a janela de publicação com a substituição e a janela de status, em português e inglês, temas claro e escuro, em dois tamanhos de janela; também exercita editar/salvar/reabrir e o aviso de pacote desatualizado. Uma captura ausente reprova a versão. |
 | Executável publicado | Teste de fumaça (`--version` igual à versão da release), `SHA256SUMS.txt` e atestado de procedência da compilação. |
 | Banco de dados (diário) | O gerador avisa quando um padrão de nome curado não corresponde mais ao que os instaladores registram. |
 
-## O que a 2.8 mudou e como foi verificado
+## O que a 3.0 mudou e como foi verificado
+
+| Área | Constatação | Alteração e verificação |
+| --- | --- | --- |
+| Instalação e remoção (3.0.0) | Quatro modos de exibição, adiamentos e uma remoção que mantinha a mesma versão tornavam difícil prever o que o dispositivo receberia. | Dois tipos de instalação (silenciosa ou com notificação), sem adiamento, e a remoção do que estiver instalado antes de instalar. As funções de remoção são executadas no Windows PowerShell 5.1 contra substitutos do toolkit (`Release30Tests`). |
+| Versões já instaladas (3.0.1) | Uma versão mais nova era sempre mantida, e o lote e os padrões não tinham como pedir uma reinstalação limpa. | Uma escolha só (remover qualquer versão, manter uma mais nova, instalar por cima), gravada nas duas opções que já existiam: projetos antigos abrem sem mudança. Componentes compartilhados são marcados `neverRemove` no banco de dados. Os scripts gerados foram conferidos nos dois tipos de instalação e pelo parser do PowerShell. |
+| Porcentagem do `.intunewin` (3.0.2) | Com o IntuneWinAppUtil, a barra parava enquanto a ferramenta calculava os dois hashes (cerca de 40% do tempo) e gravava o arquivo final num buffer, e depois pulava. | O código da ferramenta 1.8.7 foi lido: seis passagens sobre o pacote, com uma linha impressa no início de cada uma. Cada passagem é medida pelos bytes que o processo leu desde a sua linha (`GetProcessIoCounters`), com o seu peso no tempo; o empacotador interno pesa as suas passagens pelo custo. Testes com a sequência real de linhas; o empacotador interno foi cronometrado com um instalador de 300 MB. |
+| Marca do pacote (3.0.3) | Num dispositivo onde um pacote anterior do mesmo app tinha instalado a versão exigida, o Intune considerava o app instalado e não executava o pacote novo: *remover qualquer versão* nunca era aplicada (caso real: Adobe Acrobat). | Opção *Reinstalar também onde o app já está instalado*: a rodada fica gravada na marca e a detecção a exige. Um teste no Windows grava a marca no registro e executa a detecção real (sem marca, marca de um pacote anterior, outra rodada, esta rodada). |
+| Envio ao Intune (3.0.4) | O script informava o envio a cada 10%: num pacote de 770 MB, a barra ficava parada até um minuto, sem número. | O envio é informado a cada ponto, no máximo uma vez por segundo; a janela mostra a porcentagem e o tempo restante, também nos downloads. O laço foi simulado no PowerShell. |
+| Lote (3.0.1 e 3.0.2) | O botão *Gerar em lote* esticava com muitos nomes; "Gerar 1 pacotes"; nenhum número na barra de cada aplicativo. | Barra em uma linha com o contador, textos no singular, porcentagem e tempo restante por aplicativo. |
+
+## Revisão anterior — versão 2.8
 
 | Área | Constatação | Alteração e verificação |
 | --- | --- | --- |
@@ -36,6 +47,7 @@ A 2.7 partiu dos logs de uma máquina real (aplicativo, `build.log`, logs do PSA
 
 ## Limites
 
+- A reinstalação por rodada (3.0.3) e a porcentagem do envio (3.0.4) foram verificadas com testes e simulações; o comportamento num tenant real deve ser confirmado com um grupo piloto.
 - Não houve publicação em um tenant real nesta revisão: a substituição, o status de instalação, a publicação de apps da Microsoft Store pelo Graph beta, o lote com publicação e a manutenção da mesma versão em dispositivos foram verificados contra serviços simulados e devem ser validados com um grupo piloto. O formato da exportação do relatório de instalação não é documentado; a leitura aceita as formas conhecidas (colunas e linhas, ou linhas como objetos).
 - Cópias até a 2.6.0 só consultam a API do GitHub: numa rede com o limite esgotado, precisam ser atualizadas uma vez manualmente.
 - A verificação dos arquivos do PSAppDeployToolkit cobre o módulo e o inicializador assinados; os arquivos não assinados do template são recopiados da release oficial quando a cópia é reinstalada.
@@ -43,7 +55,7 @@ A 2.7 partiu dos logs de uma máquina real (aplicativo, `build.log`, logs do PSA
 
 ## English summary
 
-Each release runs 456 automated tests on Windows, renders every page (including the batch, publishing and status windows) in both languages and themes, smoke-tests the published executable and publishes checksums and a provenance attestation. 2.8 adds supersedence — a new version published as a new app that supersedes the earlier one, linked as the Intune admin center links them and tested end to end against a local stand-in of Microsoft Graph — and the install status of a published app, read through the report functions of Intune with the documented export as the fallback. It was not exercised against a live tenant: validate it with a pilot group. 2.7 started from the logs of a real machine and a review of the whole code: the update check no longer depends on the GitHub API (whose limit a company network shares), the same version already installed is kept instead of reinstalled, long OneDrive paths no longer break IntuneWinAppUtil, the built-in packager stores installers instead of recompressing them, apps of the Microsoft Store are published through Graph beta without duplicates, one window runs per data folder with safely written settings, and many interface and text issues were fixed. Publishing to a live tenant still has to be validated with a pilot group.
+Each release runs 496 automated tests on Windows, renders every page (including the batch, publishing and status windows) in both languages and themes, smoke-tests the published executable and publishes checksums and a provenance attestation. 3.0.1–3.0.4 add one choice for the versions already installed (remove any version included), the reinstall where an earlier package of the app left its mark, and a real percentage with the time left while the `.intunewin` is created, on each item of the batch and during the upload to Intune. 2.8 adds supersedence — a new version published as a new app that supersedes the earlier one, linked as the Intune admin center links them and tested end to end against a local stand-in of Microsoft Graph — and the install status of a published app, read through the report functions of Intune with the documented export as the fallback. It was not exercised against a live tenant: validate it with a pilot group. 2.7 started from the logs of a real machine and a review of the whole code: the update check no longer depends on the GitHub API (whose limit a company network shares), the same version already installed is kept instead of reinstalled, long OneDrive paths no longer break IntuneWinAppUtil, the built-in packager stores installers instead of recompressing them, apps of the Microsoft Store are published through Graph beta without duplicates, one window runs per data folder with safely written settings, and many interface and text issues were fixed. Publishing to a live tenant still has to be validated with a pilot group.
 
 ## Revisão anterior — versão 2.6
 

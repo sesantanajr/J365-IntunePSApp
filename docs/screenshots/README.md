@@ -13,6 +13,8 @@ pwsh .\tools\Render-Screenshots.ps1 -Installer <7z…-x64.msi> -Extra <VC_redist
 
 [`tools/Render-Screenshots.ps1`](../../tools/Render-Screenshots.ps1) (PowerShell 7) builds the demonstration data (database and PSAppDeployToolkit copied from `-CopyFrom`, or downloaded with `--setup`), renders every page in both languages and both themes at 1440×900, renders the editor checks (an outdated package, an empty search) apart, copies the captures below into this folder and removes the demonstration folder. The build workflow renders the same pages for its interface checks (`interface-captures` artifact) with a generic project.
 
+Without a Windows computer at hand, **Actions > Documentation screenshots > Run workflow** runs the same script on a Windows runner of GitHub (the 7-Zip MSI of its latest release and the Visual C++ Redistributable are downloaded there) and gives the captures in the `documentation-screenshots` artifact, to look at and copy into this folder. It also runs when the workflow or the script changes on `main`.
+
 ## Files
 
 | File | Capture | Theme |
