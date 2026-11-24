@@ -1331,6 +1331,8 @@
   "Publish_Validate": "Validar pacote",
   "Publish_ValidateTitle": "Validação do pacote (nada foi enviado ao Intune)",
   "Ed_PublishRunning": "Publicação no Intune em andamento: acompanhe a janela do PowerShell.",
+  "Busy_Eta": "cerca de {0} restantes",
+  "Ed_PublishRunningInApp": "Publicação no Intune em andamento: a porcentagem e o tempo restante aparecem na janela de publicação.",
   "Ed_PublishCreated": "Publicado no Intune: {0} foi criado no tenant {1}.",
   "Ed_PublishUpdated": "Publicado no Intune: {0} foi atualizado no tenant {1}.",
   "Ed_PublishAssigned": "Atribuição: {0}.",

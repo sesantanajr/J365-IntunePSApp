@@ -183,7 +183,7 @@ When something fails, the window says why and what to do (role not active in PIM
 - **Advanced options**: **Run in a PowerShell window**, or **Copy command** to run `Publish-ToIntune.ps1` yourself (it works without the application too).
 - **Validate package** checks everything without connecting.
 
-The upload shows its progress. Intune receives the app, its icon, the install/uninstall commands, the detection script, the requirements (architecture, minimum Windows), return codes, notifications and restart behavior. An incomplete app is removed if anything fails or you cancel. The result card then links to **Open in Intune** and **Status in Intune**. See [INTUNE-PUBLISH.md](INTUNE-PUBLISH.md) for the details and the command line.
+The upload shows its percentage and the time left. Intune receives the app, its icon, the install/uninstall commands, the detection script, the requirements (architecture, minimum Windows), return codes, notifications and restart behavior. An incomplete app is removed if anything fails or you cancel. The result card then links to **Open in Intune** and **Status in Intune**. See [INTUNE-PUBLISH.md](INTUNE-PUBLISH.md) for the details and the command line.
 
 ### A new version, group by group (supersedence)
 

@@ -183,7 +183,7 @@ Quando algo falha, a janela diz o motivo e o que fazer (função não ativa no P
 - **Opções avançadas**: **Executar numa janela do PowerShell**, ou **Copiar comando** para executar o `Publish-ToIntune.ps1` você mesmo (ele funciona também sem o aplicativo).
 - **Validar pacote** confere tudo sem conectar.
 
-O envio mostra o progresso. O Intune recebe o app, o ícone, os comandos de instalação e desinstalação, o script de detecção, os requisitos (arquitetura, Windows mínimo), os códigos de retorno, as notificações e o comportamento de reinício. Um app incompleto é removido se algo falhar ou se você cancelar. O cartão de resultado então mostra **Abrir no Intune** e **Status no Intune**. Detalhes e linha de comando no [INTUNE-PUBLISH.md](INTUNE-PUBLISH.md).
+O envio mostra a porcentagem e o tempo restante. O Intune recebe o app, o ícone, os comandos de instalação e desinstalação, o script de detecção, os requisitos (arquitetura, Windows mínimo), os códigos de retorno, as notificações e o comportamento de reinício. Um app incompleto é removido se algo falhar ou se você cancelar. O cartão de resultado então mostra **Abrir no Intune** e **Status no Intune**. Detalhes e linha de comando no [INTUNE-PUBLISH.md](INTUNE-PUBLISH.md).
 
 ### Uma versão nova, grupo a grupo (substituição)
 

@@ -958,6 +958,7 @@ try
             $buffer = New-Object byte[] $BlockSize
             [int64]$sent = 0
             $lastShown = -1
+            $shownClock = [System.Diagnostics.Stopwatch]::StartNew()
             while ($true)
             {
                 # A block is filled completely before it is sent (a zip stream may return less than asked).
@@ -979,7 +980,14 @@ try
                 $blockIds.Add($blockId)
                 $sent += $filled
                 $percent = [int]([math]::Floor($sent * 100 / [math]::Max(1, $encryptedSize)))
-                if ($percent -ge $lastShown + 10 -or $sent -ge $encryptedSize) { Write-Host ('  ' + $percent + ' %') -ForegroundColor Gray; $lastShown = $percent }
+                # Every point of the upload, at most once a second, and the last one: the application shows the percentage
+                # as it goes (a line every 10% left the bar still for a minute on a large package).
+                if (($percent -gt $lastShown -and $shownClock.ElapsedMilliseconds -ge 1000) -or $sent -ge $encryptedSize)
+                {
+                    Write-Host ('  ' + $percent + ' %') -ForegroundColor Gray
+                    $lastShown = $percent
+                    $shownClock.Restart()
+                }
             }
             if ($sent -ne $encryptedSize) { throw ('The upload sent ' + $sent + ' bytes, but the package has ' + $encryptedSize + '.') }
         }

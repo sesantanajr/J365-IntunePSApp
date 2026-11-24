@@ -213,7 +213,17 @@
             <TextBlock x:Name="BusyTitle" Style="{StaticResource H2}" VerticalAlignment="Center"/>
           </StackPanel>
           <TextBlock x:Name="BusyText" Style="{StaticResource MutedText}" Margin="0,8,0,16" TextWrapping="Wrap"/>
-          <ProgressBar x:Name="BusyProgress" Height="6" IsIndeterminate="True"/>
+          <!-- The bar with its percentage when the work says how far it is (download, upload), and the time left at its pace -->
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*"/>
+              <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <ProgressBar x:Name="BusyProgress" Height="6" IsIndeterminate="True" VerticalAlignment="Center"/>
+            <TextBlock x:Name="BusyPercentText" Grid.Column="1" MinWidth="44" TextAlignment="Right" Margin="12,0,0,0" FontSize="13.5" FontWeight="SemiBold"
+                       Foreground="{DynamicResource Ink}" Typography.NumeralAlignment="Tabular" VerticalAlignment="Center" Visibility="Collapsed"/>
+          </Grid>
+          <TextBlock x:Name="BusyEta" Style="{StaticResource Hint}" Margin="0,8,0,0" Visibility="Collapsed"/>
           <Button x:Name="BusyCancel" Content="{l:T Common_Cancel}" Style="{StaticResource SecondaryButton}" HorizontalAlignment="Right" Margin="0,18,0,0" Click="BusyCancel_Click"/>
         </StackPanel>
       </Border>

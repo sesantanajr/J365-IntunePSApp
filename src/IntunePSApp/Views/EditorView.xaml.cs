@@ -1636,6 +1636,8 @@ namespace J365.IntunePSApp.Views
         private string _publishFolder;
         private PublishResult _publishResult;
         private bool _publishRunning;
+        /// <summary>The publication runs inside the application: its progress is in the publishing window, not in a PowerShell window.</summary>
+        private bool _publishInApp;
 
         private async void Publish_Click(object sender, RoutedEventArgs e)
         {
@@ -1715,6 +1717,7 @@ namespace J365.IntunePSApp.Views
             _publishFolder = intune;
             _publishResult = null;
             _publishRunning = true;
+            _publishInApp = true;
             RefreshPublishStatus();
             string title = T("Publish_InAppTitle", HeaderTitle.Text);
             var ct = main.ShowBusy(title, T("Publish_StepSignIn"));
@@ -1740,6 +1743,7 @@ namespace J365.IntunePSApp.Views
                 main.HideBusy();
                 main.SetStatus(null);
                 _publishRunning = false;
+                _publishInApp = false;
                 RefreshPublishStatus();
                 Ui.Error(ex.Message);
                 return;
@@ -1747,6 +1751,7 @@ namespace J365.IntunePSApp.Views
             main.HideBusy();
             main.SetStatus(null);
             _publishRunning = false;
+            _publishInApp = false;
             if (_publishFolder != intune) return;
             var result = IntunePublisher.ReadResult(intune);
             if (result != null && File.GetLastWriteTimeUtc(IntunePublisher.ResultFile(intune)) < started.AddSeconds(-5)) result = null;
@@ -1808,7 +1813,7 @@ namespace J365.IntunePSApp.Views
             bool failed = r != null && !ok && r.Status != "cancelled";
             PublishStatus.SetResourceReference(Border.BackgroundProperty, ok ? "SuccessSoft" : failed ? "DangerSoft" : "BrandSoft");
             PublishStatusIcon.SetResourceReference(TextBlock.ForegroundProperty, ok ? "Success" : failed ? "Danger" : "Brand");
-            string text = r == null ? T("Ed_PublishRunning") : PublishSummary(r);
+            string text = r == null ? T(_publishInApp ? "Ed_PublishRunningInApp" : "Ed_PublishRunning") : PublishSummary(r);
             // Intune refused the caller: why (certain when the subscriptions of the tenant are known), what Intune said when
             // it says more, and what identifies the request for support.
             bool refused = IsRefused(r);

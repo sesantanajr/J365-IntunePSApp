@@ -21,7 +21,7 @@ body:
     id: version
     attributes:
       label: J365 IntunePSApp version and Windows version / Versão do aplicativo e do Windows
-      placeholder: "3.0.3 - Windows 11 25H2 - portable / installed"
+      placeholder: "3.0.4 - Windows 11 25H2 - portable / installed"
     validations:
       required: true
   - type: textarea

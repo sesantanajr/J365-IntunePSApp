@@ -421,6 +421,7 @@ namespace J365.IntunePSApp
             BusyTitle.Text = title;
             BusyText.Text = text;
             BusyProgress.IsIndeterminate = true;
+            SetBusyPercent(null);
             BusyCancel.Visibility = cancellable ? Visibility.Visible : Visibility.Collapsed;
             BusyOverlay.Visibility = Visibility.Visible;
             return _busyCts.Token;
@@ -435,8 +436,13 @@ namespace J365.IntunePSApp
                 BusyProgress.IsIndeterminate = false;
                 BusyProgress.Value = read * 100.0 / total.Value;
                 BusyText.Text = T("Busy_Progress", done, (total.Value / 1048576d).ToString("N1", culture));
+                SetBusyPercent(BusyProgress.Value);
             }
-            else BusyText.Text = done + " MB";
+            else
+            {
+                BusyText.Text = done + " MB";
+                SetBusyPercent(null);
+            }
         }
 
         public void HideBusy() => BusyOverlay.Visibility = Visibility.Collapsed;
@@ -445,13 +451,46 @@ namespace J365.IntunePSApp
         public void BusyStatus(string text, bool indeterminate = true)
         {
             BusyText.Text = text;
-            if (indeterminate) BusyProgress.IsIndeterminate = true;
+            if (indeterminate)
+            {
+                BusyProgress.IsIndeterminate = true;
+                SetBusyPercent(null);
+            }
         }
 
         public void BusyPercent(int percent)
         {
             BusyProgress.IsIndeterminate = false;
             BusyProgress.Value = Math.Clamp(percent, 0, 100);
+            SetBusyPercent(BusyProgress.Value);
+        }
+
+        private long _busyMeasuredSince;
+        private bool _busyMeasured;
+
+        /// <summary>
+        /// "47%" beside the bar and the time left at the pace so far, counted from the first measure of the step; null hides
+        /// them (a step that does not say how far it is).
+        /// </summary>
+        private void SetBusyPercent(double? percent)
+        {
+            if (percent is not double p)
+            {
+                _busyMeasured = false;
+                BusyPercentText.Visibility = BusyEta.Visibility = Visibility.Collapsed;
+                return;
+            }
+            if (!_busyMeasured)
+            {
+                _busyMeasured = true;
+                _busyMeasuredSince = System.Diagnostics.Stopwatch.GetTimestamp();
+            }
+            p = Math.Clamp(p, 0, 100);
+            BusyPercentText.Text = Math.Floor(p).ToString("0", Loc.Instance.Culture) + "%";
+            BusyPercentText.Visibility = Visibility.Visible;
+            var left = Core.BatchItem.Estimate(System.Diagnostics.Stopwatch.GetElapsedTime(_busyMeasuredSince), p);
+            BusyEta.Text = left is TimeSpan t ? T("Busy_Eta", Core.BuildProgress.Duration(t)) : "";
+            BusyEta.Visibility = left.HasValue ? Visibility.Visible : Visibility.Collapsed;
         }
 
         private void BusyCancel_Click(object sender, RoutedEventArgs e) => _busyCts?.Cancel();

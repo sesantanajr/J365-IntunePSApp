@@ -2,6 +2,13 @@
 
 All notable changes to J365 IntunePSApp. Versions follow [Semantic Versioning](https://semver.org).
 
+## 3.0.4 - 2026-11-24
+
+### Fixed
+
+- **The upload to Intune shows its percentage.** The publishing script said how far the upload was every 10%, so the bar of a large package (770 MB) stood still for a minute at a time with no number. It now says it every point, at most once a second, and the publishing window shows the percentage beside the bar and the time left at the pace so far. The same window shows them for the download of an installer and of an update of the application; the items of the batch follow each point too.
+- While a publication runs inside the application, the editor no longer says to follow a PowerShell window that is not there.
+
 ## 3.0.3 - 2026-11-24
 
 ### Added
