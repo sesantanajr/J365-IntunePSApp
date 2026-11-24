@@ -31,6 +31,8 @@ namespace J365.CatalogBuilder;
 public static class Program
 {
     private const string DefaultSource = "https://codeload.github.com/microsoft/winget-pkgs/tar.gz/refs/heads/master";
+    /// <summary>Versions kept per package: the newest is the entry; the next ones are where it falls back when its links are gone.</summary>
+    private const int KeptVersions = 4;
 
     public static async Task<int> Main(string[] args)
     {
@@ -41,7 +43,8 @@ public static class Program
         var sw = Stopwatch.StartNew();
 
         Console.WriteLine($"Source: {source}");
-        var best = new Dictionary<string, VersionDir>(StringComparer.OrdinalIgnoreCase);
+        // The newest versions of each package, newest first.
+        var versions = new Dictionary<string, List<VersionDir>>(StringComparer.OrdinalIgnoreCase);
         string commit = null;
         long entries = 0, dirs = 0;
 
@@ -65,10 +68,12 @@ public static class Program
                 if (segs.Length < 3) return; // letter/publisher/.../version
                 string version = segs[^1];
                 string id = string.Join('.', segs.Skip(1).Take(segs.Length - 2));
-                if (!best.TryGetValue(id, out var cur) || VersionCompare(version, cur.Version) > 0)
-                {
-                    best[id] = new VersionDir { Id = id, Version = version, Files = new Dictionary<string, string>(files) };
-                }
+                if (!versions.TryGetValue(id, out var list)) versions[id] = list = new List<VersionDir>(1);
+                int at = list.FindIndex(v => VersionCompare(version, v.Version) > 0);
+                if (at < 0 && list.Count >= KeptVersions) return;
+                var entry = new VersionDir { Id = id, Version = version, Files = new Dictionary<string, string>(files) };
+                if (at < 0) list.Add(entry); else list.Insert(at, entry);
+                if (list.Count > KeptVersions) list.RemoveAt(list.Count - 1);
             }
 
             TarEntry e;
@@ -97,11 +102,11 @@ public static class Program
                 if (e.DataStream == null) continue;
                 using var sr = new StreamReader(e.DataStream, Encoding.UTF8);
                 files[rel[(slash + 1)..]] = sr.ReadToEnd();
-                if (entries % 50000 == 0) Console.WriteLine($"  {entries:N0} entries read, {best.Count:N0} packages ({sw.Elapsed:mm\\:ss})");
+                if (entries % 50000 == 0) Console.WriteLine($"  {entries:N0} entries read, {versions.Count:N0} packages ({sw.Elapsed:mm\\:ss})");
             }
             Flush();
         }
-        Console.WriteLine($"Read finished: {entries:N0} entries, {dirs:N0} versions, {best.Count:N0} packages ({sw.Elapsed:mm\\:ss}).");
+        Console.WriteLine($"Read finished: {entries:N0} entries, {dirs:N0} versions, {versions.Count:N0} packages ({sw.Elapsed:mm\\:ss}).");
 
         Dictionary<string, CuratedEntry> curated = new(StringComparer.OrdinalIgnoreCase);
         if (!string.IsNullOrEmpty(curatedPath) && File.Exists(curatedPath))
@@ -112,9 +117,9 @@ public static class Program
         }
 
         var deserializer = new DeserializerBuilder().IgnoreUnmatchedProperties().Build();
-        var apps = new List<CatalogApp>(best.Count);
+        var apps = new List<CatalogApp>(versions.Count);
         int errors = 0;
-        foreach (var vd in best.Values)
+        foreach (var vd in versions.Values.Select(l => l[0]))
         {
             try
             {
@@ -129,6 +134,13 @@ public static class Program
                 if (errors <= 20) Console.WriteLine($"  [warning] {vd.Id} {vd.Version}: {ex.Message}");
             }
         }
+        // The links: every installer the application can package is asked whether it still gives the file. When no link
+        // of the newest version does, the newest earlier version whose link works takes its place; when none works, the
+        // installers keep the answer ("g") and the application offers the vendor's page instead of a download that fails.
+        LinkReport links = null;
+        if (!args.Contains("--no-link-check", StringComparer.OrdinalIgnoreCase))
+            links = await CheckLinksAsync(apps, versions, deserializer, sw);
+
         apps.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
 
         // A curated id that matches no package is dead weight (the package was renamed or removed): say so in the log.
@@ -169,12 +181,96 @@ public static class Program
         {
             await JsonSerializer.SerializeAsync(gzOut, catalog, opts);
         }
-        var meta = new { schema = 2, generated = catalog.Generated, count = catalog.Count, source = catalog.Source, commit, sizeBytes = new FileInfo(gzPath).Length };
+        var meta = new
+        {
+            schema = 2, generated = catalog.Generated, count = catalog.Count, source = catalog.Source, commit, sizeBytes = new FileInfo(gzPath).Length,
+            links = links == null ? null : new { asked = links.Links, gone = links.Gone, unknown = links.Unknown, fellBack = links.FellBack, unavailable = links.Unavailable, applied = links.Applied }
+        };
         File.WriteAllText(Path.Combine(outDir, "catalog-meta.json"), JsonSerializer.Serialize(meta, new JsonSerializerOptions { WriteIndented = true }));
         int withDeps = apps.Count(a => a.Dependencies != null || a.Installers.Any(i => i.Dependencies != null && i.Dependencies.Count > 0)), withPt = apps.Count(a => a.DescriptionPt != null);
         Console.WriteLine($"Catalog: {apps.Count:N0} applications ({withDeps:N0} with dependencies, {withPt:N0} with a Portuguese description), {errors} errors, {new FileInfo(gzPath).Length / 1024.0 / 1024.0:N1} MB compressed ({sw.Elapsed:mm\\:ss}).");
         if (apps.Count < 1000) { Console.WriteLine("ERROR: the catalog is suspiciously small; refusing to publish it."); return 1; }
         return 0;
+    }
+
+    // ------------------------------------------------------------------ links
+
+    private static readonly HashSet<string> PackagedTypes = new(StringComparer.OrdinalIgnoreCase) { "exe", "msi", "wix", "inno", "nullsoft", "burn" };
+
+    /// <summary>The installers the application packages (the others are never downloaded by it).</summary>
+    public static List<CatalogInstaller> Packaged(CatalogApp app)
+        => (app?.Installers ?? new List<CatalogInstaller>()).Where(i => PackagedTypes.Contains(i.Type ?? "") && !string.IsNullOrWhiteSpace(i.Url)).ToList();
+
+    public sealed class LinkReport { public int Links, Gone, Unknown, FellBack, Unavailable; public bool Applied; }
+
+    private static async Task<LinkReport> CheckLinksAsync(List<CatalogApp> apps, Dictionary<string, List<VersionDir>> versions, IDeserializer des, Stopwatch sw)
+    {
+        using var checker = new LinkChecker();
+        var urls = apps.SelectMany(Packaged).Select(i => i.Url).Distinct(StringComparer.Ordinal).ToList();
+        Console.WriteLine($"Links: asking {urls.Count:N0} installer links ({sw.Elapsed:mm\\:ss})...");
+        await checker.CheckAllAsync(urls, n => Console.WriteLine($"  {n:N0} links asked ({sw.Elapsed:mm\\:ss})"));
+        var report = new LinkReport
+        {
+            Links = urls.Count,
+            Gone = urls.Count(u => checker.Known(u).State == LinkChecker.State.Gone),
+            Unknown = urls.Count(u => checker.Known(u).State == LinkChecker.State.Unknown)
+        };
+        Console.WriteLine($"Links: {report.Links:N0} asked, {report.Gone:N0} gone, {report.Unknown:N0} without an answer ({sw.Elapsed:mm\\:ss}).");
+        return await ApplyLinksAsync(apps, versions, des, checker, report, sw);
+    }
+
+    /// <summary>
+    /// Marks the gone links and puts an earlier version in place of a package whose links are all gone. A run whose
+    /// network failed must not mark the database: with more than 15% of the links gone, nothing changes.
+    /// </summary>
+    public static async Task<LinkReport> ApplyLinksAsync(List<CatalogApp> apps, Dictionary<string, List<VersionDir>> versions, IDeserializer des,
+        LinkChecker checker, LinkReport report, Stopwatch sw = null)
+    {
+        if (report.Links == 0 || report.Gone > report.Links * 0.15)
+        {
+            Console.WriteLine("  [warning] too many links gone: the network of this run is suspect, no link is marked.");
+            return report;
+        }
+        report.Applied = true;
+        for (int k = 0; k < apps.Count; k++)
+        {
+            var app = apps[k];
+            var packaged = Packaged(app);
+            if (packaged.Count == 0) continue;
+            Mark(packaged, checker);
+            if (packaged.Any(i => i.Gone == null)) continue;
+            CatalogApp replacement = null;
+            if (versions != null && versions.TryGetValue(app.Id, out var list))
+                foreach (var older in list.Skip(1))
+                {
+                    CatalogApp candidate;
+                    try { candidate = BuildApp(older, des); } catch { continue; }
+                    var cp = Packaged(candidate);
+                    if (cp.Count == 0) continue;
+                    await Task.WhenAll(cp.Select(i => checker.CheckAsync(i.Url)));
+                    Mark(cp, checker);
+                    if (cp.Any(i => i.Gone == null)) { replacement = candidate; break; }
+                }
+            if (replacement != null)
+            {
+                replacement.Extra = app.Extra;
+                replacement.FallbackFrom = app.Version;
+                apps[k] = replacement;
+                report.FellBack++;
+            }
+            else report.Unavailable++;
+        }
+        Console.WriteLine($"Links: {report.FellBack:N0} packages use an earlier version whose link works, {report.Unavailable:N0} have no link that works" + (sw == null ? "." : $" ({sw.Elapsed:mm\\:ss})."));
+        return report;
+    }
+
+    private static void Mark(IEnumerable<CatalogInstaller> installers, LinkChecker checker)
+    {
+        foreach (var i in installers)
+        {
+            var (state, detail) = checker.Known(i.Url);
+            i.Gone = state == LinkChecker.State.Gone ? detail : null;
+        }
     }
 
     private static string Arg(string[] args, string name)
@@ -410,10 +506,14 @@ public class CatalogApp
     [JsonPropertyName("dep")] public List<string> Dependencies { get; set; }
     [JsonPropertyName("i")] public List<CatalogInstaller> Installers { get; set; }
     [JsonPropertyName("x")] public CuratedEntry Extra { get; set; }
+    /// <summary>The newest version in winget, when every link of it was gone and this earlier version took its place.</summary>
+    [JsonPropertyName("fb")] public string FallbackFrom { get; set; }
 }
 
 public class CatalogInstaller
 {
+    /// <summary>Why the link no longer gives the file ("404", "410", "dns"); null when it answered or could not be judged.</summary>
+    [JsonPropertyName("g")] public string Gone { get; set; }
     [JsonPropertyName("a")] public string Arch { get; set; }
     [JsonPropertyName("t")] public string Type { get; set; }
     [JsonPropertyName("nt")] public string NestedType { get; set; }

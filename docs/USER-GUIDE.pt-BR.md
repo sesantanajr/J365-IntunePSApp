@@ -49,7 +49,7 @@ Atalhos: **Ctrl+K** busca no catálogo · **Ctrl+N** novo pacote · **Ctrl+O** a
 
 ![Catálogo: resultados, instaladores e a curadoria do 7-Zip](screenshots/pt-BR/catalog.png)
 
-1. Digite um nome, fabricante ou ID do winget. **Somente compatíveis** esconde formatos que não podem ser empacotados (MSIX, ZIP, portátil); a linha acima dos resultados diz quantos foram escondidos.
+1. Digite um nome, fabricante ou ID do winget. **Somente compatíveis** esconde formatos que não podem ser empacotados (MSIX, ZIP, portátil) e os aplicativos cujo link do fabricante está fora do ar (o banco de dados confere os links todos os dias e, quando a versão mais nova do winget tem o link quebrado, usa a anterior que funciona); a linha acima dos resultados diz quantos foram escondidos.
 2. Escolha um resultado: os detalhes listam cada **instalador** (arquitetura, tipo, escopo, idioma e os **parâmetros silenciosos** que serão usados), a licença, a curadoria do Jornada 365 (aplicativos a fechar, nome em *Aplicativos instalados*, parâmetros de desinstalação) e as dependências.
 3. **Baixar e empacotar** baixa o instalador do endereço oficial do fabricante, confere o SHA256 com o manifesto do winget e abre tudo no editor já preenchido. **Adicionar ao lote** coloca o aplicativo na fila do [deploy em lote](#8-deploy-em-lote).
 
@@ -279,6 +279,8 @@ O `--batch` aceita IDs do winget e IDs de produto da Microsoft Store. `--existin
 | Sintoma | O que fazer |
 | --- | --- |
 | O Windows bloqueia o executável | SmartScreen: *Mais informações > Executar assim mesmo*. Controle Inteligente de Aplicativos / App Control: veja o [SIGNING.md](SIGNING.md). |
+| "Não foi possível baixar o instalador" (HTTP 404) ou *Link indisponível* | O fabricante tirou o arquivo do link registrado no winget. O aplicativo oferece abrir o site do fabricante: baixe o instalador e arraste-o em **Novo pacote** (a análise confere a assinatura e o banco de dados completa os parâmetros). A próxima atualização do banco de dados usa uma versão cujo link funciona, quando existe. |
+| O SHA256 do arquivo não confere | O fabricante publicou outro arquivo no mesmo link: por segurança ele não é usado. Baixe-o no site do fabricante e arraste-o em **Novo pacote**. |
 | "Não foi possível verificar novas versões" | Rede ou proxy; a mensagem diz o motivo (e quando um limite da API do GitHub libera). |
 | O IntuneWinAppUtil falhou | O empacotador interno gera o mesmo `.intunewin` automaticamente; caminhos muito longos vão direto para ele. Uma pasta de pacotes mais curta permite usar a ferramenta da Microsoft. |
 | O Intune diz *não detectado* depois de instalar | Confira o nome do programa das etapas 5 e 6 com **Ver correspondências neste PC** e **Testar neste computador**; a saída da detecção explica uma marca do pacote ausente. |

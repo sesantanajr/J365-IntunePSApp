@@ -125,6 +125,7 @@ namespace J365.IntunePSApp.Core
         public string Initials => App?.Initials ?? "?";
         public string AvatarColor => App?.AvatarColor ?? "#0A5CA8";
         public string InstallerLabel => Installer?.IsStore == true ? T("Batch_StoreInstaller")
+            : Installer == null && App?.LinksGone == true ? T("Batch_LinkGone")
             : Installer == null || !Installer.IsSupported ? T("Batch_NoInstaller")
             : $"{Installer.TypeLabel}  ·  {Installer.ArchLabel}  ·  {Installer.ScopeLabel}";
         public string StateLabel => T("Batch_State_" + State);
@@ -315,6 +316,7 @@ namespace J365.IntunePSApp.Core
         private static async Task RunOneAsync(BatchItem item, AppConfig cfg, BatchOptions o, Action<Action> post, CancellationToken ct)
         {
             if (item.App?.IsStore == true) { await PublishStoreAsync(item, cfg, o, ct); return; }
+            if (item.Installer == null && item.App?.LinksGone == true) { item.Finish(BatchState.Skipped, T("Batch_LinkGone")); return; }
             if (item.Installer == null || !item.Installer.IsSupported) { item.Finish(BatchState.Skipped, T("Batch_NoInstaller")); return; }
             try
             {
@@ -354,6 +356,18 @@ namespace J365.IntunePSApp.Core
             catch (OperationCanceledException)
             {
                 item.Finish(BatchState.Cancelled, T("Batch_CancelledItem"));
+            }
+            catch (HashMismatchException ex)
+            {
+                // Not the file winget registered: never used. Someone has to look at it (the vendor's page has it).
+                Log.Warn(T("Log_BatchSkipped", item.Title, ex.Message));
+                item.Finish(BatchState.Skipped, T("Batch_FileChanged"));
+            }
+            catch (DownloadGoneException ex)
+            {
+                // Gone since the last check of the database: nothing to retry, the reason is the answer.
+                Log.Warn(T("Log_BatchSkipped", item.Title, ex.Message));
+                item.Finish(BatchState.Skipped, T("Batch_LinkGone"));
             }
             catch (Exception ex)
             {

@@ -1,23 +1,29 @@
-## J365 IntunePSApp 3.0.4
+## J365 IntunePSApp 3.0.5
 
 ### Português
 
-Porcentagem real no envio ao Intune.
+Todo aplicativo que o catálogo oferece baixa.
 
-- **O envio ao Intune mostra a porcentagem.** O script de publicação só informava o andamento a cada 10%: num pacote grande (770 MB), a barra ficava parada por até um minuto, sem número. Agora ele informa cada ponto, no máximo uma vez por segundo, e a janela de publicação mostra a porcentagem ao lado da barra e o tempo restante. A mesma janela mostra os dois no download de um instalador e de uma atualização do app; os itens do lote também acompanham cada ponto.
-- Durante uma publicação feita dentro do app, o editor não pede mais para acompanhar uma janela do PowerShell que não existe.
+- **Links conferidos todos os dias.** Cerca de 2% dos links de instaladores do winget davam 404: o fabricante tira o arquivo do ar e links temporários expiram antes de o manifesto mudar (o Autodesk DWG TrueView 2027 falhava com "404 (Not Found)"). O banco de dados agora confere cada link que o app empacota. Quando a versão mais nova do winget está com o link quebrado, a versão anterior que funciona entra no lugar; quando nenhuma funciona, o aplicativo fica marcado como **Link indisponível**.
+- **Nada de download que vai falhar.** *Somente compatíveis* esconde esses aplicativos, os detalhes explicam o motivo e o lote os pula com a razão. Um instalador cujo link funciona vem antes de um preferido que está fora do ar.
+- **Mensagens claras.** Um 404 não é mais tentado três vezes, e o app oferece abrir o site do fabricante para baixar o instalador e arrastá-lo em Novo pacote. Um arquivo cujo SHA256 não confere com o winget continua nunca sendo usado, agora com a explicação.
+
+O banco de dados com os links conferidos é gerado logo depois desta versão e, a partir daí, todos os dias. Para buscá-lo na hora: Configurações > Componentes > Baixar novamente.
 
 ### English
 
-A real percentage while uploading to Intune.
+Every application the catalog offers downloads.
 
-- **The upload to Intune shows its percentage.** The publishing script reported the upload every 10%: on a large package (770 MB) the bar stood still for up to a minute with no number. It now reports every point, at most once a second, and the publishing window shows the percentage beside the bar and the time left. The same window shows both for the download of an installer and of an application update; the items of the batch follow every point too.
-- While a publication runs inside the application, the editor no longer says to follow a PowerShell window that is not there.
+- **Links checked every day.** About 2% of the installer links of winget answered 404: vendors take files off their servers and time-limited links expire before the manifest changes (Autodesk DWG TrueView 2027 failed with "404 (Not Found)"). The database now checks every link the application packages. When the newest version in winget has a broken link, the earlier version that works takes its place; when none works, the application is marked **Link unavailable**.
+- **No download that will fail.** *Supported only* hides those applications, the details say why and the batch skips them with the reason. An installer whose link works comes before a preferred one that is gone.
+- **Clear messages.** A 404 is no longer retried three times, and the application offers the vendor's site to download the installer and drop it on New package. A file whose SHA256 differs from winget's is still never used, now with an explanation.
+
+The database with the checked links is built right after this release and every day from then on. To get it at once: Settings > Components > Download again.
 
 ### Download
 
-- `J365-IntunePSApp-3.0.4-win-x64.zip`: extraia e execute `J365.IntunePSApp.exe` / extract and run the portable application.
-- `J365-IntunePSApp-3.0.4-source.zip`: código-fonte / source code.
+- `J365-IntunePSApp-3.0.5-win-x64.zip`: extraia e execute `J365.IntunePSApp.exe` / extract and run the portable application.
+- `J365-IntunePSApp-3.0.5-source.zip`: código-fonte / source code.
 - `SHA256SUMS.txt`: verificações SHA-256 / SHA-256 checksums.
 
 Já tem o J365 IntunePSApp? Em **Configurações > Geral > Verificar agora** ele baixa e instala esta versão. / Already using it? **Settings > General > Check now** downloads and installs this version.

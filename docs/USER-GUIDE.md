@@ -49,7 +49,7 @@ Shortcuts: **Ctrl+K** search the catalog · **Ctrl+N** new package · **Ctrl+O**
 
 ![Catalog: results, installers and the curated knowledge of 7-Zip](screenshots/en/catalog.png)
 
-1. Type a name, publisher or winget ID. **Supported only** hides formats that cannot be packaged (MSIX, ZIP, portable); the line above the results says how many it hid.
+1. Type a name, publisher or winget ID. **Supported only** hides formats that cannot be packaged (MSIX, ZIP, portable) and the applications whose vendor link is dead (the database checks the links every day and, when the newest version in winget has a broken link, uses the earlier one that works); the line above the results says how many it hid.
 2. Pick a result: the details list every **installer** (architecture, type, scope, language and the **silent switches** that will be used), the license, the curation of Jornada 365 (applications to close, name in *Installed apps*, uninstall switches) and the dependencies.
 3. **Download and package** downloads the installer from the vendor's official address, checks its SHA256 against the winget manifest and opens it in the editor already filled in. **Add to batch** queues it for [batch deploy](#8-batch-deploy).
 
@@ -279,6 +279,8 @@ J365.IntunePSApp.exe --version | --help
 | Symptom | What to do |
 | --- | --- |
 | Windows blocks the executable | SmartScreen: *More info > Run anyway*. Smart App Control / App Control: see [SIGNING.md](SIGNING.md). |
+| "Could not download the installer" (HTTP 404) or *Link unavailable* | The vendor took the file off the link registered in winget. The application offers the vendor's site: download the installer and drop it on **New package** (the analysis checks its signature and the database fills in the switches). The next update of the database uses a version whose link works, when there is one. |
+| The SHA256 of the file does not match | The vendor published another file at the same link: for safety it is not used. Download it from the vendor's site and drop it on **New package**. |
 | "Could not check for new versions" | Network or proxy; the message says why (and when a GitHub API limit frees up). |
 | IntuneWinAppUtil failed | The built-in packager makes the same `.intunewin` automatically; very long paths go straight to it. A shorter packages folder lets Microsoft's tool be used. |
 | Intune says *not detected* after installing | Check the program name of step 5/6 with **Show matches on this PC** and **Test on this computer**; the detection output explains a missing package mark. |

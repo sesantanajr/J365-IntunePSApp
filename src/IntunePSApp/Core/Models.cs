@@ -478,13 +478,18 @@ namespace J365.IntunePSApp.Core
         [JsonIgnore] public string Subtitle => string.IsNullOrEmpty(Publisher) ? Id : $"{Publisher}  ·  {Id}";
         [JsonIgnore] public string TypesLabel => string.Join("  ", (Installers ?? new List<CatalogInstaller>()).Select(i => i.TypeLabel).Distinct().Take(3));
         [JsonIgnore] public bool HasCuration => Extra != null;
-        [JsonIgnore] public bool IsSupported => Installers != null && Installers.Any(i => i.IsSupported);
+        /// <summary>The newest version in winget, when every link of it was gone and the database took this earlier version.</summary>
+        [JsonPropertyName("fb")] public string FallbackFrom { get; set; }
+        /// <summary>Can be packaged here: an installer of a supported type whose link gives the file.</summary>
+        [JsonIgnore] public bool IsSupported => Installers != null && Installers.Any(i => i.CanDownload);
+        /// <summary>Installers of a supported type, but the daily check of the database found every link gone.</summary>
+        [JsonIgnore] public bool LinksGone => Installers != null && Installers.Any(i => i.IsSupported) && !Installers.Any(i => i.CanDownload);
         /// <summary>An application of the Microsoft Store (found by a live search): Intune installs it from the Store, nothing is packaged.</summary>
         [JsonIgnore] public bool IsStore { get; set; }
         /// <summary>Can be packaged, or published from the Store: it may join a batch.</summary>
         [JsonIgnore] public bool CanDeploy => IsSupported || IsStore;
         /// <summary>The source shown in the list: the Store, or the types of the installers.</summary>
-        [JsonIgnore] public string SourceLabel => IsStore ? T("Type_Store") : TypesLabel;
+        [JsonIgnore] public string SourceLabel => IsStore ? T("Type_Store") : LinksGone ? T("Catalog_LinkGoneLabel") : TypesLabel;
         [JsonIgnore] public string VersionLabel => string.IsNullOrEmpty(Version) ? "" : "v" + Version;
         [JsonIgnore] public string AvatarColor => Names.AvatarColor(Id);
     }
@@ -506,8 +511,16 @@ namespace J365.IntunePSApp.Core
         [JsonPropertyName("sc")] public List<long> SuccessCodes { get; set; }
         [JsonPropertyName("dep")] public List<string> Dependencies { get; set; }
         [JsonPropertyName("arp")] public List<ArpEntry> Arp { get; set; }
+        /// <summary>Why the link no longer gives the file ("404", "410", "dns"), from the daily check of the database; null when it does.</summary>
+        [JsonPropertyName("g")] public string Gone { get; set; }
 
         [JsonIgnore] public bool IsMsi => Type == "msi" || Type == "wix";
+        /// <summary>The link gave the file at the last check of the database.</summary>
+        [JsonIgnore] public bool IsAvailable => string.IsNullOrEmpty(Gone);
+        /// <summary>A supported type whose link gives the file: it can be downloaded and packaged.</summary>
+        [JsonIgnore] public bool CanDownload => IsSupported && IsAvailable;
+        /// <summary>What the check found, for people: "HTTP 404", or an address that no longer exists.</summary>
+        [JsonIgnore] public string GoneLabel => Gone == "dns" ? T("Catalog_GoneDns") : "HTTP " + Gone;
         /// <summary>An installer of the Microsoft Store: Intune installs it, there is nothing to download or package.</summary>
         [JsonIgnore] public bool IsStore => Type == StoreCatalog.InstallerType;
         [JsonIgnore] public bool IsSupported => Type is "exe" or "msi" or "wix" or "inno" or "nullsoft" or "burn";

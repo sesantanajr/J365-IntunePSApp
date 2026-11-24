@@ -219,7 +219,7 @@ namespace J365.IntunePSApp.Core
             var app = ById(appId);
             if (app == null) return new List<DependencyInfo>();
             bool? preferMsi = installerType == "MSI" ? true : installerType == "EXE" ? false : (bool?)null;
-            var installer = PickInstaller(app, string.IsNullOrEmpty(arch) ? ConfigStore.Current.PreferredArch : arch, ConfigStore.Current.PreferredLocale, preferMsi);
+            var installer = PickInstaller(app, string.IsNullOrEmpty(arch) ? ConfigStore.Current.PreferredArch : arch, ConfigStore.Current.PreferredLocale, preferMsi, downloadable: false);
             return DependenciesOf(app, installer);
         }
 
@@ -289,13 +289,17 @@ namespace J365.IntunePSApp.Core
                 .Take(max).ToList();
         }
 
-        /// <summary>Best installer for Intune: preferred architecture, machine scope, MSI when available, preferred language.</summary>
-        public static CatalogInstaller PickInstaller(CatalogApp app, string prefArch = "x64", string prefLocale = "pt-BR", bool? preferMsi = null)
+        /// <summary>
+        /// Best installer for Intune: preferred architecture, machine scope, MSI when available, preferred language.
+        /// <paramref name="downloadable"/>: only installers whose link gives the file (false to recognise a file someone
+        /// downloaded by hand, when the link of the database is gone).
+        /// </summary>
+        public static CatalogInstaller PickInstaller(CatalogApp app, string prefArch = "x64", string prefLocale = "pt-BR", bool? preferMsi = null, bool downloadable = true)
         {
             prefArch = string.IsNullOrEmpty(prefArch) ? "x64" : prefArch;
             bool armTarget = prefArch.StartsWith("arm", StringComparison.OrdinalIgnoreCase);
             // An installer the target cannot run is never an answer: ARM builds on x64/x86, x64 builds on x86.
-            var list = (app?.Installers ?? new List<CatalogInstaller>()).Where(i => i.IsSupported
+            var list = (app?.Installers ?? new List<CatalogInstaller>()).Where(i => (downloadable ? i.CanDownload : i.IsSupported)
                 && (armTarget || !IsArm(i)) && !(prefArch == "x86" && i.Arch == "x64")).ToList();
             if (list.Count == 0) return null;
             prefLocale = string.IsNullOrEmpty(prefLocale) ? "en-US" : prefLocale;

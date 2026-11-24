@@ -28,8 +28,9 @@ jobs:
   catalog:
     name: Build catalog.json.gz from winget-pkgs
     runs-on: ubuntu-latest
-    # A stalled download of the winget-pkgs tarball would otherwise run for 6 hours and hold the queue.
-    timeout-minutes: 45
+    # A stalled download of the winget-pkgs tarball would otherwise run for 6 hours and hold the queue. The build also asks
+    # every installer link whether it still gives the file (about 17,000 links, 6 minutes in November 2026).
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 

@@ -2,6 +2,14 @@
 
 All notable changes to J365 IntunePSApp. Versions follow [Semantic Versioning](https://semver.org).
 
+## 3.0.5 - 2026-11-24
+
+### Fixed
+
+- **Every application the catalog offers downloads.** About 2% of the installer links of winget answer 404: vendors take files off their servers and time-limited links expire long before the manifest changes (Autodesk DWG TrueView 2027 failed with "404 (Not Found)"). The database builder now asks every link the application can package whether it still gives the file (HEAD, then a GET of one byte, a few requests per host; only 404, 410 or a host that no longer exists counts against a link, and a run with more than 15% gone marks nothing). A gone link is written on its installer; when every link of the newest version is gone, the newest earlier version whose link works takes its place. In a full run, 334 of 16,723 links were gone: 16 packages fell back to an earlier version and 275 are marked.
+- The application never offers an installer whose link is gone: *Supported only* hides the application, the list says *Link unavailable*, the details say why and the batch skips it with the reason. An installer whose link works comes before a preferred one that is gone.
+- A download that answers 404 or 410 is no longer retried twice (it waited 6 seconds for nothing), and the message offers the vendor's site. A file whose SHA256 differs from the one winget registered is still never used, now with an explanation instead of the two hashes; in a batch it is skipped with the reason.
+
 ## 3.0.4 - 2026-11-24
 
 ### Fixed

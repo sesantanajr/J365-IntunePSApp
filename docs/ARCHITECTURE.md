@@ -133,7 +133,9 @@ A build is one bar (`BuildProgress`): each step weighs the seconds it should tak
 
 ## Application database
 
-`tools/CatalogBuilder` streams the `microsoft/winget-pkgs` tarball (nothing is cloned), keeps the newest version of each package and writes a compact JSON (short keys, see the classes at the end of `Program.cs`) merged with `catalog/curated.json`. The result is published to the `catalog` release. The application first reads `catalog-meta.json` and downloads the database only when `generated` is newer than its local copy.
+`tools/CatalogBuilder` streams the `microsoft/winget-pkgs` tarball (nothing is cloned), keeps the four newest versions of each package and writes the newest one in a compact JSON (short keys, see the classes at the end of `Program.cs`) merged with `catalog/curated.json`. The result is published to the `catalog` release. The application first reads `catalog-meta.json` and downloads the database only when `generated` is newer than its local copy.
+
+Since 3.0.5 the builder also asks every installer link the application can package whether it still gives the file (`LinkChecker.cs`: HEAD, then a GET of one byte; a few requests per host). Only 404, 410 or a host name that no longer resolves counts against a link; a refusal (403, 429), a server error or a timeout says nothing about the file. A gone link is written on its installer (`"g": "404"`); when every link of the newest version is gone, the newest of the three earlier versions whose link works takes its place (`"fb"`: the version it replaces). With more than 15% of the links gone the run is suspect and nothing is marked. `catalog-meta.json` reports the counts (`links`). The application does not offer an installer whose link is gone: *Supported only* hides the application, the batch skips it with the reason, and a link that dies between two checks fails at once (404 and 410 are not retried) with the vendor's page offered. In November 2026, 334 of 16,723 links were gone: 16 packages fell back to an earlier version and 275 had no working link (Autodesk DWG TrueView 2027 among them).
 
 ## Localization
 

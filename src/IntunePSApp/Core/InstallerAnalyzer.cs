@@ -178,7 +178,7 @@ namespace J365.IntunePSApp.Core
             if (!string.IsNullOrEmpty(x?.UninstallArgs) && info.Type == "EXE") info.UninstallExeArgs = x.UninstallArgs;
             if (info.Technology == TechUnknown && info.Type == "EXE")
             {
-                var ci = CatalogService.PickInstaller(similar, string.IsNullOrEmpty(info.AppArch) ? "x64" : info.AppArch, preferMsi: false);
+                var ci = CatalogService.PickInstaller(similar, string.IsNullOrEmpty(info.AppArch) ? "x64" : info.AppArch, preferMsi: false, downloadable: false);
                 if (ci != null && !ci.IsMsi)
                 {
                     info.InstallArgs = CatalogService.SilentArgsFor(ci);

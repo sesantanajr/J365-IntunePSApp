@@ -277,7 +277,9 @@ namespace J365.IntunePSApp.Views
             DStore.Visibility = a.IsStore ? Visibility.Visible : Visibility.Collapsed;
             // An application of the database that cannot be packaged (MSIX, ZIP, portable) may be in the Store.
             BtnSearchStore.Visibility = !a.IsStore && !a.IsSupported ? Visibility.Visible : Visibility.Collapsed;
-            DNote.Text = a.IsStore ? T("Catalog_StoreNote") : T("Catalog_DownloadNote");
+            DNote.Text = a.IsStore ? T("Catalog_StoreNote")
+                : a.LinksGone ? T("Catalog_LinksGoneNote")
+                : T("Catalog_DownloadNote") + (string.IsNullOrEmpty(a.FallbackFrom) ? "" : " " + T("Catalog_FallbackNote", a.FallbackFrom, a.Version));
             DId.Text = a.Id;
             DLicense.Text = a.License ?? "";
             DLicenseChip.Visibility = string.IsNullOrEmpty(a.License) ? Visibility.Collapsed : Visibility.Visible;
@@ -380,15 +382,15 @@ namespace J365.IntunePSApp.Views
         {
             var i = DInstallers.SelectedItem as CatalogInstaller;
             bool store = _current?.IsStore == true;
-            BtnPackage.IsEnabled = store || (i != null && i.IsSupported);
+            BtnPackage.IsEnabled = store || (i != null && i.CanDownload);
             BtnPackageText.Text = store ? T("Catalog_PublishStore") : T("Catalog_DownloadAndPackage");
             BtnPackageIcon.Text = store ? "\uE898" : "\uE896";
             ShowDependencies();
             if (store) { DInstallerInfo.Text = T("Catalog_StoreSelected"); return; }
             if (i == null) { DInstallerInfo.Text = ""; return; }
-            DInstallerInfo.Text = i.IsSupported
-                ? T("Catalog_Selected", i.TypeLabel, i.ArchLabel, i.ScopeLabel) + (string.IsNullOrEmpty(i.ProductCode) ? "" : T("Catalog_SelectedCode", i.ProductCode))
-                : T("Catalog_Unsupported", i.TypeLabel);
+            DInstallerInfo.Text = !i.IsSupported ? T("Catalog_Unsupported", i.TypeLabel)
+                : !i.IsAvailable ? T("Catalog_InstallerGone", i.GoneLabel)
+                : T("Catalog_Selected", i.TypeLabel, i.ArchLabel, i.ScopeLabel) + (string.IsNullOrEmpty(i.ProductCode) ? "" : T("Catalog_SelectedCode", i.ProductCode));
         }
 
         private void Site_Click(object sender, RoutedEventArgs e)
@@ -408,12 +410,22 @@ namespace J365.IntunePSApp.Views
             var inst = DInstallers.SelectedItem as CatalogInstaller ?? CatalogService.PickInstaller(app);
             var main = MainWindow.Current;
             if (app == null || inst == null || !inst.IsSupported) { main.Toast(T("Catalog_PickSupported"), "warn"); return; }
+            if (!inst.IsAvailable) { main.Toast(T("Catalog_InstallerGone", inst.GoneLabel), "warn"); return; }
             // While a package is generated the editor cannot take another one: nothing is downloaded for nothing.
             if (main.Editor?.IsBuilding == true) { main.Toast(T("Ed_BusyBuilding"), "warn"); return; }
             string dest = await DownloadWithBusyAsync(app, inst);
             if (dest == null) return;
             main.Navigate("editor");
             await main.Editor.LoadFromCatalogAsync(dest, app, inst);
+        }
+
+        /// <summary>Says why the installer cannot be used and, when the database knows the vendor's page, offers to open it.</summary>
+        private static void OfferVendorSite(CatalogApp app, string why)
+        {
+            // Only web pages: the database comes from a public source (see Site_Click).
+            bool site = Uri.TryCreate(app?.Homepage, UriKind.Absolute, out var page) && (page.Scheme == Uri.UriSchemeHttps || page.Scheme == Uri.UriSchemeHttp);
+            if (!site) { Ui.Warn(why); return; }
+            if (Ui.Confirm(why + "\n\n" + T("Catalog_OpenVendorSite"), T("Catalog_OpenSite"), T("Common_Close"))) MainWindow.OpenUrl(page.AbsoluteUri);
         }
 
         /// <summary>Downloads an installer of the database showing the busy overlay. Returns null when cancelled or failed (already reported).</summary>
@@ -429,6 +441,24 @@ namespace J365.IntunePSApp.Views
             catch (OperationCanceledException)
             {
                 main.Toast(T("Catalog_DownloadCancelled"), "warn");
+                return null;
+            }
+            catch (HashMismatchException ex)
+            {
+                // The file at the official link is not the one winget registered (the vendor replaced it, or something
+                // changed it on the way): it is never used. The vendor's page gives the file to check by hand.
+                Log.Error(T("Log_DownloadFailed", ex.Message));
+                main.HideBusy();
+                OfferVendorSite(app, T("Catalog_DownloadChanged", app.Name));
+                return null;
+            }
+            catch (DownloadGoneException ex)
+            {
+                // The vendor took the file off this link after the last check of the database: say so plainly, and offer
+                // the vendor's page, where the file can be downloaded and dropped on New package.
+                Log.Error(T("Log_DownloadFailed", ex.Message));
+                main.HideBusy();
+                OfferVendorSite(app, T("Catalog_DownloadGone", app.Name, ex.Status));
                 return null;
             }
             catch (Exception ex)

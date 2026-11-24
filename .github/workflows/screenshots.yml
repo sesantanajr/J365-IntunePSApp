@@ -33,6 +33,49 @@ jobs:
       - name: Build the application
         run: dotnet build src/IntunePSApp -c Release
 
+      - name: Use a 1920x1080 screen
+        # The screen of the runner is 1024x768, and Windows keeps a window within the screen: the 1440x900 captures came
+        # out at 1044x788 with the compact sidebar. A larger mode is set when the display adapter offers one; without it
+        # the captures are still made, smaller.
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          Add-Type -TypeDefinition @'
+          using System;
+          using System.Runtime.InteropServices;
+          public static class Display
+          {
+              [StructLayout(LayoutKind.Sequential)]
+              public struct DEVMODE
+              {
+                  [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmDeviceName;
+                  public short dmSpecVersion, dmDriverVersion, dmSize, dmDriverExtra;
+                  public int dmFields;
+                  public short dmOrientation, dmPaperSize, dmPaperLength, dmPaperWidth, dmScale, dmCopies, dmDefaultSource, dmPrintQuality;
+                  public short dmColor, dmDuplex, dmYResolution, dmTTOption, dmCollate;
+                  [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmFormName;
+                  public short dmLogPixels;
+                  public int dmBitsPerPel, dmPelsWidth, dmPelsHeight, dmDisplayFlags, dmDisplayFrequency;
+                  public int dmICMMethod, dmICMIntent, dmMediaType, dmDitherType, dmReserved1, dmReserved2, dmPanningWidth, dmPanningHeight;
+              }
+              [DllImport("user32.dll")] public static extern bool EnumDisplaySettings(string device, int mode, ref DEVMODE dm);
+              [DllImport("user32.dll")] public static extern int ChangeDisplaySettings(ref DEVMODE dm, int flags);
+              public static int Set(int width, int height)
+              {
+                  var dm = new DEVMODE();
+                  dm.dmSize = (short)Marshal.SizeOf(typeof(DEVMODE));
+                  if (!EnumDisplaySettings(null, -1, ref dm)) return -100;
+                  dm.dmPelsWidth = width;
+                  dm.dmPelsHeight = height;
+                  dm.dmFields = 0x80000 | 0x100000;
+                  return ChangeDisplaySettings(ref dm, 0);
+              }
+          }
+          '@
+          Write-Host ('ChangeDisplaySettings: ' + [Display]::Set(1920, 1080) + ' (0 = done)')
+          Add-Type -AssemblyName System.Windows.Forms
+          Write-Host ('Screen: ' + [System.Windows.Forms.Screen]::PrimaryScreen.Bounds)
+
       - name: Download the sample installers
         shell: pwsh
         env:

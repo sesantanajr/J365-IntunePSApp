@@ -16,6 +16,20 @@ using static J365.IntunePSApp.Localization.Loc;
 
 namespace J365.IntunePSApp.Core
 {
+    /// <summary>The downloaded file is not the one expected (its SHA256 differs): it is never used.</summary>
+    public sealed class HashMismatchException : IOException
+    {
+        public HashMismatchException(string message) : base(message) { }
+    }
+
+    /// <summary>The server says the file is no longer at this address (404 or 410): asking again will not bring it back.</summary>
+    public sealed class DownloadGoneException : IOException
+    {
+        public DownloadGoneException(string url, int status) : base(T("Err_DownloadGone", status)) { Url = url; Status = status; }
+        public string Url { get; }
+        public int Status { get; }
+    }
+
     public static class Json
     {
         private static readonly object SaveLock = new object();
@@ -386,7 +400,9 @@ namespace J365.IntunePSApp.Core
                     await DownloadOnceAsync(url, tmp, progress, ct);
                     break;
                 }
-                catch (Exception ex) when (attempt < attempts && !ct.IsCancellationRequested && (ex is HttpRequestException || ex is IOException || ex is TimeoutException || ex is OperationCanceledException))
+                // A file the server says is gone (404, 410) is not asked again: only failures that may pass are retried.
+                catch (Exception ex) when (attempt < attempts && !ct.IsCancellationRequested && ex is not DownloadGoneException
+                    && (ex is HttpRequestException || ex is IOException || ex is TimeoutException || ex is OperationCanceledException))
                 {
                     Log.Warn(T("Log_DownloadRetry", attempt, attempts - 1, ex.Message));
                     await Task.Delay(TimeSpan.FromSeconds(2 * attempt), ct);
@@ -404,7 +420,7 @@ namespace J365.IntunePSApp.Core
                 if (!actual.Equals(expectedSha256.Trim(), StringComparison.OrdinalIgnoreCase))
                 {
                     try { File.Delete(tmp); } catch { }
-                    throw new InvalidDataException(T("Err_HashMismatch", expectedSha256, actual));
+                    throw new HashMismatchException(T("Err_HashMismatch", expectedSha256, actual));
                 }
             }
             File.Move(tmp, destination, true);
@@ -421,6 +437,7 @@ namespace J365.IntunePSApp.Core
                 catch (OperationCanceledException) when (!ct.IsCancellationRequested) { throw new TimeoutException(T("Err_DownloadStalled")); }
             }
             using var response = resp;
+            if ((int)resp.StatusCode is 404 or 410) throw new DownloadGoneException(url, (int)resp.StatusCode);
             resp.EnsureSuccessStatusCode();
             long? total = resp.Content.Headers.ContentLength;
             using var src = await resp.Content.ReadAsStreamAsync(ct);
