@@ -56,7 +56,7 @@ From then on publishing needs **no sign-in, no password and no secret**, and it 
 2. The application creates the app registration **J365 IntunePSApp** in your Entra ID: single tenant, public client with the redirect `http://localhost`, **no secret**, and only the delegated permission `DeviceManagementApps.ReadWrite.All`. It creates the enterprise application and grants the **admin consent** for the organisation. Run it again and the same registration is found and repaired, not duplicated.
 3. You sign in with the new registration. The **session is remembered**: its refresh token is stored encrypted for your Windows user (DPAPI) in the data folder of the application. *Sign out* deletes it.
 
-From then on, *Publish to Intune* on the card of a package publishes **inside the application**: no PowerShell window, no new sign-in, with the steps and the upload progress on screen. When Intune already has a version of the same application ("7-Zip 25.01" for a "7-Zip 26.06" package), the dialog offers to **update that app** (it keeps its assignments) or to create a new one.
+From then on, *Publish to Intune* on the card of a package publishes **inside the application**: no PowerShell window, no new sign-in, with the steps, the percentage and the time left of the upload on screen. When Intune already has a version of the same application ("7-Zip 25.01" for a "7-Zip 26.06" package), the dialog offers to **update that app** (it keeps its assignments) or to create a new one.
 
 Publishing always acts **as the signed-in user**, with that user's own Intune rights. If the administrator who ran the setup cannot grant consent for Microsoft Graph, the registration is still created and the application shows the admin consent link for a Global Administrator.
 
@@ -88,7 +88,7 @@ No client secret is created: you sign in with your own account and the permissio
 
 ## Publishing
 
-**From the application:** after generating a package, *Publish to Intune (preview)* asks for the tenant and the client ID (remembered in Settings; no secret is stored), what to do when an app with the same name exists, and an optional assignment. *Validate package* checks everything without connecting. *Publish* opens a PowerShell window; when it finishes, the result card shows the outcome and an *Open in Intune* link.
+**From the application:** after generating a package, *Publish to Intune* asks for the tenant and the client ID (remembered in Settings; no secret is stored), what to do when an app with the same name exists, and an optional assignment. *Validate package* checks everything without connecting. *Publish* opens a PowerShell window; when it finishes, the result card shows the outcome and an *Open in Intune* link.
 
 **By hand:**
 
@@ -115,7 +115,7 @@ powershell -ExecutionPolicy Bypass -File .\Publish-ToIntune.ps1 -TenantId contos
 |---|---|
 | `-ValidateOnly` | Checks the files and values; nothing is sent. |
 | `-DeviceCode` | Signs in with a code instead of the browser. Many organisations block this flow with Conditional Access; prefer the browser. |
-| `-IfExists Ask\|Fail\|Update\|Supersede\|CreateNew` | What to do when an app with the same name exists. `Ask` (default) asks in the window; with `-Force` it stops instead. `Update` sends new content and settings to the existing app and keeps its assignments. `Supersede` creates a new app that supersedes the newest of them (see [below](#a-new-version-update-or-supersede-and-follow-the-installation-28)). |
+| `-IfExists Ask\|Fail\|Update\|Supersede\|CreateNew` | What to do when an app with the same name exists or, when none has it, an app of the same product under another name (the package mark in its notes, packages made since 3.0.6). `Ask` (default) asks in the window; with `-Force` it stops instead. `Update` sends new content and settings to the existing app and keeps its assignments. `Supersede` creates a new app that supersedes the newest of them (see [below](#a-new-version-update-or-supersede-and-follow-the-installation-28)). |
 | `-SupersedenceType Update\|Replace` | With `Supersede`: `Update` (default) installs over the earlier version; `Replace` makes Intune uninstall it first. |
 | `-AppId <id>` | The app to update, or with `Supersede` the app to supersede, instead of looking it up by name. |
 | `-AssignIntent none\|available\|required` | Optional assignment, only for an app created by this run. Default `none`. |
@@ -127,7 +127,7 @@ powershell -ExecutionPolicy Bypass -File .\Publish-ToIntune.ps1 -TenantId contos
 
 1. Reads `intune-app.json`, checks that the files exist, that the `.intunewin` matches the SHA256 recorded when it was generated and that its `Detection.xml` carries the encryption data.
 2. Signs in: authorization code with PKCE in your browser, answered on a local port (or a device code).
-3. Looks for an app with exactly the same name. (Inside the application, the list of earlier versions shows the apps named like the application as a whole word, "Git 2.45" but never "GitHub Desktop"; only an app with exactly this name is preselected. An app of the same name that J365 IntunePSApp did not create is updated only when chosen, and the script says so.)
+3. Looks for an app with exactly the same name; when there is none, for an app of the same product under another name (the line `J365 package mark: ...` of its notes, written since 3.0.6). Two apps of one product assigned to the same devices compete for Windows Installer and satisfy each other's detection, so creating another one anyway is said in the output. (Inside the application, the list of earlier versions shows the apps named like the application as a whole word, "Git 2.45" but never "GitHub Desktop"; only an app with exactly this name is preselected. An app of the same name that J365 IntunePSApp did not create is updated only when chosen, and the script says so.)
 4. Creates the app, creates a content version, uploads the encrypted content in blocks, commits it and waits until Intune confirms it. Throttling and temporary errors are retried.
 5. If anything fails after the app was created, **the incomplete app is deleted again**: no empty entry is left in the tenant.
 6. With `-IfExists Supersede`, links the new app to the earlier version (supersedence) once its content is active. A refused link leaves the new app published and says why.
@@ -155,7 +155,7 @@ Supersedence follows the rules of Intune ([documentation](https://learn.microsof
 - A chain (A superseded by B, B by C) is superseded by its last app. Intune keeps at most 10 apps in one chain: once no device runs a version any more, unassign and delete it.
 - With your account, linking apps takes the Intune permission to relate apps (*Mobile apps > Relate*; Intune Administrator and Application Manager have it). The app certificate uses the application permission `DeviceManagementApps.ReadWrite.All`, which covers it.
 
-The publishing dialog lists the apps of the tenant named like the application, with *Update* for each one and *New app that supersedes* for the newest earlier version. *Create a new app that supersedes it* (in the dialog, the batch window, or `--if-exists Supersede` on the command line) supersedes the newest app with the same name. When Intune refuses the link, the new app stays published and the result card says why; add the link in the admin center (the new app > *Properties > Supersedence*).
+The publishing dialog lists the apps of the tenant named like the application and, since 3.0.6, the apps of the same product under another name (same package mark; creating a second app asks first), with *Update* for each one and *New app that supersedes* for the newest earlier version. *Create a new app that supersedes it* (in the dialog, the batch window, or `--if-exists Supersede` on the command line) supersedes the newest app with the same name. When Intune refuses the link, the new app stays published and the result card says why; add the link in the admin center (the new app > *Properties > Supersedence*).
 
 **Status in Intune.** *Status in Intune* on the result card of a published package, and *Status* in *My packages*, read with the connection of this computer and the same permission:
 
@@ -250,7 +250,7 @@ A partir daí a publicação **não pede login, senha nem segredo** e não depen
 2. O aplicativo cria o registro **J365 IntunePSApp** no seu Entra ID: um único tenant, cliente público com o redirecionamento `http://localhost`, **sem segredo** e só com a permissão delegada `DeviceManagementApps.ReadWrite.All`. Cria o aplicativo empresarial e concede o **consentimento do administrador** para a organização. Executando de novo, o mesmo registro é encontrado e corrigido, não duplicado.
 3. Você entra com o novo registro. A **sessão fica lembrada**: o refresh token é guardado criptografado para o seu usuário do Windows (DPAPI) na pasta de dados do aplicativo. *Sair* o apaga.
 
-Daí em diante, *Publicar no Intune* no cartão de um pacote publica **dentro do aplicativo**: sem janela do PowerShell, sem novo login, com as etapas e o progresso do envio na tela. Quando o Intune já tem uma versão do mesmo aplicativo ("7-Zip 25.01" para um pacote "7-Zip 26.06"), a janela oferece **atualizar esse app** (ele mantém as atribuições) ou criar um novo.
+Daí em diante, *Publicar no Intune* no cartão de um pacote publica **dentro do aplicativo**: sem janela do PowerShell, sem novo login, com as etapas, a porcentagem e o tempo restante do envio na tela. Quando o Intune já tem uma versão do mesmo aplicativo ("7-Zip 25.01" para um pacote "7-Zip 26.06"), a janela oferece **atualizar esse app** (ele mantém as atribuições) ou criar um novo.
 
 A publicação sempre age **como o usuário conectado**, com os direitos de Intune desse usuário. Se o administrador que executou a configuração não puder conceder consentimento para o Microsoft Graph, o registro é criado mesmo assim e o aplicativo mostra o link de consentimento para um Administrador Global.
 
@@ -282,7 +282,7 @@ Nenhum segredo de cliente é criado: você entra com a sua própria conta e a pe
 
 ## Publicando
 
-**Pelo aplicativo:** depois de gerar um pacote, *Publicar no Intune (prévia)* pede o tenant e o ID do cliente (ficam lembrados em Configurações; nenhum segredo é guardado), o que fazer quando já existe um app com o mesmo nome e uma atribuição opcional. *Validar pacote* confere tudo sem conectar. *Publicar* abre uma janela do PowerShell; quando ela termina, o cartão de resultado mostra o que aconteceu e um link *Abrir no Intune*.
+**Pelo aplicativo:** depois de gerar um pacote, *Publicar no Intune* pede o tenant e o ID do cliente (ficam lembrados em Configurações; nenhum segredo é guardado), o que fazer quando já existe um app com o mesmo nome e uma atribuição opcional. *Validar pacote* confere tudo sem conectar. *Publicar* abre uma janela do PowerShell; quando ela termina, o cartão de resultado mostra o que aconteceu e um link *Abrir no Intune*.
 
 **Manualmente:**
 
@@ -309,7 +309,7 @@ powershell -ExecutionPolicy Bypass -File .\Publish-ToIntune.ps1 -TenantId contos
 |---|---|
 | `-ValidateOnly` | Confere os arquivos e valores; nada é enviado. |
 | `-DeviceCode` | Entra com um código em vez do navegador. Muitas organizações bloqueiam esse fluxo com Acesso Condicional; prefira o navegador. |
-| `-IfExists Ask\|Fail\|Update\|Supersede\|CreateNew` | O que fazer quando já existe um app com o mesmo nome. `Ask` (padrão) pergunta na janela; com `-Force` ele para. `Update` envia novo conteúdo e configurações para o app existente e mantém as atribuições. `Supersede` cria um app novo que substitui o mais novo deles (veja [abaixo](#uma-versão-nova-atualizar-ou-substituir-e-acompanhar-a-instalação-28)). |
+| `-IfExists Ask\|Fail\|Update\|Supersede\|CreateNew` | O que fazer quando já existe um app com o mesmo nome ou, quando nenhum tem esse nome, um app do mesmo produto com outro nome (a marca do pacote nas observações, em pacotes gerados a partir da 3.0.6). `Ask` (padrão) pergunta na janela; com `-Force` ele para. `Update` envia novo conteúdo e configurações para o app existente e mantém as atribuições. `Supersede` cria um app novo que substitui o mais novo deles (veja [abaixo](#uma-versão-nova-atualizar-ou-substituir-e-acompanhar-a-instalação-28)). |
 | `-SupersedenceType Update\|Replace` | Com `Supersede`: `Update` (padrão) instala por cima da versão anterior; `Replace` faz o Intune desinstalá-la antes. |
 | `-AppId <id>` | O app a atualizar ou, com `Supersede`, o app a substituir, em vez de procurá-lo pelo nome. |
 | `-AssignIntent none\|available\|required` | Atribuição opcional, só para um app criado nesta execução. Padrão `none`. |
@@ -321,7 +321,7 @@ powershell -ExecutionPolicy Bypass -File .\Publish-ToIntune.ps1 -TenantId contos
 
 1. Lê o `intune-app.json`, confere se os arquivos existem, se o `.intunewin` bate com o SHA256 registrado quando foi gerado e se o `Detection.xml` dele traz os dados de criptografia.
 2. Faz o login: código de autorização com PKCE no seu navegador, respondido em uma porta local (ou código de dispositivo).
-3. Procura um app com exatamente o mesmo nome. (Dentro do aplicativo, a lista de versões anteriores mostra os apps com o nome do aplicativo como palavra inteira, "Git 2.45" mas nunca "GitHub Desktop"; só um app com exatamente este nome vem pré-selecionado. Um app do mesmo nome que o J365 IntunePSApp não criou só é atualizado quando escolhido, e o script avisa.)
+3. Procura um app com exatamente o mesmo nome; quando não há, um app do mesmo produto com outro nome (a linha `J365 package mark: ...` das observações, gravada a partir da 3.0.6). Dois apps do mesmo produto atribuídos aos mesmos dispositivos disputam o Windows Installer e um satisfaz a detecção do outro, por isso criar outro mesmo assim é avisado na saída. (Dentro do aplicativo, a lista de versões anteriores mostra os apps com o nome do aplicativo como palavra inteira, "Git 2.45" mas nunca "GitHub Desktop"; só um app com exatamente este nome vem pré-selecionado. Um app do mesmo nome que o J365 IntunePSApp não criou só é atualizado quando escolhido, e o script avisa.)
 4. Cria o app, cria uma versão de conteúdo, envia o conteúdo criptografado em blocos, confirma e espera o Intune validar. Limite de requisições e erros temporários são repetidos.
 5. Se algo falhar depois de o app ter sido criado, **o app incompleto é apagado**: não fica nenhuma entrada vazia no locatário.
 6. Com `-IfExists Supersede`, liga o app novo à versão anterior (substituição) assim que o conteúdo dele estiver ativo. Se o Intune recusar a ligação, o app novo continua publicado e o motivo é informado.
@@ -349,7 +349,7 @@ A substituição segue as regras do Intune ([documentação](https://learn.micro
 - Uma cadeia (A substituído por B, B por C) é substituída pelo último app dela. O Intune aceita no máximo 10 apps numa cadeia: quando nenhum dispositivo usar mais uma versão, remova as atribuições dela e exclua-a.
 - Com a sua conta, ligar apps exige a permissão do Intune de relacionar apps (*Aplicativos móveis > Relacionar*; Administrador do Intune e Gerenciador de Aplicativos têm). O certificado do aplicativo usa a permissão de aplicativo `DeviceManagementApps.ReadWrite.All`, que cobre isso.
 
-A janela de publicação lista os apps do tenant com o nome do aplicativo, com *Atualizar* para cada um e *App novo que substitui* para a versão anterior mais nova. *Criar um app novo que substitui o existente* (na janela, no lote ou com `--if-exists Supersede` na linha de comando) substitui o app mais novo com o mesmo nome. Se o Intune recusar a ligação, o app novo continua publicado e o cartão de resultado diz o motivo; adicione a ligação no centro de administração (o app novo > *Propriedades > Substituição*).
+A janela de publicação lista os apps do tenant com o nome do aplicativo e, a partir da 3.0.6, os apps do mesmo produto com outro nome (mesma marca do pacote; criar um segundo app pede confirmação), com *Atualizar* para cada um e *App novo que substitui* para a versão anterior mais nova. *Criar um app novo que substitui o existente* (na janela, no lote ou com `--if-exists Supersede` na linha de comando) substitui o app mais novo com o mesmo nome. Se o Intune recusar a ligação, o app novo continua publicado e o cartão de resultado diz o motivo; adicione a ligação no centro de administração (o app novo > *Propriedades > Substituição*).
 
 **Status no Intune.** *Status no Intune*, no cartão de resultado de um pacote publicado, e *Status*, em *Meus pacotes*, leem com a conexão deste computador e a mesma permissão:
 

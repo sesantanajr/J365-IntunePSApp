@@ -6,7 +6,7 @@
 
 Please **do not open a public issue** for security problems. Report them privately: use *Security > Report a vulnerability* on this repository when that option is shown, or send a private message to the author on [LinkedIn](https://www.linkedin.com/in/sergiosantanacloud/). You will get an answer as soon as possible; fixes are released as a new version and credited to the reporter (unless you prefer otherwise).
 
-Supported version: the latest release (2.7.x). Settings > *Check now* updates a copy in place. A copy up to 2.6.0 may keep saying "you have the latest version" while the GitHub API limit of its network is reached (60 requests an hour per public address, shared by everyone behind a company proxy): download the latest release once by hand; from 2.6.1 on the check no longer depends on that API.
+Supported version: the latest release (3.0.x). Settings > *Check now* updates a copy in place. A copy up to 2.6.0 may keep saying "you have the latest version" while the GitHub API limit of its network is reached (60 requests an hour per public address, shared by everyone behind a company proxy): download the latest release once by hand; from 2.6.1 on the check no longer depends on that API.
 
 ## What the application does to protect you
 
@@ -40,7 +40,7 @@ Supported version: the latest release (2.7.x). Settings > *Check now* updates a 
 
 Por favor, **não abra uma issue pública** para problemas de segurança. Relate de forma privada: use *Security > Report a vulnerability* neste repositório quando essa opção aparecer, ou envie uma mensagem privada ao autor no [LinkedIn](https://www.linkedin.com/in/sergiosantanacloud/). Você receberá resposta o quanto antes; as correções saem em uma nova versão, com crédito a quem relatou (se desejar).
 
-Versão com suporte: a mais recente (2.7.x). Configurações > *Verificar agora* atualiza a cópia sem sair do aplicativo. Uma cópia até a 2.6.0 pode continuar dizendo "você tem a versão mais recente" enquanto o limite da API do GitHub da sua rede estiver esgotado (60 consultas por hora por endereço público, divididas por todos que saem pelo mesmo proxy da empresa): baixe a versão mais recente uma vez manualmente; a partir da 2.6.1 a verificação não depende mais dessa API.
+Versão com suporte: a mais recente (3.0.x). Configurações > *Verificar agora* atualiza a cópia sem sair do aplicativo. Uma cópia até a 2.6.0 pode continuar dizendo "você tem a versão mais recente" enquanto o limite da API do GitHub da sua rede estiver esgotado (60 consultas por hora por endereço público, divididas por todos que saem pelo mesmo proxy da empresa): baixe a versão mais recente uma vez manualmente; a partir da 2.6.1 a verificação não depende mais dessa API.
 
 ## O que o aplicativo faz para proteger você
 
