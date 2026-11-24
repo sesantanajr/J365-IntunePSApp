@@ -246,7 +246,7 @@ namespace J365.IntunePSApp.Views
             UpdateButtons();
             UpdateHints();
             var main = MainWindow.Current;
-            main?.SetStatus(T("Batch_Status", _items.Count), true);
+            main?.SetStatus(Loc.Count("Batch_Status", _items.Count), true);
             foreach (var i in _items) i.PropertyChanged += Item_PropertyChanged;
             try
             {
@@ -339,6 +339,7 @@ namespace J365.IntunePSApp.Views
                     BatchState.Skipped => T("Batch_NoSilentArgs"),
                     _ => ""
                 }, state is BatchState.Publishing ? 62 : state is BatchState.Building ? 35 : 0);
+                if (state == BatchState.Building) _items[k].SampleRemaining(TimeSpan.FromSeconds(48));
                 // A sample that got past its build has a package, as a real one would: the summary counts it as generated.
                 if (state is BatchState.Published or BatchState.Done or BatchState.Warning or BatchState.Publishing)
                 {

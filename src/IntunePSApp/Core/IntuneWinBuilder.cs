@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
@@ -18,7 +19,7 @@ namespace J365.IntunePSApp.Core
     /// the same format:
     ///   IntuneWinPackage/Contents/IntunePackage.intunewin -> [HMAC-SHA256 32 bytes][IV 16 bytes][AES-256-CBC(zip of the content)]
     ///   IntuneWinPackage/Metadata/Detection.xml           -> keys, SHA256 digest and setup file
-    /// Both say how far they are (0 to 1) while they work.
+    /// Both say how far they are (0 to 1) while they work, each pass with the share of the time it takes.
     /// </summary>
     public static class IntuneWinBuilder
     {
@@ -102,9 +103,10 @@ namespace J365.IntunePSApp.Core
         }
 
         /// <summary>
-        /// Runs IntuneWinAppUtil.exe. It prints no progress, so the progress is read from what it writes: the zip of the
-        /// content and its encrypted copy in its TEMP folder, then the .intunewin file. For an installer (already
-        /// compressed) each one is about as large as the content, so the three together are about three times its size.
+        /// Runs IntuneWinAppUtil.exe. Its progress bar is drawn only in a console window: with the output redirected it
+        /// prints one line as each pass over the package begins, and the bytes the process reads and writes say how far the
+        /// pass is (<see cref="IwauProgress"/>). A version whose lines are not recognised is followed by what it writes:
+        /// the zip of the content and its encrypted copy in its TEMP folder, then the .intunewin, about three times the content.
         /// </summary>
         private static async Task<(int Code, string Output)> RunIntuneWinAppUtilAsync(string exe, string sourceFolder, string outFolder, string work,
             CancellationToken ct, Action<double> progress)
@@ -119,13 +121,20 @@ namespace J365.IntunePSApp.Core
             psi.Environment["TEMP"] = work;
             psi.Environment["TMP"] = work;
             var output = new StringBuilder();
+            long content = Math.Max(1, BuildProgress.FolderSize(sourceFolder));
+            var passes = new IwauProgress(content);
             using var p = new Process { StartInfo = psi };
-            p.OutputDataReceived += (s, e) => { if (e.Data != null) lock (output) output.AppendLine(e.Data); };
+            p.OutputDataReceived += (s, e) =>
+            {
+                if (e.Data == null) return;
+                lock (output) output.AppendLine(e.Data);
+                // The line comes as the pass begins: what the process has read and written by then is where the pass starts.
+                passes.OnLine(e.Data, IoOf(p), () => ZipBytes(work));
+            };
             p.ErrorDataReceived += (s, e) => { if (e.Data != null) lock (output) output.AppendLine(e.Data); };
             p.Start();
             p.BeginOutputReadLine();
             p.BeginErrorReadLine();
-            long expected = Math.Max(1, BuildProgress.FolderSize(sourceFolder)) * 3;
             long mostInWork = 0;
             var exited = p.WaitForExitAsync(CancellationToken.None);
             try
@@ -134,9 +143,10 @@ namespace J365.IntunePSApp.Core
                 {
                     await Task.WhenAny(exited, Task.Delay(300, ct));
                     ct.ThrowIfCancellationRequested();
-                    mostInWork = Math.Max(mostInWork, BuildProgress.FolderSize(work));
-                    long written = mostInWork + BuildProgress.FolderSize(outFolder);
-                    progress?.Invoke(Math.Min(0.97, written / (double)expected));
+                    long inWork = BuildProgress.FolderSize(work), inOut = BuildProgress.FolderSize(outFolder);
+                    mostInWork = Math.Max(mostInWork, inWork);
+                    double done = passes.Recognized ? passes.Fraction(IoOf(p), inWork, inOut) : (mostInWork + inOut) / (3d * content);
+                    progress?.Invoke(Math.Min(0.99, done));
                 }
             }
             catch (OperationCanceledException)
@@ -149,6 +159,54 @@ namespace J365.IntunePSApp.Core
             // Lets the last lines of the output arrive.
             p.WaitForExit();
             lock (output) return (p.ExitCode, output.ToString());
+        }
+
+        /// <summary>Bytes the process has read and written so far; null when Windows does not tell.</summary>
+        private static (long Read, long Written)? IoOf(Process p)
+        {
+            try
+            {
+                if (NativeMethods.GetProcessIoCounters(p.SafeHandle, out var c)) return ((long)c.ReadTransferCount, (long)c.WriteTransferCount);
+            }
+            catch (Exception) { }
+            return null;
+        }
+
+        /// <summary>Size of the zip the tool made of the content, before it encrypts it (0 when it is not found).</summary>
+        private static long ZipBytes(string work)
+        {
+            try
+            {
+                var f = Directory.EnumerateFiles(work, "IntunePackage.intunewin", SearchOption.AllDirectories).FirstOrDefault();
+                return f == null ? 0 : new FileInfo(f).Length;
+            }
+            catch (IOException) { return 0; }
+            catch (UnauthorizedAccessException) { return 0; }
+        }
+
+        /// <summary>Speeds that weigh the passes of the built-in packager, in bytes per second: deflate (Optimal) is bound by
+        /// the processor; a file stored as it is, the encryption (with its SHA256 and HMAC) and the outer file by the disk.</summary>
+        private const double DeflateRate = 40d * 1024 * 1024, StoreRate = 400d * 1024 * 1024, EncryptRate = 300d * 1024 * 1024;
+
+        /// <summary>Seconds the zip pass of the built-in packager spends on a file of <paramref name="bytes"/>.</summary>
+        internal static double NativeCost(long bytes, bool stored) => Math.Max(0, bytes) / (stored ? StoreRate : DeflateRate);
+
+        /// <summary>
+        /// Shares of the zip and of the encryption in the time of the built-in packager; the outer file has the rest. An
+        /// installer stored as it is costs about as much as the encryption, so each pass is about a third; a folder of files
+        /// to compress puts almost all the time in the zip.
+        /// </summary>
+        internal static (double Zip, double Encrypt) NativeShares(IEnumerable<(long Bytes, bool Stored)> files)
+        {
+            double zip = 0;
+            long content = 0;
+            foreach (var (bytes, stored) in files)
+            {
+                zip += NativeCost(bytes, stored);
+                content += Math.Max(0, bytes);
+            }
+            double enc = content / EncryptRate, outer = content / StoreRate, total = zip + enc + outer;
+            return total <= 0 ? (1d / 3, 1d / 3) : (zip / total, enc / total);
         }
 
         /// <summary>
@@ -177,23 +235,27 @@ namespace J365.IntunePSApp.Core
                 string encFile = Path.Combine(work, "IntunePackage.intunewin");
                 string src = Path.GetFullPath(sourceFolder).TrimEnd('\\');
                 var files = Directory.GetFiles(src, "*", SearchOption.AllDirectories);
-                long content = Math.Max(1, files.Sum(f => new FileInfo(f).Length));
+                var levels = files.Select(LevelFor).ToArray();
+                var sizes = files.Select(f => new FileInfo(f).Length).ToArray();
 
-                // Three passes over the content: compression (the slow one), encryption, and the outer file.
-                const double zipShare = 0.7, encShare = 0.15;
-                long zipped = 0;
+                // Three passes over the content: the zip, the encryption and the outer file, each with the share of the time
+                // it takes (NativeShares). In the zip a byte to compress weighs ten times a byte stored as it is.
+                var (zipShare, encShare) = NativeShares(sizes.Select((b, i) => (b, levels[i] == CompressionLevel.NoCompression)));
+                double zipCost = Math.Max(1e-9, sizes.Select((b, i) => NativeCost(b, levels[i] == CompressionLevel.NoCompression)).Sum()), zippedCost = 0;
                 using (var fs = new FileStream(plainZip, FileMode.CreateNew))
                 using (var zip = new ZipArchive(fs, ZipArchiveMode.Create))
                 {
                     // Entry names use "/" like Microsoft's tool (the zip format's separator).
-                    foreach (var f in files)
+                    for (int i = 0; i < files.Length; i++)
                     {
                         ct.ThrowIfCancellationRequested();
-                        var entry = zip.CreateEntry(f.Substring(src.Length + 1).Replace('\\', '/'), LevelFor(f));
+                        string f = files[i];
+                        bool asIs = levels[i] == CompressionLevel.NoCompression;
+                        var entry = zip.CreateEntry(f.Substring(src.Length + 1).Replace('\\', '/'), levels[i]);
                         entry.LastWriteTime = ZipDate(File.GetLastWriteTime(f));
                         using var es = entry.Open();
                         using var input = new FileStream(f, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 20, FileOptions.SequentialScan);
-                        BuildProgress.CopyStream(input, es, n => { zipped += n; progress?.Invoke(zipShare * zipped / content); }, ct);
+                        BuildProgress.CopyStream(input, es, n => { zippedCost += NativeCost(n, asIs); progress?.Invoke(zipShare * Math.Min(1, zippedCost / zipCost)); }, ct);
                     }
                     foreach (var d in Directory.GetDirectories(src, "*", SearchOption.AllDirectories))
                         if (!Directory.EnumerateFileSystemEntries(d).Any()) zip.CreateEntry(d.Substring(src.Length + 1).Replace('\\', '/') + "/");
@@ -390,6 +452,103 @@ namespace J365.IntunePSApp.Core
             public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
             public override void SetLength(long value) => throw new NotSupportedException();
             public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        }
+    }
+
+    /// <summary>
+    /// How far IntuneWinAppUtil.exe (1.8.7) is. Its code goes over the package six times: it compresses the content into a
+    /// zip (Fastest), encrypts the zip into a second file, computes the HMAC of that file and the SHA256 of the zip (managed
+    /// code of .NET Framework, about as slow as the compression), copies the encrypted file over the zip, and stores the
+    /// package folder in the .intunewin through System.IO.Packaging, which writes the content to a buffer first and into the
+    /// file when it closes. With the output redirected the tool prints one line as each pass begins (-q only skips its
+    /// questions) and nothing while it runs. Each pass weighs about the time it takes and advances with the bytes the
+    /// process has read since its line, so the percentage also moves while the tool only reads (the two hashes) or writes to
+    /// the buffer. Without the counters of the process, the files it writes are measured instead.
+    /// </summary>
+    internal sealed class IwauProgress
+    {
+        internal enum Pass { None, Zip, Encrypt, Mac, Digest, Copy, Metadata, Store, Cleanup }
+
+        /// <summary>Share of each pass (by <see cref="Pass"/>) in the time of the tool.</summary>
+        internal static readonly double[] Shares = { 0, 0.32, 0.09, 0.19, 0.19, 0.06, 0, 0.13, 0.02 };
+
+        private readonly object _gate = new();
+        private readonly long _content;
+        private long _zip;
+        private int _hashes;
+        private Pass _pass;
+        private (long Read, long Written)? _start;
+        private double _reached;
+
+        /// <param name="contentBytes">Size of the folder the tool packages.</param>
+        internal IwauProgress(long contentBytes)
+        {
+            _content = Math.Max(1, contentBytes);
+            _zip = _content;
+        }
+
+        /// <summary>True once a line of the tool was recognised: its passes can be followed.</summary>
+        internal bool Recognized { get { lock (_gate) return _pass != Pass.None; } }
+
+        internal Pass Current { get { lock (_gate) return _pass; } }
+
+        /// <summary>The pass a line of the tool begins (None for the other lines). Two lines begin a hash: the HMAC, then the SHA256.</summary>
+        internal static Pass PassOf(string line, int hashesBefore)
+        {
+            string text = (line ?? "").Trim();
+            if (text.StartsWith("INFO", StringComparison.Ordinal)) text = text.Substring(4).TrimStart();
+            bool Starts(string s) => text.StartsWith(s, StringComparison.Ordinal);
+            if (Starts("Compressing the source folder")) return Pass.Zip;
+            if (Starts("Encrypting file")) return Pass.Encrypt;
+            if (Starts("Computing SHA256 hash for")) return hashesBefore == 0 ? Pass.Mac : Pass.Digest;
+            if (Starts("Copying encrypted file")) return Pass.Copy;
+            if (Starts("Generating detection XML")) return Pass.Metadata;
+            if (Starts("Compressing folder")) return Pass.Store;
+            if (Starts("Removing temporary files")) return Pass.Cleanup;
+            return Pass.None;
+        }
+
+        /// <summary>A line of the tool, with the counters of the process when it arrived; <paramref name="zipBytes"/> reads the size of the zip when the encryption begins.</summary>
+        internal void OnLine(string line, (long Read, long Written)? io, Func<long> zipBytes = null)
+        {
+            lock (_gate)
+            {
+                var pass = PassOf(line, _hashes);
+                if (pass is Pass.Mac or Pass.Digest) _hashes++;
+                if (pass <= _pass) return;
+                _pass = pass;
+                _start = io;
+                // Every pass after the first goes over the zip (or its encrypted copy, 48 bytes longer).
+                if (pass == Pass.Encrypt && zipBytes?.Invoke() is long z && z > 0) _zip = z;
+            }
+        }
+
+        /// <summary>The work done, from 0 to 0.99 (the end of the tool is the 100%). Never goes back.</summary>
+        /// <param name="io">The counters of the process now (null when Windows does not tell).</param>
+        /// <param name="workBytes">Bytes in its TEMP folder.</param>
+        /// <param name="outBytes">Bytes in its output folder.</param>
+        internal double Fraction((long Read, long Written)? io, long workBytes, long outBytes)
+        {
+            lock (_gate)
+            {
+                if (_pass == Pass.None) return _reached;
+                long? read = io is { } now && _start is { } start ? now.Read - start.Read : null;
+                double size = _pass == Pass.Zip ? _content : _zip;
+                double within = _pass switch
+                {
+                    Pass.Zip => (read ?? workBytes) / size,
+                    Pass.Encrypt => (read ?? workBytes - _zip) / size,
+                    Pass.Mac or Pass.Digest or Pass.Copy => (read ?? 0) / size,
+                    // Reading the encrypted file into the buffer, then writing the .intunewin when the package closes.
+                    Pass.Store => read is long r ? 0.5 * Math.Min(1, r / size) + 0.5 * Math.Min(1, outBytes / size) : outBytes / size,
+                    _ => 0
+                };
+                double done = 0;
+                for (int i = 1; i < (int)_pass; i++) done += Shares[i];
+                done += Shares[(int)_pass] * Math.Clamp(within, 0, 1);
+                _reached = Math.Max(_reached, Math.Min(0.99, done));
+                return _reached;
+            }
         }
     }
 }

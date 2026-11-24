@@ -26,6 +26,18 @@ namespace J365.IntunePSApp.Core
         [DllImport("msi.dll")] public static extern uint MsiRecordDataSize(IntPtr hRecord, uint iField);
         [DllImport("msi.dll")] public static extern uint MsiRecordReadStream(IntPtr hRecord, uint iField, byte[] szDataBuf, ref uint pcbDataBuf);
 
+        // ---------------- kernel32.dll
+        /// <summary>What a process has read and written since it started (every file and pipe it used), in operations and bytes.</summary>
+        [StructLayout(LayoutKind.Sequential)]
+        public struct IoCounters
+        {
+            public ulong ReadOperationCount, WriteOperationCount, OtherOperationCount, ReadTransferCount, WriteTransferCount, OtherTransferCount;
+        }
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool GetProcessIoCounters(Microsoft.Win32.SafeHandles.SafeProcessHandle hProcess, out IoCounters lpIoCounters);
+
         // ---------------- wintrust.dll
         [DllImport("wintrust.dll", ExactSpelling = true, SetLastError = false, CharSet = CharSet.Unicode)]
         public static extern int WinVerifyTrust(IntPtr hwnd, [MarshalAs(UnmanagedType.LPStruct)] Guid pgActionID, IntPtr pWVTData);

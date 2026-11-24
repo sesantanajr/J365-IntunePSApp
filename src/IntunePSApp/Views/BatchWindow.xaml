@@ -159,9 +159,16 @@
               <StackPanel Grid.Column="1" Margin="12,0,10,0">
                 <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="13.5" Foreground="{DynamicResource Ink}" TextTrimming="CharacterEllipsis"/>
                 <TextBlock Text="{Binding InstallerLabel}" Style="{StaticResource MutedText}" FontSize="12"/>
-                <ProgressBar Value="{Binding Percent, Mode=OneWay}" Maximum="100" Height="4" Margin="0,6,0,0"
-                             Visibility="{Binding IsRunning, Converter={StaticResource Visible}}"/>
-                <TextBlock Text="{Binding Message}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                <Grid Margin="0,6,0,0" Visibility="{Binding IsRunning, Converter={StaticResource Visible}}">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                  </Grid.ColumnDefinitions>
+                  <ProgressBar Value="{Binding Percent, Mode=OneWay}" Maximum="100" Height="4" VerticalAlignment="Center"/>
+                  <TextBlock Grid.Column="1" Text="{Binding PercentText}" MinWidth="40" TextAlignment="Right" Margin="10,0,0,0" FontSize="12.5" FontWeight="SemiBold"
+                             Foreground="{DynamicResource Ink}" Typography.NumeralAlignment="Tabular" VerticalAlignment="Center"/>
+                </Grid>
+                <TextBlock Text="{Binding MessageLine}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,4,0,0"/>
                 <Button Style="{StaticResource GhostButton}" Content="{l:T Batch_OpenInEditor}" Tag="{Binding}" Click="OpenInEditor_Click" HorizontalAlignment="Left"
                         Margin="-8,2,0,0" Visibility="{Binding CanOpenInEditor, Converter={StaticResource Visible}}"/>
               </StackPanel>

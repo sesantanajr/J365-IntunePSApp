@@ -1371,6 +1371,8 @@
   "Batch_SummaryReady": "{0} applications ready to generate.",
   "Batch_Summary": "{0} of {1} generated · {2} with warnings · {3} skipped · {4} failed",
   "Batch_Status": "Generating {0} packages in a batch...",
+  "Batch_Status_One": "Generating 1 package in a batch...",
+  "Batch_ItemEta": "{0} · about {1} left",
   "Batch_Toast": "Batch finished: {0} of {1} packages generated.",
   "Batch_ConfirmCancel": "Cancel the batch? The package in progress is discarded; the ones already generated are kept.",
   "Batch_CancelBatch": "Cancel the batch",

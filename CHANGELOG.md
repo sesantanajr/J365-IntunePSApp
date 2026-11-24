@@ -2,6 +2,14 @@
 
 All notable changes to J365 IntunePSApp. Versions follow [Semantic Versioning](https://semver.org).
 
+## 3.0.2 - 2026-11-24
+
+### Fixed
+
+- **A real percentage while the `.intunewin` is created.** With Microsoft's IntuneWinAppUtil.exe the bar followed only the files the tool writes: it stood still while the tool computed its two hashes (about 40% of its time) and while it wrote the outer file to a buffer, then jumped. The application now follows the six passes the tool makes over the package, from the line it prints as each one begins and the bytes the process reads, each pass with its share of the time. The built-in packager gave 70% of the bar to the zip, which for an installer stored as it is takes about a third of the time: each pass now weighs the time it takes.
+- **Batch window**: each application shows the percentage of the step it is in (download, build, upload) beside the bar, and the time left at the pace so far. Analysing, signing in and the other steps without a percentage of their own show no number instead of 0%.
+- The status bar said "Gerando 1 pacotes em lote" for one application.
+
 ## 3.0.1 - 2026-11-24
 
 ### Added

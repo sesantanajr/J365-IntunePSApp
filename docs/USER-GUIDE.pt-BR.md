@@ -214,7 +214,7 @@ Quando nenhum dispositivo usar mais a versão anterior, remova as atribuições 
 1. No catálogo, marque vários aplicativos (ou **Adicionar ao lote** nos detalhes) e clique em **Gerar em lote**.
 2. Defina o que eles têm em comum: empresa, proprietário, o tipo de instalação (silenciosa ou com notificação) e o que cada pacote faz com as **versões já instaladas** — *Remover qualquer versão instalada e instalar esta* reinstala todos os aplicativos do zero.
 3. Se quiser, ligue **Publicar cada pacote no Intune assim que for gerado (deploy)**, com o que fazer com um app do mesmo nome (atualizá-lo, **criar um app novo que substitui o existente**, criar outro ou não publicar) e a atribuição. O tenant e a atribuição são confirmados antes de qualquer coisa começar.
-4. **Gerar N pacotes**. Cada instalador é baixado do link oficial, conferido pelo SHA256 e empacotado como no editor. Um `.exe` sem parâmetros silenciosos conhecidos, ou um nome que também corresponde a outros aplicativos, é **pulado com o motivo** — abra-o no editor para terminar manualmente. Uma publicação que falhou pode ser repetida sozinha; **Copiar relatório** gera uma tabela com os resultados.
+4. **Gerar N pacotes**. Cada instalador é baixado do link oficial, conferido pelo SHA256 e empacotado como no editor; cada aplicativo mostra a etapa em que está, com a porcentagem real (download, geração e envio ao Intune) e o tempo restante. Um `.exe` sem parâmetros silenciosos conhecidos, ou um nome que também corresponde a outros aplicativos, é **pulado com o motivo** — abra-o no editor para terminar manualmente. Uma publicação que falhou pode ser repetida sozinha; **Copiar relatório** gera uma tabela com os resultados.
 
 ## 9. Meus pacotes
 

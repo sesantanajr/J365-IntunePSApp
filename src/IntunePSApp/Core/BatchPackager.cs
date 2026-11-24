@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using J365.IntunePSApp.Localization;
 using static J365.IntunePSApp.Localization.Loc;
 
 namespace J365.IntunePSApp.Core
@@ -96,6 +98,16 @@ namespace J365.IntunePSApp.Core
         public BatchState State { get; private set; } = BatchState.Waiting;
         public string Message { get; private set; } = "";
         public double Percent { get; private set; }
+        /// <summary>The percentage measures the running step (download, build, upload); false while analysing or signing in.</summary>
+        public bool HasPercent { get; private set; }
+        /// <summary>Time left of the running step at its pace so far; null while it is too early to tell.</summary>
+        public TimeSpan? Remaining { get; private set; }
+        /// <summary>"47%" beside the bar while the running step is measured.</summary>
+        public string PercentText => IsRunning && HasPercent ? Math.Floor(Percent).ToString("0", Loc.Instance.Culture) + "%" : "";
+        /// <summary>The step under the bar, with the time left when there is an estimate.</summary>
+        public string MessageLine => IsRunning && HasPercent && Remaining is TimeSpan left && Message.Length > 0
+            ? T("Batch_ItemEta", Message.TrimEnd('.', '\u2026', ' '), BuildProgress.Duration(left)) : Message;
+        private long _measuredSince;
         /// <summary>The package generated for this application (null until it is built).</summary>
         public BuildResult Result { get; internal set; }
         /// <summary>Folder of the package generated for this application.</summary>
@@ -131,16 +143,36 @@ namespace J365.IntunePSApp.Core
             _ => "Brand"
         };
 
-        internal void Update(BatchState state, string message, double percent)
+        /// <param name="measured">False when the step has no percentage of its own (analysing, signing in): the number beside the bar goes away.</param>
+        internal void Update(BatchState state, string message, double percent, bool measured = true)
         {
+            // The time left is counted from the start of the step, or from its first measure.
+            bool restart = state != State || (measured && !HasPercent);
             State = state;
             Message = message ?? "";
             Percent = Math.Clamp(percent, 0, 100);
+            HasPercent = measured && IsRunning;
+            if (restart) _measuredSince = Stopwatch.GetTimestamp();
+            Remaining = HasPercent ? Estimate(Stopwatch.GetElapsedTime(_measuredSince), Percent) : null;
             Changed();
         }
 
-        /// <summary>The text of the current step changes; the state and the bar stay.</summary>
-        internal void Say(string message) => Update(State, message, Percent);
+        /// <summary>The text of the current step changes; the state, the bar and its percentage stay.</summary>
+        internal void Say(string message) => Update(State, message, Percent, HasPercent);
+
+        /// <summary>A new step of a publication: until it says its own percentage (the upload), the bar has no number.</summary>
+        internal void Step(string message) => Update(State, message, Percent, false);
+
+        /// <summary>Capture mode: the time left a running step shows once it has a pace.</summary>
+        internal void SampleRemaining(TimeSpan left)
+        {
+            Remaining = left;
+            Changed();
+        }
+
+        /// <summary>Time left at the pace so far: <paramref name="percent"/> took <paramref name="elapsed"/>. Null while it is too early to tell.</summary>
+        internal static TimeSpan? Estimate(TimeSpan elapsed, double percent) =>
+            percent >= 3 && percent < 100 && elapsed.TotalSeconds >= 2 ? TimeSpan.FromSeconds(elapsed.TotalSeconds * (100 - percent) / percent) : null;
 
         internal void Finish(BatchState state, string message) => Update(state, message, state is BatchState.Done or BatchState.Warning or BatchState.Published ? 100 : Percent);
 
@@ -156,7 +188,7 @@ namespace J365.IntunePSApp.Core
         /// <summary>Texts follow a change of language.</summary>
         public void Changed()
         {
-            foreach (var p in new[] { nameof(State), nameof(Message), nameof(Percent), nameof(StateLabel), nameof(StateColor), nameof(IsFinished), nameof(IsRunning),
+            foreach (var p in new[] { nameof(State), nameof(Message), nameof(Percent), nameof(HasPercent), nameof(Remaining), nameof(PercentText), nameof(MessageLine), nameof(StateLabel), nameof(StateColor), nameof(IsFinished), nameof(IsRunning),
                 nameof(Succeeded), nameof(Built), nameof(CanOpenInEditor), nameof(InstallerLabel) })
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(p));
         }
@@ -276,7 +308,7 @@ namespace J365.IntunePSApp.Core
             if (item.Installer == null || !item.Installer.IsSupported) { item.Finish(BatchState.Skipped, T("Batch_NoInstaller")); return; }
             try
             {
-                item.Update(BatchState.Downloading, T("Batch_Downloading"), 0);
+                item.Update(BatchState.Downloading, T("Batch_Downloading"), 0, measured: false);
                 var download = new Progress<(long Done, long? Total)>(p =>
                 {
                     if (item.State == BatchState.Downloading && p.Total is long total && total > 0) item.Update(BatchState.Downloading, T("Batch_Downloading"), p.Done * 100d / total);
@@ -284,7 +316,7 @@ namespace J365.IntunePSApp.Core
                 string file = await CatalogService.DownloadInstallerAsync(item.App, item.Installer, download, ct);
                 item.InstallerFile = file;
 
-                item.Update(BatchState.Analyzing, T("Batch_Analyzing"), 0);
+                item.Update(BatchState.Analyzing, T("Batch_Analyzing"), 0, measured: false);
                 var info = await Task.Run(() => InstallerAnalyzer.Analyze(file), ct);
                 // As in the editor: the row of the database decides scope and architecture, a match by hash stays exact.
                 bool byHash = info.CatalogMatch == "hash";
@@ -326,7 +358,7 @@ namespace J365.IntunePSApp.Core
         /// </summary>
         private static async Task PublishOneAsync(BatchItem item, BatchOptions o, Action<Action> post, CancellationToken ct)
         {
-            item.Update(BatchState.Publishing, T("Publish_StepSignIn"), 0);
+            item.Update(BatchState.Publishing, T("Publish_StepSignIn"), 0, measured: false);
             string intune = item.Result?.IntuneFolder;
             try
             {
@@ -383,7 +415,7 @@ namespace J365.IntunePSApp.Core
         private static async Task PublishStoreAsync(BatchItem item, AppConfig cfg, BatchOptions o, CancellationToken ct)
         {
             if (o?.Publish != true) { item.Finish(BatchState.Skipped, T("Batch_StoreNeedsPublish")); return; }
-            item.Update(BatchState.Publishing, T("Batch_StoreReading"), 0);
+            item.Update(BatchState.Publishing, T("Batch_StoreReading"), 0, measured: false);
             try
             {
                 var app = await StoreCatalog.GetAsync(item.App.Id, cfg?.PreferredLocale, ct);
@@ -418,7 +450,8 @@ namespace J365.IntunePSApp.Core
             if (pct.Success) { item.Update(BatchState.Publishing, item.Message, int.Parse(pct.Groups[1].Value)); return; }
             string text = (line ?? "").Trim();
             if (text.Length == 0 || text.StartsWith("OK", StringComparison.Ordinal)) return;   // the step text stays until the next step
-            item.Say(text.StartsWith("> ", StringComparison.Ordinal) ? PublishTexts.StepText(text.Substring(2)) : text);
+            if (text.StartsWith("> ", StringComparison.Ordinal)) item.Step(PublishTexts.StepText(text.Substring(2)));
+            else item.Say(text);
         }
 
         /// <summary>The batch as tab-separated text (application, version, state, package, details), to paste in a ticket or a sheet.</summary>

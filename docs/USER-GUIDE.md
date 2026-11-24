@@ -214,7 +214,7 @@ Once no device runs the earlier version, unassign and delete it: Intune keeps at
 1. In the catalog, tick several applications (or **Add to batch** on the details) and click **Batch package**.
 2. Set what they share: company, owner, the type of installation (silent or with notification) and what every package does with the **versions already installed** — *Remove any installed version and install this one* reinstalls every application from scratch.
 3. Optionally **Publish each package to Intune as soon as it is generated**, with what to do with an app of the same name (update it, **create a new app that supersedes it**, create another, or do not publish) and the assignment. The tenant and the assignment are confirmed before anything starts.
-4. **Generate N packages**. Each installer is downloaded from its official link, checked against its SHA256 and packaged as in the editor. An `.exe` without known silent switches, or a name that also matches other applications, is **skipped with the reason** — open it in the editor to finish it by hand. A failed publication can be retried alone; **Copy report** gives a table of the results.
+4. **Generate N packages**. Each installer is downloaded from its official link, checked against its SHA256 and packaged as in the editor; each application shows the step it is in, with its real percentage (download, build and upload to Intune) and the time left. An `.exe` without known silent switches, or a name that also matches other applications, is **skipped with the reason** — open it in the editor to finish it by hand. A failed publication can be retried alone; **Copy report** gives a table of the results.
 
 ## 9. My packages
 

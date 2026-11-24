@@ -1371,6 +1371,8 @@
   "Batch_SummaryReady": "{0} aplicativos prontos para gerar.",
   "Batch_Summary": "Gerados: {0} de {1} · com avisos: {2} · pulados: {3} · com falha: {4}",
   "Batch_Status": "Gerando {0} pacotes em lote...",
+  "Batch_Status_One": "Gerando 1 pacote em lote...",
+  "Batch_ItemEta": "{0} · cerca de {1} restantes",
   "Batch_Toast": "Lote concluído: {0} de {1} pacotes gerados.",
   "Batch_ConfirmCancel": "Cancelar o lote? O pacote em andamento é descartado; os já gerados são mantidos.",
   "Batch_CancelBatch": "Cancelar o lote",

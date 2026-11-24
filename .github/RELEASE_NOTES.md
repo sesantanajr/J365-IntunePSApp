@@ -1,33 +1,25 @@
-## J365 IntunePSApp 3.0.1
+## J365 IntunePSApp 3.0.2
 
 ### Português
 
-Reinstalação limpa: remover qualquer versão instalada e instalar de novo.
+Porcentagem real enquanto o arquivo .intunewin é criado.
 
-- **Versões já instaladas no dispositivo** é agora uma escolha única, igual no editor (etapa 5), nos padrões da empresa e na janela de lote (e `--existing` na linha de comando):
-  - **Remover qualquer versão instalada (mais antiga, a mesma ou mais nova) e instalar esta** — reinstalação limpa, no modo silencioso ou com notificação. Até agora uma versão mais nova era sempre mantida, e o lote e os padrões não tinham como mudar isso.
-  - **Remover versões mais antigas e a mesma; manter uma versão mais nova** — o comportamento da 3.0.0, ainda o padrão.
-  - **Não remover: instalar por cima do que existir.**
-- **Componentes compartilhados nunca são removidos**: runtimes do Visual C++ e do .NET, WebView2 e Edge. Um app que o banco de dados só recomenda não remover (navegadores que se atualizam sozinhos, OneDrive, Adobe Acrobat 64 bits, cujo nome é também o do Acrobat Pro) é removido quando você escolhe *remover qualquer versão*, com aviso.
-- **Botão *Gerar em lote* do catálogo**: a barra fica em uma linha, com a contagem, os nomes resumidos e os botões alinhados; ele não estica mais com muitos aplicativos marcados.
-- **Contagens no singular**: "Gerar 1 pacote", "1 aplicativo selecionado".
+- **A barra segue o trabalho de verdade.** Com o IntuneWinAppUtil.exe da Microsoft, a barra acompanhava só os arquivos gravados pela ferramenta: parava enquanto ela calculava os dois hashes (cerca de 40% do tempo) e enquanto gravava o arquivo final num buffer, e depois pulava. Agora o app acompanha as seis passagens que a ferramenta faz sobre o pacote — pela linha que ela imprime no início de cada uma e pelos bytes que o processo lê —, cada passagem com o seu peso no tempo. No empacotador interno, a compactação ficava com 70% da barra mesmo levando cerca de um terço do tempo; agora cada passagem pesa o tempo que leva.
+- **Janela de lote**: cada aplicativo mostra a porcentagem da etapa em que está (download, geração, envio ao Intune) ao lado da barra e o tempo restante. Análise, entrada na conta e outras etapas sem porcentagem própria não mostram mais 0%.
+- A barra de status dizia "Gerando 1 pacotes em lote".
 
 ### English
 
-Clean reinstall: remove any installed version and install again.
+A real percentage while the .intunewin file is created.
 
-- **Versions already installed on the device** is now one choice, the same in the editor (step 5), the company defaults and the batch window (and `--existing` on the command line):
-  - **Remove any installed version (older, the same or newer) and install this one** — a clean reinstall, silent or with notification. Until now a newer version was always kept, and the batch and the defaults could not change that.
-  - **Remove older versions and the same one; keep a newer version** — the behaviour of 3.0.0, still the default.
-  - **Do not remove: install over what is there.**
-- **Shared components are never removed**: Visual C++ and .NET runtimes, WebView2 and Edge. An app the database only advises not to remove (self-updating browsers, OneDrive, Adobe Acrobat 64-bit, whose name is also Acrobat Pro's) is removed when *remove any version* is chosen, with a note.
-- **The *Batch package* button of the catalog**: the bar keeps one line, with the count, the names trimmed and the buttons aligned; it no longer stretches with many applications ticked.
-- **Counts of one in the singular.**
+- **The bar follows the actual work.** With Microsoft's IntuneWinAppUtil.exe the bar followed only the files the tool writes: it stood still while the tool computed its two hashes (about 40% of its time) and while it wrote the outer file to a buffer, then jumped. The application now follows the six passes the tool makes over the package — from the line it prints as each one begins and the bytes the process reads — each pass with its share of the time. The built-in packager gave the zip 70% of the bar although it takes about a third of the time; each pass now weighs the time it takes.
+- **Batch window**: each application shows the percentage of the step it is in (download, build, upload to Intune) beside the bar, and the time left. Analysing, signing in and other steps without a percentage of their own no longer show 0%.
+- The status bar said "Generating 1 packages" in Portuguese for one application.
 
 ### Download
 
-- `J365-IntunePSApp-3.0.1-win-x64.zip`: extraia e execute `J365.IntunePSApp.exe` / extract and run the portable application.
-- `J365-IntunePSApp-3.0.1-source.zip`: código-fonte / source code.
+- `J365-IntunePSApp-3.0.2-win-x64.zip`: extraia e execute `J365.IntunePSApp.exe` / extract and run the portable application.
+- `J365-IntunePSApp-3.0.2-source.zip`: código-fonte / source code.
 - `SHA256SUMS.txt`: verificações SHA-256 / SHA-256 checksums.
 
 Já tem o J365 IntunePSApp? Em **Configurações > Geral > Verificar agora** ele baixa e instala esta versão. / Already using it? **Settings > General > Check now** downloads and installs this version.
