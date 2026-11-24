@@ -215,6 +215,18 @@ namespace J365.IntunePSApp.Core
         /// installed next to the old one and Intune reports the failure. True: the new version is installed over it.
         /// </summary>
         public bool InstallIfRemovalFails { get; set; }
+        /// <summary>
+        /// Reinstall also where the application is already installed, by an earlier package of the same application too.
+        /// Every package of an application writes the same mark, so its detection reports such a device as installed and
+        /// Intune never runs a new package there. On: the package writes <see cref="ReinstallRound"/> in its mark and the
+        /// detection asks for it, so Intune runs the package once on every device of the assignment, which removes the
+        /// installed versions as <see cref="RemovePreviousVersions"/> says and installs again. Needs
+        /// <see cref="DetectionRequireMark"/>.
+        /// </summary>
+        public bool ForceReinstall { get; set; }
+        /// <summary>When the reinstall was asked for (UTC, yyyy-MM-ddTHH:mm:ssZ): the round the mark must carry. Packages
+        /// generated again with the same round do not reinstall again; a new round does.</summary>
+        public string ReinstallRound { get; set; } = "";
         // Output
         public string OutputRoot { get; set; } = "";
 

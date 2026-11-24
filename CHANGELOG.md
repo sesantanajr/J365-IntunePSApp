@@ -2,6 +2,16 @@
 
 All notable changes to J365 IntunePSApp. Versions follow [Semantic Versioning](https://semver.org).
 
+## 3.0.3 - 2026-11-24
+
+### Added
+
+- **Reinstall also where the app is already installed** (off by default), in the editor (step 5), the batch window and `--reinstall` on the command line. Every package of an application writes the same mark, so where an earlier package had installed the application in the required version Intune reported it as installed and never ran a new package there: *Remove any installed version* was never applied (a device kept the Adobe Acrobat installed the day before). On, the package writes the round it started in its mark and the detection asks for that round: Intune runs the package once on every device of the assignment, which removes the installed versions as chosen and installs again, silently or with notification. Generating the package again keeps the round; turning the option off and on starts a new one. The local detection test and the review say so.
+
+### Fixed
+
+- The hint of the package mark (step 6) named an option that left in 3.0.1 and did not say that a copy installed by an earlier package of the same application counts as installed.
+
 ## 3.0.2 - 2026-11-24
 
 ### Fixed

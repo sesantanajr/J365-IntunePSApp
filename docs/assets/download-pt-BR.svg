@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="400" height="88" viewBox="0 0 400 88" role="img" aria-labelledby="title desc">
-<title id="title">BAIXAR VERSÃO 3.0.2</title><desc id="desc">Windows x64  •  ZIP portátil</desc>
+<title id="title">BAIXAR VERSÃO 3.0.3</title><desc id="desc">Windows x64  •  ZIP portátil</desc>
 <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#315cf5"/><stop offset="1" stop-color="#1748c5"/></linearGradient></defs>
 <rect x="1" y="4" width="398" height="83" rx="18" fill="#10275b" opacity=".24"/>
 <rect x="1" y="1" width="398" height="80" rx="17" fill="url(#bg)" stroke="#7395ff"/>
 <rect x="18" y="17" width="48" height="48" rx="13" fill="#ffffff" fill-opacity=".13"/>
 <g fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M42 27v21m-8-8 8 8 8-8M30 51v5h24v-5"/></g>
-<text x="82" y="35" fill="#ffffff" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="700">BAIXAR VERSÃO 3.0.2</text>
+<text x="82" y="35" fill="#ffffff" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="700">BAIXAR VERSÃO 3.0.3</text>
 <text x="82" y="56" fill="#e0eaff" font-family="Segoe UI,Arial,sans-serif" font-size="13">Windows x64  •  ZIP portátil</text>
 <path d="m372 34 7 7-7 7" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

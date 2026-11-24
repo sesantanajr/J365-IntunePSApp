@@ -108,6 +108,17 @@ namespace J365.IntunePSApp.Core
         public static string MarkVersion(PackageSettings s)
             => Ascii(string.IsNullOrWhiteSpace(s.DetectionVersion) ? s.AppVersion ?? "" : s.DetectionVersion).Trim();
 
+        /// <summary>A new reinstall round: the moment it was asked for, in UTC (yyyy-MM-ddTHH:mm:ssZ).</summary>
+        public static string NewReinstallRound() => DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
+
+        /// <summary>True when the package reinstalls also where the application already is: the mark carries the round and the detection asks for it.</summary>
+        public static bool Reinstalls(PackageSettings s) => s != null && s.ForceReinstall && s.DetectionRequireMark && !string.IsNullOrWhiteSpace(s.ReinstallRound);
+
+        /// <summary>A round as people read it: the local date and time.</summary>
+        public static string RoundLabel(string round)
+            => DateTime.TryParse(round, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var utc)
+                ? utc.ToLocalTime().ToString("g", Localization.Loc.Instance.Culture) : (round ?? "");
+
         /// <summary>
         /// Version that the package installs, for the check that keeps a newer copy: the greater of the application
         /// version and the minimum version of the detection. The minimum may be lower on purpose (older copies count as
@@ -133,7 +144,8 @@ namespace J365.IntunePSApp.Core
         private static List<string> WriteMarkLines(PackageSettings s)
         {
             string key = Lit(MarkKey(s)), shown = MarkDisplayPath(s), version = MarkVersion(s);
-            return new List<string>
+            string round = Reinstalls(s) ? Ascii(s.ReinstallRound).Trim() : null;
+            var lines = new List<string>
             {
                 "    ## Package mark: tells the Intune detection that this package installed the application. A copy installed",
                 "    ## some other way (by hand, by another tool) has no mark, so Intune runs the package there and replaces it.",
@@ -147,9 +159,12 @@ namespace J365.IntunePSApp.Core
                 $"    $markKey.SetValue('Generator', {Lit(AppInfo.Name + " " + AppInfo.Version)})",
                 "    $markKey.Close()",
                 "    $markRoot.Close()",
-                $"    Write-ADTLogEntry -Message {Lit($"Package mark written: {shown} (version {version}).")}",
+                $"    Write-ADTLogEntry -Message {Lit($"Package mark written: {shown} (version {version}{(round == null ? "" : ", reinstall round " + round)}).")}",
                 ""
             };
+            // Reinstall also where the application already is: the detection asks for the mark of this round.
+            if (round != null) lines.Insert(lines.IndexOf("    $markKey.Close()"), $"    $markKey.SetValue('ReinstallRound', {Lit(round)})");
+            return lines;
         }
 
         private static List<string> RemoveMarkLines(PackageSettings s) => new List<string>
@@ -803,12 +818,19 @@ namespace J365.IntunePSApp.Core
                 sb.AppendLine("                  other way has no mark: it is reported as not installed, so Intune runs the package,");
                 sb.AppendLine("                  which removes that copy (when set to) and installs this version.");
             }
+            if (Reinstalls(s))
+            {
+                sb.AppendLine($"    Reinstall   : round {Ascii(s.ReinstallRound).Trim()}. Only the mark of this round counts: where an earlier");
+                sb.AppendLine("                  package of the application left its mark, Intune runs this package once, which removes");
+                sb.AppendLine("                  the installed versions as set and installs again.");
+            }
             sb.AppendLine("#>");
             sb.AppendLine("$ErrorActionPreference = 'SilentlyContinue'");
             sb.AppendLine($"$CheckVersion = {(check ? "$true" : "$false")}");
             sb.AppendLine($"$MinimumVersion = {Lit(Ascii(s.DetectionVersion ?? ""))}");
             sb.AppendLine($"$RequireMark = {(mark ? "$true" : "$false")}");
             sb.AppendLine($"$MarkPath = {Lit(MarkKey(s))}");
+            sb.AppendLine($"$RequiredRound = {Lit(Reinstalls(s) ? Ascii(s.ReinstallRound).Trim() : "")}");
             sb.AppendLine();
             sb.AppendLine(@"function ConvertTo-VersionParts([string]$Value)
 {
@@ -839,7 +861,10 @@ function Test-PackageMark
     $base = " + MarkHive(s) + @"
     $k = $base.OpenSubKey($MarkPath)
     if (-not $k) { return $false }
+    $round = [string]$k.GetValue('ReinstallRound')
     $k.Close()
+    # Reinstall also where the application already is: only the mark of this round counts.
+    if ($RequiredRound -and $round -ne $RequiredRound) { return $false }
     return $true
 }
 ");
@@ -912,8 +937,10 @@ $found = Find-Application
 if (-not $found) { exit 1 }
 if ($RequireMark -and -not (Test-PackageMark))
 {
-    # Not installed by this package: a nonzero exit code means ""not installed"" for Intune, whatever is written.
-    Write-Output """ + NoMarkPrefix + @" $found is installed, but not by this package (no package mark in $MarkPath). Intune runs the package.""
+    # Not installed by this package, or not in its reinstall round: a nonzero exit code means ""not installed"" for Intune,
+    # whatever is written.
+    if ($RequiredRound) { Write-Output """ + NoMarkPrefix + @" $found is installed, but this package has not reinstalled it yet (no mark of the round $RequiredRound in $MarkPath). Intune runs the package."" }
+    else { Write-Output """ + NoMarkPrefix + @" $found is installed, but not by this package (no package mark in $MarkPath). Intune runs the package."" }
     exit 1
 }
 Write-Output ""Detected: $found""

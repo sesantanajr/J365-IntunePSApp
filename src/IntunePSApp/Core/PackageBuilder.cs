@@ -245,6 +245,8 @@ namespace J365.IntunePSApp.Core
             // A newer version usually has another product code: the package keeps it, but the detection by the code of
             // this version does not find it, so Intune reports a failure at every check on that device.
             if (s.KeepNewerVersion && s.DetectionMethod == "ProductCode") v.Warnings.Add(T("Val_Warn_KeepNewerProductCode"));
+            // The reinstall lives in the mark: without it, the option would change nothing.
+            if (s.ForceReinstall && !s.DetectionRequireMark) v.Warnings.Add(T("Val_Warn_ReinstallNeedsMark"));
             return v;
         }
 
@@ -334,6 +336,8 @@ namespace J365.IntunePSApp.Core
             var s = input.Clone();
             Migrate(s);
             if (string.IsNullOrWhiteSpace(s.DetectionNamePattern)) s.DetectionNamePattern = s.UninstallPattern;
+            // A reinstall asked without a round (a project edited by hand): the round starts with this package.
+            if (s.ForceReinstall && string.IsNullOrWhiteSpace(s.ReinstallRound)) s.ReinstallRound = ScriptGenerator.NewReinstallRound();
             var check = Validate(s);
             foreach (var w in check.Warnings) Log.Warn(w);
             if (!check.IsValid) throw new InvalidOperationException(T("Err_FixBeforeBuild") + "\n• " + string.Join("\n• ", check.Errors));
@@ -343,6 +347,7 @@ namespace J365.IntunePSApp.Core
             var bp = PlanProgress(s, outRoot, forceNative, progress);
             var sw = Stopwatch.StartNew();
             Log.Step(T("Log_BuildStart", s.AppName, s.AppVersion));
+            if (ScriptGenerator.Reinstalls(s)) Log.Info(T("Log_ReinstallRound", ScriptGenerator.RoundLabel(s.ReinstallRound)));
             Log.Step(T("Log_CheckingPsadt"));
             bp.Begin("psadt", T("Log_CheckingPsadt"));
             // Checked again before every build: the copy in the tools folder could have been changed since it was installed

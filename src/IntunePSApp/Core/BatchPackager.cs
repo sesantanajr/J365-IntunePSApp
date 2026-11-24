@@ -50,6 +50,10 @@ namespace J365.IntunePSApp.Core
         /// any version, the same and newer ones included, and installs again; null keeps the company default.
         /// </summary>
         public string ExistingVersions { get; set; }
+        /// <summary>Every package reinstalls also where its application is already installed, by an earlier package too.</summary>
+        public bool ForceReinstall { get; set; }
+        /// <summary>The round of that reinstall, one for the whole batch (set when it starts).</summary>
+        public string ReinstallRound { get; set; } = "";
 
         public static BatchOptions FromConfig(AppConfig c) => new BatchOptions
         {
@@ -232,6 +236,11 @@ namespace J365.IntunePSApp.Core
             s.DeployMode = DeployModes.Normalize(o.DeployMode);
             if (!string.IsNullOrWhiteSpace(o.Owner)) s.Owner = o.Owner.Trim();
             if (!string.IsNullOrWhiteSpace(o.OutputRoot)) s.OutputRoot = o.OutputRoot.Trim();
+            if (o.ForceReinstall)
+            {
+                s.ForceReinstall = true;
+                s.ReinstallRound = string.IsNullOrWhiteSpace(o.ReinstallRound) ? ScriptGenerator.NewReinstallRound() : o.ReinstallRound.Trim();
+            }
         }
 
         /// <summary>
@@ -280,6 +289,7 @@ namespace J365.IntunePSApp.Core
             var context = SynchronizationContext.Current;
             void Post(Action a) { if (context == null) a(); else context.Post(_ => a(), null); }
             Log.Step(T("Log_BatchStart", items.Count));
+            if (o?.ForceReinstall == true && string.IsNullOrWhiteSpace(o.ReinstallRound)) o.ReinstallRound = ScriptGenerator.NewReinstallRound();
             foreach (var item in items)
             {
                 if (item.Succeeded) continue;   // a batch run again keeps what it already generated (and published)

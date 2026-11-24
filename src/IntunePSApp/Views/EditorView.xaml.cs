@@ -142,6 +142,9 @@ namespace J365.IntunePSApp.Views
                 _extraFiles.Clear(); foreach (var f in s.ExtraFiles) _extraFiles.Add(f);
                 SelectTag(CmbExisting, ExistingVersions.Of(s));
                 ChkInstallOver.IsChecked = s.InstallIfRemovalFails;
+                // A project that asks for a reinstall without a round (edited by hand) gets one before it is shown as saved.
+                if (s.ForceReinstall && string.IsNullOrWhiteSpace(s.ReinstallRound)) s.ReinstallRound = ScriptGenerator.NewReinstallRound();
+                ChkReinstall.IsChecked = s.ForceReinstall;
                 TxtPattern.Text = s.UninstallPattern;
                 TxtUninstallArgs.Text = s.UninstallExeArgs;
                 RbDetName.IsChecked = s.DetectionMethod == "Registry";
@@ -351,6 +354,9 @@ namespace J365.IntunePSApp.Views
             // Installing over keeps "keep a newer version" as loaded: the project does not change by being shown.
             ExistingVersions.Set(s, TagOf(CmbExisting));
             s.InstallIfRemovalFails = ChkInstallOver.IsChecked == true;
+            // The round comes with the package (it starts when the option is turned on): collecting does not start another.
+            s.ForceReinstall = ChkReinstall.IsChecked == true;
+            if (!s.ForceReinstall) s.ReinstallRound = "";
             s.UninstallPattern = TxtPattern.Text.Trim();
             s.UninstallExeArgs = TxtUninstallArgs.Text.Trim();
             s.DetectionMethod = RbDetCode.IsChecked == true ? "ProductCode" : RbDetFile.IsChecked == true ? "File" : "Registry";
@@ -662,9 +668,29 @@ namespace J365.IntunePSApp.Views
         }
 
         /// <summary>Spells out the order on the device: close the app, uninstall what is there, install the new version.</summary>
+        /// <summary>Turning the reinstall on starts a round: every device reinstalls once. Off and on again starts another.</summary>
+        private void Reinstall_Click(object sender, RoutedEventArgs e)
+        {
+            if (_s != null) _s.ReinstallRound = ChkReinstall.IsChecked == true ? ScriptGenerator.NewReinstallRound() : "";
+            UpdateReinstall();
+            UpdateWorkspaceState();
+        }
+
+        /// <summary>The reinstall needs the package mark (step 6); its hint says the round it is in.</summary>
+        private void UpdateReinstall()
+        {
+            if (ReinstallHint == null || ChkDetMark == null) return;
+            bool mark = ChkDetMark.IsChecked == true;
+            ChkReinstall.IsEnabled = mark;
+            ReinstallHint.Text = !mark ? T("Ed_ReinstallNeedsMark")
+                : ChkReinstall.IsChecked == true ? T("Ed_ReinstallOn", ScriptGenerator.RoundLabel(_s?.ReinstallRound))
+                : T("Ed_ReinstallHint");
+        }
+
         private void UpdateExistingFlow()
         {
             if (ExistingFlow == null) return;
+            UpdateReinstall();
             string pattern = TxtPattern.Text.Trim();
             var others = CatalogService.Instance.OthersMatching(pattern, _s?.CatalogId);
             PatternOthers.Visibility = others.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -1195,6 +1221,7 @@ namespace J365.IntunePSApp.Views
             TxtDetVersion.IsEnabled = ChkDetVersion.IsChecked == true;
             var who = new PackageSettings { AppName = TxtName.Text.Trim(), InstallBehavior = TagOf(CmbBehavior), CatalogId = _s?.CatalogId ?? "" };
             DetMarkHint.Text = ChkDetMark.IsChecked == true ? T("Ed_DetMarkHint", ScriptGenerator.MarkDisplayPath(who)) : T("Ed_DetMarkOffHint");
+            UpdateReinstall();
         }
 
         private async void TestDetection_Click(object sender, RoutedEventArgs e)
@@ -1216,7 +1243,7 @@ namespace J365.IntunePSApp.Views
             DetResult.SetResourceReference(Border.BackgroundProperty, r.Detected ? "SuccessSoft" : "WarningSoft");
             DetResultText.SetResourceReference(TextBlock.ForegroundProperty, r.Detected ? "SuccessText" : "WarningText");
             DetResultText.Text = r.Detected ? T("Ed_Detected", Regex.Replace(r.Output, @"^Detected:\s*", ""))
-                : r.NoMark ? T("Ed_DetectedNoMark", ScriptGenerator.MarkDisplayPath(s))
+                : r.NoMark ? (ScriptGenerator.Reinstalls(s) ? T("Ed_DetectedNoRound", ScriptGenerator.RoundLabel(s.ReinstallRound)) : T("Ed_DetectedNoMark", ScriptGenerator.MarkDisplayPath(s)))
                 : T("Ed_NotDetected");
         }
 
@@ -1248,8 +1275,9 @@ namespace J365.IntunePSApp.Views
                 Tuple.Create(T("Ed_InstallFor"), (s.InstallBehavior == "User" ? T("Rev_V_User") : T("Rev_V_System")) + "  ·  " + PackageBuilder.MinimumOsLabel(s.MinimumOs) + "+"),
                 Tuple.Create(T("Rev_Experience"), mode + (s.ProcessesToClose.Count > 0 ? T("Rev_V_Closes", string.Join(", ", s.ProcessesToClose)) : "")),
                 Tuple.Create(T("Ed_IntuneNotify"), NotifyLabel(PackageBuilder.IntuneNotifications(s)) + (PackageBuilder.RestartBehavior(s) == "suppress" ? T("Rev_V_NoRestart") : "")),
-                Tuple.Create(T("Rev_Previous"), !s.RemovePreviousVersions ? T("Rev_V_Keeps")
-                    : T(s.KeepNewerVersion ? "Rev_V_Removes" : "Rev_V_RemovesAll", s.UninstallPattern) + T(s.InstallIfRemovalFails ? "Rev_V_RemovesOrOver" : "Rev_V_RemovesOrStops")),
+                Tuple.Create(T("Rev_Previous"), (!s.RemovePreviousVersions ? T("Rev_V_Keeps")
+                    : T(s.KeepNewerVersion ? "Rev_V_Removes" : "Rev_V_RemovesAll", s.UninstallPattern) + T(s.InstallIfRemovalFails ? "Rev_V_RemovesOrOver" : "Rev_V_RemovesOrStops"))
+                    + (ScriptGenerator.Reinstalls(s) ? T("Rev_V_Reinstall", ScriptGenerator.RoundLabel(s.ReinstallRound)) : "")),
                 Tuple.Create(T("Rev_Actions"), s.Actions.Count == 0 ? T("Rev_V_None") : string.Join("; ", s.Actions.Select(a => a.TypeLabel))),
                 Tuple.Create(T("Rev_Detection"), s.DetectionMethod switch { "File" => s.DetectionFilePath, "ProductCode" => s.MsiProductCode, _ => s.DetectionNamePattern } + (s.DetectionCheckVersion ? $"  ≥ {s.DetectionVersion}" : "") + (s.DetectionRequireMark ? T("Rev_V_Mark") : "")),
                 Tuple.Create(T("Rev_Branding"), $"{(string.IsNullOrEmpty(s.CompanyName) ? T("Rev_V_NoCompany") : s.CompanyName)} · {s.DialogStyle} · {s.AccentColor}"),

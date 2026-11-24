@@ -90,6 +90,8 @@
           <ComboBoxItem Tag="InstallOver" Content="{l:T Opt_ExistingInstallOver}"/>
         </ComboBox>
         <TextBlock x:Name="ExistingHint" Style="{StaticResource Hint}" TextWrapping="Wrap"/>
+        <CheckBox x:Name="ChkReinstall" Style="{StaticResource Switch}" Content="{l:T Ed_Reinstall}" Margin="0,10,0,0" Click="Reinstall_Click"/>
+        <TextBlock x:Name="ReinstallHint" Style="{StaticResource Hint}" TextWrapping="Wrap"/>
         <TextBlock x:Name="DefaultsHint" Style="{StaticResource Hint}" TextWrapping="Wrap"/>
         <CheckBox x:Name="ChkSaveDefaults" Style="{StaticResource Switch}" Content="{l:T Batch_SaveDefaults}" Margin="0,10,0,0"/>
 

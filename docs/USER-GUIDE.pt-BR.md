@@ -107,6 +107,7 @@ Ações prontas, cada uma na sua fase (*antes/depois da instalação*, *antes/de
   - **Remover versões mais antigas e a mesma; manter uma versão mais nova** (padrão): nunca rebaixa um aplicativo que se atualizou sozinho.
   - **Não remover: instalar por cima do que existir.**
 - **Se a remoção falhar, instalar por cima mesmo assim** (desligado por padrão): desligado, se uma cópia continuar instalada a instalação para com erro, o log diz qual cópia ficou e o Intune informa a falha, de modo que a versão nova nunca fica ao lado da antiga. Ligado, a versão nova é instalada por cima.
+- **Reinstalar também onde o app já está instalado** (desligado por padrão): todo pacote de um app grava a mesma marca, então onde um pacote anterior já instalou o app na versão exigida o Intune o considera instalado e não executa o pacote novo — a escolha acima nem chega a ser aplicada. Ligado, o Intune executa o pacote uma vez em cada dispositivo da atribuição, que remove as versões instaladas conforme a escolha acima e instala de novo. A rodada começa quando você liga a opção: gerar o pacote de novo não reinstala outra vez; para uma nova rodada, desligue e ligue. Precisa da marca do pacote (etapa 6).
 - **Nome do programa em "Aplicativos instalados"** (aceita curingas) é usado para encontrar, remover e detectar o aplicativo; **Ver correspondências neste PC** mostra o que ele encontraria. Pacotes MSI desinstalam pelo código do produto; um `.exe` precisa dos seus parâmetros silenciosos de desinstalação.
 
 ### Etapa 6 — Detecção
@@ -212,7 +213,7 @@ Quando nenhum dispositivo usar mais a versão anterior, remova as atribuições 
 ![Janela de lote: configurações em comum e cada aplicativo com o seu estado](screenshots/pt-BR/batch.png)
 
 1. No catálogo, marque vários aplicativos (ou **Adicionar ao lote** nos detalhes) e clique em **Gerar em lote**.
-2. Defina o que eles têm em comum: empresa, proprietário, o tipo de instalação (silenciosa ou com notificação) e o que cada pacote faz com as **versões já instaladas** — *Remover qualquer versão instalada e instalar esta* reinstala todos os aplicativos do zero.
+2. Defina o que eles têm em comum: empresa, proprietário, o tipo de instalação (silenciosa ou com notificação) e o que cada pacote faz com as **versões já instaladas** — *Remover qualquer versão instalada e instalar esta* reinstala todos os aplicativos do zero; com **Reinstalar também onde o app já está instalado**, isso vale também onde um pacote anterior já o instalou.
 3. Se quiser, ligue **Publicar cada pacote no Intune assim que for gerado (deploy)**, com o que fazer com um app do mesmo nome (atualizá-lo, **criar um app novo que substitui o existente**, criar outro ou não publicar) e a atribuição. O tenant e a atribuição são confirmados antes de qualquer coisa começar.
 4. **Gerar N pacotes**. Cada instalador é baixado do link oficial, conferido pelo SHA256 e empacotado como no editor; cada aplicativo mostra a etapa em que está, com a porcentagem real (download, geração e envio ao Intune) e o tempo restante. Um `.exe` sem parâmetros silenciosos conhecidos, ou um nome que também corresponde a outros aplicativos, é **pulado com o motivo** — abra-o no editor para terminar manualmente. Uma publicação que falhou pode ser repetida sozinha; **Copiar relatório** gera uma tabela com os resultados.
 

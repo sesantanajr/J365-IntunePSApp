@@ -273,6 +273,8 @@ namespace J365.IntunePSApp
             if (HasArg("--notifications")) { Console.WriteLine(T("Cli_NotificationsRemoved")); return 2; }
             // --existing RemoveAll: every package removes any version already installed (older, the same or newer) and installs again.
             if (Arg("--existing") is string existing && (o.ExistingVersions = ExistingVersions.Normalize(existing)) == null) { Console.WriteLine(T("Cli_BatchUsage")); return 2; }
+            // --reinstall: also where the application is already installed (by an earlier package too), once per device.
+            o.ForceReinstall = HasArg("--reinstall");
             if (Arg("--out") is string output) o.OutputRoot = output;
             o.NativePackager = HasArg("--native");
             // --publish: each package goes to Intune with the connection of this computer (the certificate connects without

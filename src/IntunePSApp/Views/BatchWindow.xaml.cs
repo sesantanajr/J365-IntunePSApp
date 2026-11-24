@@ -95,6 +95,8 @@ namespace J365.IntunePSApp.Views
 
         private void Existing_Changed(object sender, SelectionChangedEventArgs e) { if (IsLoaded) UpdateExistingHint(); }
 
+        private void Reinstall_Click(object sender, RoutedEventArgs e) => UpdateExistingHint();
+
         /// <summary>What every package does with the copies already installed, and the applications the database protects.</summary>
         private void UpdateExistingHint()
         {
@@ -106,6 +108,7 @@ namespace J365.IntunePSApp.Views
                 Core.ExistingVersions.KeepNewer => T("Batch_ExistingHintKeepNewer"),
                 _ => T("Ed_ExistingFlowOff")
             } + (ConfigStore.Current.InstallIfRemovalFails ? " " + T("Batch_ExistingFailOver") : choice != Core.ExistingVersions.InstallOver ? " " + T("Batch_ExistingFailStops") : "");
+            if (ReinstallHint != null) ReinstallHint.Text = T(ChkReinstall.IsChecked == true ? "Batch_ReinstallOn" : "Batch_ReinstallHint");
         }
 
         private void Mode_Changed(object sender, SelectionChangedEventArgs e) { if (IsLoaded) UpdateHints(); }
@@ -176,6 +179,7 @@ namespace J365.IntunePSApp.Views
                 Owner = TxtOwner.Text.Trim(),
                 DeployMode = DeployModes.Normalize(TagOf(CmbMode)),
                 ExistingVersions = Core.ExistingVersions.Normalize(TagOf(CmbExisting)),
+                ForceReinstall = ChkReinstall.IsChecked == true,
                 Publish = ChkPublish.IsChecked == true,
                 IfExists = TagOf(CmbIfExists),
                 AssignIntent = assign[0],

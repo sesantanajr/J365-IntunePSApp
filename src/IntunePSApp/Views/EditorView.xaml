@@ -414,6 +414,10 @@
                 <TextBlock x:Name="ExistingHint" Style="{StaticResource Hint}" TextWrapping="Wrap"/>
                 <CheckBox x:Name="ChkInstallOver" Style="{StaticResource Switch}" Content="{l:T Ed_InstallOver}" Margin="0,14,0,0"/>
                 <TextBlock Text="{l:T Ed_InstallOverHint}" Style="{StaticResource Hint}" Margin="52,6,0,0"/>
+                <!-- Every package of an application writes the same mark: on, the detection asks for the mark of this round, so Intune
+                     runs the package once also where the application is already installed (by an earlier package too) -->
+                <CheckBox x:Name="ChkReinstall" Style="{StaticResource Switch}" Content="{l:T Ed_Reinstall}" Margin="0,14,0,0" Click="Reinstall_Click"/>
+                <TextBlock x:Name="ReinstallHint" Style="{StaticResource Hint}" Margin="52,6,0,0" TextWrapping="Wrap"/>
                 <TextBlock Text="{l:T Ed_ProgramName}" Style="{StaticResource Label}"/>
                 <Grid>
                   <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>

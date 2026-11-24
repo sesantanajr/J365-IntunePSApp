@@ -1,25 +1,23 @@
-## J365 IntunePSApp 3.0.2
+## J365 IntunePSApp 3.0.3
 
 ### Português
 
-Porcentagem real enquanto o arquivo .intunewin é criado.
+Reinstalar também onde o app já está instalado.
 
-- **A barra segue o trabalho de verdade.** Com o IntuneWinAppUtil.exe da Microsoft, a barra acompanhava só os arquivos gravados pela ferramenta: parava enquanto ela calculava os dois hashes (cerca de 40% do tempo) e enquanto gravava o arquivo final num buffer, e depois pulava. Agora o app acompanha as seis passagens que a ferramenta faz sobre o pacote — pela linha que ela imprime no início de cada uma e pelos bytes que o processo lê —, cada passagem com o seu peso no tempo. No empacotador interno, a compactação ficava com 70% da barra mesmo levando cerca de um terço do tempo; agora cada passagem pesa o tempo que leva.
-- **Janela de lote**: cada aplicativo mostra a porcentagem da etapa em que está (download, geração, envio ao Intune) ao lado da barra e o tempo restante. Análise, entrada na conta e outras etapas sem porcentagem própria não mostram mais 0%.
-- A barra de status dizia "Gerando 1 pacotes em lote".
+- **Nova opção *Reinstalar também onde o app já está instalado*** (desligada por padrão), no editor (etapa 5), na janela de lote e com `--reinstall` na linha de comando. Todo pacote de um app grava a mesma marca; por isso, onde um pacote anterior já tinha instalado o app na versão exigida, o Intune o considerava instalado e não executava o pacote novo — e *Remover qualquer versão instalada* nem chegava a ser aplicada. Ligada, a detecção passa a exigir a marca desta rodada: o Intune executa o pacote uma vez em cada dispositivo da atribuição, que remove as versões instaladas conforme a escolha e instala de novo, no modo silencioso ou com notificação. Gerar o pacote de novo mantém a rodada; desligar e ligar a opção começa outra.
+- O teste de detecção no editor e o resumo da etapa 8 mostram a rodada; a explicação da marca do pacote (etapa 6) foi corrigida.
 
 ### English
 
-A real percentage while the .intunewin file is created.
+Reinstall also where the app is already installed.
 
-- **The bar follows the actual work.** With Microsoft's IntuneWinAppUtil.exe the bar followed only the files the tool writes: it stood still while the tool computed its two hashes (about 40% of its time) and while it wrote the outer file to a buffer, then jumped. The application now follows the six passes the tool makes over the package — from the line it prints as each one begins and the bytes the process reads — each pass with its share of the time. The built-in packager gave the zip 70% of the bar although it takes about a third of the time; each pass now weighs the time it takes.
-- **Batch window**: each application shows the percentage of the step it is in (download, build, upload to Intune) beside the bar, and the time left. Analysing, signing in and other steps without a percentage of their own no longer show 0%.
-- The status bar said "Generating 1 packages" in Portuguese for one application.
+- **New option *Reinstall also where the app is already installed*** (off by default), in the editor (step 5), the batch window and `--reinstall` on the command line. Every package of an application writes the same mark, so where an earlier package had installed the application in the required version Intune reported it as installed and never ran the new package — *Remove any installed version* was never applied. On, the detection asks for the mark of this round: Intune runs the package once on every device of the assignment, which removes the installed versions as chosen and installs again, silently or with notification. Generating the package again keeps the round; turning the option off and on starts another.
+- The detection test of the editor and the review of step 8 show the round; the explanation of the package mark (step 6) was corrected.
 
 ### Download
 
-- `J365-IntunePSApp-3.0.2-win-x64.zip`: extraia e execute `J365.IntunePSApp.exe` / extract and run the portable application.
-- `J365-IntunePSApp-3.0.2-source.zip`: código-fonte / source code.
+- `J365-IntunePSApp-3.0.3-win-x64.zip`: extraia e execute `J365.IntunePSApp.exe` / extract and run the portable application.
+- `J365-IntunePSApp-3.0.3-source.zip`: código-fonte / source code.
 - `SHA256SUMS.txt`: verificações SHA-256 / SHA-256 checksums.
 
 Já tem o J365 IntunePSApp? Em **Configurações > Geral > Verificar agora** ele baixa e instala esta versão. / Already using it? **Settings > General > Check now** downloads and installs this version.
