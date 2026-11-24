@@ -12,6 +12,9 @@
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <Version>3.0.0</Version>
+    <!-- The product version of the executable is the version and nothing else ("3.0.0", not "3.0.0+commit"): the signing
+         service checks it against the version of the release (docs/SIGNING.md). The commit is in the release itself. -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <Authors>Sérgio Sant'Ana Junior</Authors>
     <Company>Jornada 365</Company>
     <Product>J365 IntunePSApp</Product>

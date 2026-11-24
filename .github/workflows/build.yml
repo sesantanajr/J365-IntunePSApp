@@ -179,6 +179,10 @@ jobs:
           signing-policy-slug: ${{ env.SIGNPATH_SIGNING_POLICY_SLUG }}
           artifact-configuration-slug: ${{ env.SIGNPATH_EXE_CONFIGURATION }}
           github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          # The artifact configuration only signs an executable whose product name and product version are the ones of
+          # this release (SignPath Foundation asks for both to be enforced).
+          parameters: |
+            version: "${{ env.VERSION }}"
           wait-for-completion: true
           wait-for-completion-timeout-in-seconds: 3600
           output-artifact-directory: signed
@@ -232,6 +236,10 @@ jobs:
           if ($p.ExitCode -ne 0 -or $out -ne $env:VERSION) { throw "The published executable did not report version $env:VERSION." }
           $sig = Get-AuthenticodeSignature -FilePath publish/J365.IntunePSApp.exe
           Write-Host "Signature: $($sig.Status) $($sig.SignerCertificate.Subject)"
+          # What the signing service enforces: the product name of the project and the version of the release, exactly.
+          $info = (Get-Item publish/J365.IntunePSApp.exe).VersionInfo
+          Write-Host "Product: '$($info.ProductName)' version '$($info.ProductVersion)'"
+          if ($info.ProductName -ne 'J365 IntunePSApp' -or $info.ProductVersion -ne $env:VERSION) { throw "The executable must say product 'J365 IntunePSApp' version '$env:VERSION'." }
 
       - name: Attest build provenance
         if: github.event_name != 'pull_request'

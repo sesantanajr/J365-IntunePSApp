@@ -23,14 +23,19 @@ The application accepts an update signed by any publisher of the project (SignPa
 
 ### SignPath Foundation (free)
 
-1. Read the conditions and apply on [signpath.org](https://signpath.org). The project is MIT-licensed, public and built by GitHub Actions; [CODE_SIGNING_POLICY.md](../CODE_SIGNING_POLICY.md) is the policy the foundation asks for.
+1. Read the [conditions](https://signpath.org/terms) and apply on [signpath.org/apply](https://signpath.org/apply). The project is MIT-licensed, public, already released and built by GitHub Actions on GitHub-hosted runners; [CODE_SIGNING_POLICY.md](../CODE_SIGNING_POLICY.md) is the policy the foundation asks for, with its wording (the attribution, *Committers and reviewers*, *Approvers*, the privacy statement), linked from the README and from every release. Turn on two-factor authentication in the GitHub account before applying: the foundation requires it for GitHub and for SignPath.
 2. After the approval, in SignPath: the project (slug, for example `J365-IntunePSApp`), the predefined trusted build system **GitHub.com** linked to it, a **signing policy** (for example `release-signing`; each request is approved by hand) and two **artifact configurations** (examples below; SignPath's editor validates the exact syntax):
 
    ```xml
-   <!-- exe: the artifact uploaded by the workflow is a zip with J365.IntunePSApp.exe -->
+   <!-- exe: the artifact uploaded by the workflow is a zip with J365.IntunePSApp.exe.
+        The foundation asks for the product name and the product version to be enforced: the workflow sends the
+        version of the release as the parameter "version", and the executable carries exactly that product version. -->
    <artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+     <parameters>
+       <parameter name="version" required="true" />
+     </parameters>
      <zip-file>
-       <pe-file path="J365.IntunePSApp.exe" product-name="J365 IntunePSApp">
+       <pe-file path="J365.IntunePSApp.exe" product-name="J365 IntunePSApp" product-version="${version}">
          <authenticode-sign/>
        </pe-file>
      </zip-file>
@@ -46,7 +51,7 @@ The application accepts an update signed by any publisher of the project (SignPa
    ```
 
 3. In GitHub, *Settings > Secrets and variables > Actions*: variables `SIGNPATH_ORGANIZATION_ID`, `SIGNPATH_PROJECT_SLUG`, `SIGNPATH_SIGNING_POLICY_SLUG`, `SIGNPATH_EXE_CONFIGURATION` (slug of the first configuration) and, to sign the scripts too, `SIGNPATH_SCRIPTS_CONFIGURATION`; secret `SIGNPATH_API_TOKEN`.
-4. Push the next tag. The workflow signs the scripts (when configured) and embeds them, builds, sends the executable, waits up to an hour for the approval, checks that the signature is valid and timestamped (`tools/Assert-Signature.ps1`), and only then zips, hashes and attests. The release notes name the signer and carry the attribution *Free code signing provided by SignPath.io, certificate by SignPath Foundation*.
+4. Publish a new version (a release that already exists is never rebuilt: raise `<Version>` in `src/IntunePSApp/IntunePSApp.csproj` and push to `main`, or push the next tag). The workflow signs the scripts (when configured) and embeds them, builds, sends the executable with the version of the release (the `version` parameter of the configuration above), waits up to an hour for the approval (approve the request in SignPath, or it times out), checks that the signature is valid and timestamped (`tools/Assert-Signature.ps1`), and only then zips, hashes and attests. The release notes name the signer and carry the attribution *Free code signing provided by SignPath.io, certificate by SignPath Foundation*.
 
 **What to write in the application** (ready to paste):
 
@@ -123,10 +128,10 @@ O aplicativo aceita uma atualização assinada por qualquer editor do projeto (S
 
 ### SignPath Foundation (gratuito)
 
-1. Leia as condições e inscreva o projeto em [signpath.org](https://signpath.org). O projeto tem licença MIT, é público e é compilado pelo GitHub Actions; o [CODE_SIGNING_POLICY.md](../CODE_SIGNING_POLICY.md) é a política que a fundação pede.
-2. Depois da aprovação, no SignPath: o projeto (slug, por exemplo `J365-IntunePSApp`), o sistema de build confiável pré-definido **GitHub.com** vinculado a ele, uma **política de assinatura** (por exemplo `release-signing`; cada pedido é aprovado à mão) e duas **configurações de artefato** (os exemplos estão na seção em inglês acima; o editor do SignPath valida a sintaxe exata): uma para o zip com o `J365.IntunePSApp.exe` (arquivo PE) e outra para o zip com os dois scripts (`Publish-ToIntune.ps1` e `Sandbox-Test.ps1`, arquivos PowerShell).
+1. Leia as [condições](https://signpath.org/terms) e inscreva o projeto em [signpath.org/apply](https://signpath.org/apply). O projeto tem licença MIT, é público, já tem versões publicadas e é compilado pelo GitHub Actions em executores do próprio GitHub; o [CODE_SIGNING_POLICY.md](../CODE_SIGNING_POLICY.md) é a política que a fundação pede, com a redação dela (a atribuição, *Committers and reviewers*, *Approvers*, a declaração de privacidade), com link no README e em cada versão. Ative a autenticação em dois fatores na conta do GitHub antes de se inscrever: a fundação exige isso no GitHub e no SignPath.
+2. Depois da aprovação, no SignPath: o projeto (slug, por exemplo `J365-IntunePSApp`), o sistema de build confiável pré-definido **GitHub.com** vinculado a ele, uma **política de assinatura** (por exemplo `release-signing`; cada pedido é aprovado à mão) e duas **configurações de artefato** (os exemplos estão na seção em inglês acima; o editor do SignPath valida a sintaxe exata): uma para o zip com o `J365.IntunePSApp.exe` (arquivo PE, com o nome e a versão do produto exigidos: o workflow envia a versão como o parâmetro `version`) e outra para o zip com os dois scripts (`Publish-ToIntune.ps1` e `Sandbox-Test.ps1`, arquivos PowerShell).
 3. No GitHub, *Settings > Secrets and variables > Actions*: variáveis `SIGNPATH_ORGANIZATION_ID`, `SIGNPATH_PROJECT_SLUG`, `SIGNPATH_SIGNING_POLICY_SLUG`, `SIGNPATH_EXE_CONFIGURATION` (slug da primeira configuração) e, para assinar também os scripts, `SIGNPATH_SCRIPTS_CONFIGURATION`; segredo `SIGNPATH_API_TOKEN`.
-4. Envie a próxima tag. O workflow assina os scripts (quando configurado) e os embute, compila, envia o executável, espera até uma hora pela aprovação, confere se a assinatura é válida e tem carimbo de tempo (`tools/Assert-Signature.ps1`) e só então compacta, calcula os hashes e atesta. As notas da versão dizem quem assinou e trazem a atribuição *Free code signing provided by SignPath.io, certificate by SignPath Foundation*.
+4. Publique uma versão nova (uma versão que já existe nunca é refeita: aumente o `<Version>` em `src/IntunePSApp/IntunePSApp.csproj` e envie à `main`, ou envie a próxima tag). O workflow assina os scripts (quando configurado) e os embute, compila, envia o executável com a versão (o parâmetro `version` da configuração acima), espera até uma hora pela aprovação (aprove o pedido no SignPath, senão ele expira), confere se a assinatura é válida e tem carimbo de tempo (`tools/Assert-Signature.ps1`) e só então compacta, calcula os hashes e atesta. As notas da versão dizem quem assinou e trazem a atribuição *Free code signing provided by SignPath.io, certificate by SignPath Foundation*.
 
 **O que escrever na inscrição** (pronto para colar, em inglês, como o formulário pede):
 
